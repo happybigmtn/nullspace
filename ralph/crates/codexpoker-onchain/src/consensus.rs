@@ -42,9 +42,10 @@
 //! - Simplex "payload" → `BlockBody` (serialized payloads)
 //! - Finalization includes the block hash and validator signatures
 
-use crate::block::{Block, BlockBody, BlockHeader, Receipt};
+use crate::block::{compute_receipts_root, Block, BlockBody, BlockHeader, Receipt};
 use protocol_messages::ProtocolVersion;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thiserror::Error;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ pub mod domain {
 /// - **Binding**: The digest commits to all header fields including receipts_root
 /// - **Unique**: Different blocks produce different digests (collision-resistant)
 /// - **Compact**: Fixed 32-byte size regardless of block content
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Digest(pub [u8; 32]);
 
 impl Digest {
@@ -543,6 +544,464 @@ impl Marshal {
         serde_json::from_slice(data)
             .map_err(|e| AutomatonError::MarshalError(format!("finalization decode error: {}", e)))
     }
+
+    /// Encode a receipt for storage or transmission.
+    pub fn encode_receipt(receipt: &Receipt) -> Result<Vec<u8>, AutomatonError> {
+        serde_json::to_vec(receipt)
+            .map_err(|e| AutomatonError::MarshalError(format!("receipt encode error: {}", e)))
+    }
+
+    /// Decode a receipt from bytes.
+    pub fn decode_receipt(data: &[u8]) -> Result<Receipt, AutomatonError> {
+        serde_json::from_slice(data)
+            .map_err(|e| AutomatonError::MarshalError(format!("receipt decode error: {}", e)))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SimplexAutomaton - Concrete Implementation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Configuration for the simplex automaton.
+#[derive(Debug, Clone)]
+pub struct SimplexConfig {
+    /// Protocol version to use for new blocks.
+    pub version: ProtocolVersion,
+
+    /// This node's proposer identity (public key).
+    pub proposer_id: [u8; 32],
+
+    /// Total number of validators for quorum calculation.
+    pub validator_count: usize,
+}
+
+impl Default for SimplexConfig {
+    fn default() -> Self {
+        Self {
+            version: ProtocolVersion::current(),
+            proposer_id: [0; 32],
+            validator_count: 1,
+        }
+    }
+}
+
+/// In-memory chain state for the simplex automaton.
+///
+/// This tracks:
+/// - The canonical chain tip (latest finalized block digest)
+/// - Block height
+/// - State root (application state commitment)
+/// - Finalized blocks and their receipts
+#[derive(Debug, Clone, Default)]
+pub struct ChainState {
+    /// Current chain tip digest (header hash of latest finalized block).
+    /// `Digest::ZERO` if no blocks finalized yet.
+    tip: Digest,
+
+    /// Current block height (0 for genesis, increments with each block).
+    height: u64,
+
+    /// Current state root (application state commitment).
+    state_root: [u8; 32],
+
+    /// Whether genesis has been finalized.
+    has_genesis: bool,
+}
+
+impl ChainState {
+    /// Create a new chain state starting from genesis.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create chain state at a specific point (for restart recovery).
+    pub fn at(tip: Digest, height: u64, state_root: [u8; 32]) -> Self {
+        Self {
+            tip,
+            height,
+            state_root,
+            has_genesis: height > 0 || tip != Digest::ZERO,
+        }
+    }
+
+    /// Expected height for the next block.
+    pub fn next_height(&self) -> u64 {
+        if self.has_genesis {
+            self.height + 1
+        } else {
+            0
+        }
+    }
+}
+
+/// A concrete implementation of the [`Automaton`] trait for simplex consensus.
+///
+/// `SimplexAutomaton` maintains in-memory chain state and provides the
+/// propose/verify/finalize operations needed by the consensus layer.
+///
+/// # State Management
+///
+/// The automaton uses a simple state model:
+/// - State root is updated after each finalized block
+/// - Blocks and finalizations are stored in-memory (for persistence, see M5.3)
+///
+/// # Payload Execution
+///
+/// Currently, payload execution is a no-op (state root is computed from
+/// block content hash). In a full implementation, this would execute
+/// game actions and update poker table state.
+///
+/// # Example
+///
+/// ```
+/// use codexpoker_onchain::consensus::{SimplexAutomaton, SimplexConfig, Digest};
+/// use codexpoker_onchain::consensus::Automaton;
+///
+/// let config = SimplexConfig::default();
+/// let mut automaton = SimplexAutomaton::new(config);
+///
+/// // Check initial state
+/// assert_eq!(automaton.tip(), Digest::ZERO);
+/// assert_eq!(automaton.height(), 0);
+/// ```
+pub struct SimplexAutomaton<E: PayloadExecutor = NoOpExecutor> {
+    /// Configuration.
+    config: SimplexConfig,
+
+    /// Current chain state.
+    state: ChainState,
+
+    /// Finalized blocks by height.
+    blocks: HashMap<u64, Block>,
+
+    /// Finalization certificates by height.
+    finalizations: HashMap<u64, Finalization>,
+
+    /// Receipts by block height.
+    receipts: HashMap<u64, Vec<Receipt>>,
+
+    /// Payload executor for state transitions.
+    executor: E,
+}
+
+/// Trait for executing payloads and computing state transitions.
+///
+/// This allows different execution backends (no-op for testing, real
+/// game logic for production).
+pub trait PayloadExecutor {
+    /// Execute a block body and return receipts.
+    ///
+    /// The executor receives the current state root and the payloads,
+    /// and returns:
+    /// - The receipts for each payload
+    /// - The new state root after execution
+    fn execute(
+        &mut self,
+        current_state_root: [u8; 32],
+        body: &BlockBody,
+    ) -> Result<(Vec<Receipt>, [u8; 32]), AutomatonError>;
+
+    /// Verify execution of a block body.
+    ///
+    /// This re-executes the payloads and checks that:
+    /// - Receipts match the expected receipts root
+    /// - Final state root matches the expected state root
+    fn verify(
+        &self,
+        current_state_root: [u8; 32],
+        body: &BlockBody,
+        expected_receipts_root: [u8; 32],
+        expected_state_root: [u8; 32],
+    ) -> Result<Vec<Receipt>, AutomatonError>;
+}
+
+/// No-op executor for testing.
+///
+/// This executor:
+/// - Produces success receipts for all payloads
+/// - Computes state root as hash of (current_root || block_body_hash)
+#[derive(Debug, Clone, Default)]
+pub struct NoOpExecutor;
+
+impl PayloadExecutor for NoOpExecutor {
+    fn execute(
+        &mut self,
+        current_state_root: [u8; 32],
+        body: &BlockBody,
+    ) -> Result<(Vec<Receipt>, [u8; 32]), AutomatonError> {
+        // Generate success receipts for each payload
+        let mut receipts = Vec::with_capacity(body.payloads.len());
+
+        // Compute new state root incrementally
+        let mut state_root = current_state_root;
+
+        for payload in &body.payloads {
+            // Compute payload hash
+            let payload_hash = if let Some(hash) = payload.referenced_commitment_hash() {
+                hash
+            } else {
+                [0; 32]
+            };
+
+            // Update state root: hash(current || payload_hash)
+            let mut preimage = Vec::with_capacity(64);
+            preimage.extend_from_slice(&state_root);
+            preimage.extend_from_slice(&payload_hash);
+            state_root = protocol_messages::canonical_hash(&preimage);
+
+            receipts.push(Receipt::success(payload_hash, state_root));
+        }
+
+        // For empty blocks, just hash the current state with a marker
+        if body.payloads.is_empty() {
+            let mut preimage = Vec::with_capacity(33);
+            preimage.extend_from_slice(&state_root);
+            preimage.push(0xFF); // Empty block marker
+            state_root = protocol_messages::canonical_hash(&preimage);
+        }
+
+        Ok((receipts, state_root))
+    }
+
+    fn verify(
+        &self,
+        current_state_root: [u8; 32],
+        body: &BlockBody,
+        expected_receipts_root: [u8; 32],
+        expected_state_root: [u8; 32],
+    ) -> Result<Vec<Receipt>, AutomatonError> {
+        // Re-execute using same logic
+        let mut executor = NoOpExecutor;
+        let (receipts, state_root) = executor.execute(current_state_root, body)?;
+
+        // Verify receipts root
+        let receipts_root = compute_receipts_root(&receipts);
+        if receipts_root != expected_receipts_root {
+            return Err(AutomatonError::ReceiptsRootMismatch);
+        }
+
+        // Verify state root
+        if state_root != expected_state_root {
+            return Err(AutomatonError::StateRootMismatch);
+        }
+
+        Ok(receipts)
+    }
+}
+
+impl SimplexAutomaton<NoOpExecutor> {
+    /// Create a new automaton with no-op executor.
+    pub fn new(config: SimplexConfig) -> Self {
+        Self::with_executor(config, NoOpExecutor)
+    }
+}
+
+impl<E: PayloadExecutor> SimplexAutomaton<E> {
+    /// Create a new automaton with a custom executor.
+    pub fn with_executor(config: SimplexConfig, executor: E) -> Self {
+        Self {
+            config,
+            state: ChainState::new(),
+            blocks: HashMap::new(),
+            finalizations: HashMap::new(),
+            receipts: HashMap::new(),
+            executor,
+        }
+    }
+
+    /// Restore automaton from persisted state.
+    ///
+    /// Used for restart recovery when chain state is loaded from disk.
+    pub fn restore(
+        config: SimplexConfig,
+        executor: E,
+        state: ChainState,
+        blocks: HashMap<u64, Block>,
+        finalizations: HashMap<u64, Finalization>,
+        receipts: HashMap<u64, Vec<Receipt>>,
+    ) -> Self {
+        Self {
+            config,
+            state,
+            blocks,
+            finalizations,
+            receipts,
+            executor,
+        }
+    }
+
+    /// Get a finalized block by height.
+    pub fn get_block(&self, height: u64) -> Option<&Block> {
+        self.blocks.get(&height)
+    }
+
+    /// Get a finalization certificate by height.
+    pub fn get_finalization(&self, height: u64) -> Option<&Finalization> {
+        self.finalizations.get(&height)
+    }
+
+    /// Get receipts for a block by height.
+    pub fn get_receipts(&self, height: u64) -> Option<&[Receipt]> {
+        self.receipts.get(&height).map(|v| v.as_slice())
+    }
+
+    /// Get current timestamp in milliseconds.
+    fn now_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+}
+
+impl<E: PayloadExecutor> Automaton for SimplexAutomaton<E> {
+    type State = ChainState;
+    type Payload = BlockBody;
+
+    fn propose(
+        &mut self,
+        round: u64,
+        parent: Digest,
+        payload: &Self::Payload,
+    ) -> Result<Block, AutomatonError> {
+        // Verify parent matches our tip
+        if parent != self.state.tip {
+            return Err(AutomatonError::ParentHashMismatch);
+        }
+
+        let height = self.state.next_height();
+
+        // Execute payloads to get receipts and state root
+        let (receipts, state_root) = self.executor.execute(self.state.state_root, payload)?;
+        let receipts_root = compute_receipts_root(&receipts);
+
+        // Build header
+        let header = if height == 0 {
+            BlockHeader::genesis(
+                self.config.version,
+                receipts_root,
+                state_root,
+                Self::now_ms(),
+                self.config.proposer_id,
+            )
+        } else {
+            BlockHeader::new(
+                self.config.version,
+                height,
+                parent.0,
+                receipts_root,
+                state_root,
+                Self::now_ms(),
+                self.config.proposer_id,
+            )
+        };
+
+        // Store receipts temporarily (will be committed on finalize)
+        // Using round as temp key since block isn't finalized yet
+        self.receipts.insert(round, receipts);
+
+        Ok(Block::new(header, payload.clone()))
+    }
+
+    fn verify(
+        &self,
+        _round: u64,
+        block: &Block,
+    ) -> Result<Vec<Receipt>, AutomatonError> {
+        let header = &block.header;
+
+        // Check height
+        let expected_height = self.state.next_height();
+        if header.height != expected_height {
+            return Err(AutomatonError::HeightMismatch {
+                expected: expected_height,
+                actual: header.height,
+            });
+        }
+
+        // Check parent hash
+        if header.is_genesis() {
+            if self.state.has_genesis {
+                return Err(AutomatonError::HeightMismatch {
+                    expected: expected_height,
+                    actual: 0,
+                });
+            }
+        } else {
+            if header.parent_hash != self.state.tip.0 {
+                return Err(AutomatonError::ParentHashMismatch);
+            }
+        }
+
+        // Verify execution
+        self.executor.verify(
+            self.state.state_root,
+            &block.body,
+            header.receipts_root,
+            header.state_root,
+        )
+    }
+
+    fn finalize(
+        &mut self,
+        block: Block,
+        finalization: Finalization,
+    ) -> Result<(), AutomatonError> {
+        // Verify finalization matches block
+        let block_digest = Digest::from_header(&block.header);
+        if finalization.digest != block_digest {
+            return Err(AutomatonError::InvalidFinalization(
+                "digest mismatch".into()
+            ));
+        }
+
+        // Verify height matches
+        if finalization.height != block.header.height {
+            return Err(AutomatonError::InvalidFinalization(
+                "height mismatch".into()
+            ));
+        }
+
+        // Verify quorum
+        if !finalization.has_quorum(self.config.validator_count) {
+            return Err(AutomatonError::InvalidFinalization(
+                format!(
+                    "insufficient signatures: {} of {} required",
+                    finalization.signature_count(),
+                    (2 * self.config.validator_count / 3) + 1
+                )
+            ));
+        }
+
+        // Re-verify block if we haven't already
+        let receipts = self.verify(finalization.round, &block)?;
+
+        // Update chain state
+        let height = block.header.height;
+        self.state.tip = block_digest;
+        self.state.height = height;
+        self.state.state_root = block.header.state_root;
+        self.state.has_genesis = true;
+
+        // Store block, finalization, and receipts
+        self.blocks.insert(height, block);
+        self.finalizations.insert(height, finalization);
+        self.receipts.insert(height, receipts);
+
+        Ok(())
+    }
+
+    fn tip(&self) -> Digest {
+        self.state.tip
+    }
+
+    fn height(&self) -> u64 {
+        self.state.height
+    }
+
+    fn state_root(&self) -> [u8; 32] {
+        self.state.state_root
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -895,5 +1354,246 @@ mod tests {
         assert_ne!(domain::FINALIZATION, block_domain::BLOCK_BODY);
         assert_ne!(domain::FINALIZATION, block_domain::RECEIPT);
         assert_ne!(domain::FINALIZATION_VOTE, block_domain::BLOCK_HEADER);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SimplexAutomaton Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_simplex_automaton_initial_state() {
+        let config = SimplexConfig::default();
+        let automaton = SimplexAutomaton::new(config);
+
+        assert_eq!(automaton.tip(), Digest::ZERO);
+        assert_eq!(automaton.height(), 0);
+        assert_eq!(automaton.state_root(), [0; 32]);
+    }
+
+    #[test]
+    fn test_simplex_automaton_propose_genesis() {
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let mut automaton = SimplexAutomaton::new(config);
+
+        let body = BlockBody::empty();
+        let block = automaton.propose(0, Digest::ZERO, &body).unwrap();
+
+        assert_eq!(block.height(), 0);
+        assert!(block.header.is_genesis());
+        assert_eq!(block.header.proposer, [0xAA; 32]);
+    }
+
+    #[test]
+    fn test_simplex_automaton_verify_genesis() {
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let mut automaton = SimplexAutomaton::new(config);
+
+        let body = BlockBody::empty();
+        let block = automaton.propose(0, Digest::ZERO, &body).unwrap();
+
+        // Verify should succeed
+        let receipts = automaton.verify(0, &block).unwrap();
+        assert!(receipts.is_empty()); // Empty block has no receipts
+    }
+
+    #[test]
+    fn test_simplex_automaton_finalize_genesis() {
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let mut automaton = SimplexAutomaton::new(config);
+
+        // Propose genesis
+        let body = BlockBody::empty();
+        let block = automaton.propose(0, Digest::ZERO, &body).unwrap();
+        let block_digest = Digest::from_header(&block.header);
+
+        // Create finalization with quorum
+        let mut fin = Finalization::new(test_version(), block_digest, 0, 0);
+        fin.add_signature([1u8; 32], vec![0xBB; 64]);
+
+        // Finalize
+        automaton.finalize(block.clone(), fin).unwrap();
+
+        // Check state updated
+        assert_eq!(automaton.tip(), block_digest);
+        assert_eq!(automaton.height(), 0);
+        assert_eq!(automaton.state_root(), block.header.state_root);
+    }
+
+    #[test]
+    fn test_simplex_automaton_propose_chain() {
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let mut automaton = SimplexAutomaton::new(config);
+
+        // Propose and finalize genesis
+        let body0 = BlockBody::empty();
+        let block0 = automaton.propose(0, Digest::ZERO, &body0).unwrap();
+        let digest0 = Digest::from_header(&block0.header);
+
+        let mut fin0 = Finalization::new(test_version(), digest0, 0, 0);
+        fin0.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block0.clone(), fin0).unwrap();
+
+        // Propose block 1
+        let body1 = BlockBody::empty();
+        let block1 = automaton.propose(1, digest0, &body1).unwrap();
+
+        assert_eq!(block1.height(), 1);
+        assert_eq!(block1.header.parent_hash, digest0.0);
+
+        // Finalize block 1
+        let digest1 = Digest::from_header(&block1.header);
+        let mut fin1 = Finalization::new(test_version(), digest1, 1, 1);
+        fin1.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block1.clone(), fin1).unwrap();
+
+        assert_eq!(automaton.height(), 1);
+        assert_eq!(automaton.tip(), digest1);
+    }
+
+    #[test]
+    fn test_simplex_automaton_rejects_wrong_parent() {
+        let config = SimplexConfig::default();
+        let mut automaton = SimplexAutomaton::new(config);
+
+        // Try to propose with non-zero parent (should fail, we have no genesis)
+        let body = BlockBody::empty();
+        let result = automaton.propose(0, Digest::new([1u8; 32]), &body);
+
+        assert!(matches!(result, Err(AutomatonError::ParentHashMismatch)));
+    }
+
+    #[test]
+    fn test_simplex_automaton_rejects_insufficient_quorum() {
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 4, // Requires 3 signatures for quorum
+        };
+        let mut automaton = SimplexAutomaton::new(config);
+
+        // Propose genesis
+        let body = BlockBody::empty();
+        let block = automaton.propose(0, Digest::ZERO, &body).unwrap();
+        let block_digest = Digest::from_header(&block.header);
+
+        // Create finalization with only 2 signatures (need 3)
+        let mut fin = Finalization::new(test_version(), block_digest, 0, 0);
+        fin.add_signature([1u8; 32], vec![]);
+        fin.add_signature([2u8; 32], vec![]);
+
+        // Finalize should fail
+        let result = automaton.finalize(block, fin);
+        assert!(matches!(result, Err(AutomatonError::InvalidFinalization(_))));
+    }
+
+    #[test]
+    fn test_simplex_automaton_get_finalized_data() {
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let mut automaton = SimplexAutomaton::new(config);
+
+        // Propose and finalize genesis
+        let body = BlockBody::empty();
+        let block = automaton.propose(0, Digest::ZERO, &body).unwrap();
+        let digest = Digest::from_header(&block.header);
+
+        let mut fin = Finalization::new(test_version(), digest, 0, 0);
+        fin.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block.clone(), fin.clone()).unwrap();
+
+        // Should be able to retrieve finalized data
+        assert_eq!(automaton.get_block(0), Some(&block));
+        assert_eq!(automaton.get_finalization(0), Some(&fin));
+        assert!(automaton.get_receipts(0).is_some());
+    }
+
+    #[test]
+    fn test_simplex_automaton_state_root_changes() {
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let mut automaton = SimplexAutomaton::new(config);
+
+        let initial_state_root = automaton.state_root();
+
+        // Propose and finalize genesis
+        let body = BlockBody::empty();
+        let block = automaton.propose(0, Digest::ZERO, &body).unwrap();
+        let digest = Digest::from_header(&block.header);
+
+        let mut fin = Finalization::new(test_version(), digest, 0, 0);
+        fin.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block.clone(), fin).unwrap();
+
+        // State root should have changed
+        assert_ne!(automaton.state_root(), initial_state_root);
+        assert_eq!(automaton.state_root(), block.header.state_root);
+    }
+
+    #[test]
+    fn test_chain_state_at() {
+        let state = ChainState::at(
+            Digest::new([1u8; 32]),
+            5,
+            [2u8; 32],
+        );
+
+        assert_eq!(state.tip, Digest::new([1u8; 32]));
+        assert_eq!(state.height, 5);
+        assert_eq!(state.state_root, [2u8; 32]);
+        assert!(state.has_genesis);
+        assert_eq!(state.next_height(), 6);
+    }
+
+    #[test]
+    fn test_chain_state_new() {
+        let state = ChainState::new();
+
+        assert_eq!(state.tip, Digest::ZERO);
+        assert_eq!(state.height, 0);
+        assert!(!state.has_genesis);
+        assert_eq!(state.next_height(), 0);
+    }
+
+    #[test]
+    fn test_marshal_receipt_roundtrip() {
+        let receipt = Receipt::success([1u8; 32], [2u8; 32]);
+
+        let encoded = Marshal::encode_receipt(&receipt).unwrap();
+        let decoded = Marshal::decode_receipt(&encoded).unwrap();
+
+        assert_eq!(receipt, decoded);
+    }
+
+    #[test]
+    fn test_marshal_receipt_failure_roundtrip() {
+        let receipt = Receipt::failure([1u8; 32], [2u8; 32], "test error");
+
+        let encoded = Marshal::encode_receipt(&receipt).unwrap();
+        let decoded = Marshal::decode_receipt(&encoded).unwrap();
+
+        assert_eq!(receipt, decoded);
+        assert_eq!(decoded.error, Some("test error".to_string()));
     }
 }
