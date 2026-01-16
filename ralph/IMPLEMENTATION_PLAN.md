@@ -54,7 +54,7 @@
 ### M3: Selective Reveal + Timelock Enforcement
 
 - [x] Implement per-street reveal gating in onchain state machine.
-- [ ] Enforce reveal-only phases (flop/turn/river/showdown).
+- [x] Enforce reveal-only phases (flop/turn/river/showdown).
 - [ ] Add reveal timeout (`REVEAL_TTL`) and fallback to timelock.
 - [ ] Enforce timelock scope and proof validation in consensus path.
 - [ ] Replace full-deck reveal with selective reveal in all flows.
