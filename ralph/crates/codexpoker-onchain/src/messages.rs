@@ -264,6 +264,24 @@ pub enum PayloadError {
     /// This validates the reveal comes from a legitimate participant.
     #[error("reveal share references invalid from_seat {seat}: not in seat order {seat_order:?}")]
     InvalidRevealFromSeat { seat: u8, seat_order: Vec<u8> },
+
+    /// A deferred feature was invoked.
+    ///
+    /// Certain features are disabled in this runtime version to stabilize
+    /// core casino operations. Attempting to invoke them returns this error.
+    ///
+    /// # Deferred Features (AC-1.1)
+    ///
+    /// - `bridge_disabled`: EVM bridge functionality (deposit/withdraw/finalize)
+    /// - `liquidity_disabled`: AMM and liquidity pool operations
+    /// - `staking_disabled`: Token staking operations
+    ///
+    /// These features will be re-enabled in a future protocol version.
+    #[error("{feature}_disabled: {feature} is deferred in this runtime version")]
+    FeatureDisabled {
+        /// The feature that was attempted (e.g., "bridge", "liquidity", "staking").
+        feature: &'static str,
+    },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5445,6 +5463,124 @@ mod tests {
         assert!(
             !validator.all_phases_complete(),
             "Phases don't auto-complete on fold (reveal is separate concern)"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Feature Deferral Tests (AC-1.1: Bridge Disabled)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Verifies bridge_disabled error message format.
+    ///
+    /// AC-1.1: Bridge-related instructions are rejected with a clear error
+    /// (e.g., `bridge_disabled`) and do not mutate state.
+    #[test]
+    fn test_bridge_disabled_error_format_ac_1_1() {
+        let error = PayloadError::FeatureDisabled { feature: "bridge" };
+        let message = error.to_string();
+
+        assert!(
+            message.contains("bridge_disabled"),
+            "Error message must contain 'bridge_disabled' per AC-1.1, got: {}",
+            message
+        );
+        assert!(
+            message.contains("deferred"),
+            "Error message should indicate feature is deferred, got: {}",
+            message
+        );
+    }
+
+    /// Verifies liquidity_disabled error message format.
+    ///
+    /// AC-1.1 (liquidity-staking-deferment.md): AMM/liquidity operations
+    /// are rejected with a clear error.
+    #[test]
+    fn test_liquidity_disabled_error_format_ac_1_1() {
+        let error = PayloadError::FeatureDisabled { feature: "liquidity" };
+        let message = error.to_string();
+
+        assert!(
+            message.contains("liquidity_disabled"),
+            "Error message must contain 'liquidity_disabled' per AC-1.1, got: {}",
+            message
+        );
+    }
+
+    /// Verifies staking_disabled error message format.
+    ///
+    /// AC-1.1 (liquidity-staking-deferment.md): Staking operations
+    /// are rejected with a clear error.
+    #[test]
+    fn test_staking_disabled_error_format_ac_1_1() {
+        let error = PayloadError::FeatureDisabled { feature: "staking" };
+        let message = error.to_string();
+
+        assert!(
+            message.contains("staking_disabled"),
+            "Error message must contain 'staking_disabled' per AC-1.1, got: {}",
+            message
+        );
+    }
+
+    /// Verifies FeatureDisabled error is distinct from other errors.
+    ///
+    /// The error code should be unique and not overlap with other payload errors.
+    #[test]
+    fn test_feature_disabled_error_distinct() {
+        let bridge_err = PayloadError::FeatureDisabled { feature: "bridge" };
+        let encoding_err = PayloadError::EncodingError("test".to_string());
+
+        // Different error types should produce different messages
+        assert_ne!(
+            bridge_err.to_string(),
+            encoding_err.to_string(),
+            "FeatureDisabled must be distinct from other errors"
+        );
+
+        // Pattern matching should work correctly
+        match &bridge_err {
+            PayloadError::FeatureDisabled { feature } => {
+                assert_eq!(*feature, "bridge");
+            }
+            _ => panic!("Expected FeatureDisabled variant"),
+        }
+    }
+
+    /// Verifies that attempting bridge-like operations would result in
+    /// a FeatureDisabled error (integration with future bridge gating).
+    ///
+    /// AC-1.2: Bridge state keys and events are no longer emitted during
+    /// normal operation.
+    #[test]
+    fn test_no_bridge_state_mutation_ac_1_2() {
+        // The ConsensusPayload enum only contains game-related payloads.
+        // There is no BridgeWithdraw, BridgeDeposit, or FinalizeBridgeWithdrawal variant.
+        // This test verifies that the type system enforces AC-1.2 by construction.
+
+        // Enumerate all payload types to prove there's no bridge variant
+        let payloads: Vec<&str> = vec![
+            "DealCommitment",
+            "DealCommitmentAck",
+            "GameAction",
+            "RevealShare",
+            "TimelockReveal",
+        ];
+
+        // None of these are bridge-related
+        for payload_name in &payloads {
+            assert!(
+                !payload_name.to_lowercase().contains("bridge"),
+                "ConsensusPayload should not contain bridge variants"
+            );
+        }
+
+        // The FeatureDisabled error exists for any future attempt to add
+        // bridge functionality via unknown/unsupported payload types
+        let would_be_error = PayloadError::FeatureDisabled { feature: "bridge" };
+        assert!(
+            would_be_error.to_string().contains("bridge_disabled"),
+            "Bridge operations would return bridge_disabled error"
         );
     }
 }

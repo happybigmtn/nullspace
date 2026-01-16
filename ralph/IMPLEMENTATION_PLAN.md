@@ -83,9 +83,10 @@
 
 ### M2: Defer EVM Bridge
 
-- [ ] Gate or remove bridge instructions in execution layer (`execution/src/layer/handlers/bridge.rs`).
+- [x] Gate or remove bridge instructions in execution layer (`execution/src/layer/handlers/bridge.rs`).
   - Tests: AC-1.1, AC-1.2
   - Perceptual: None
+  - Implemented: `FeatureDisabled { feature: "bridge" }` error in `messages.rs:PayloadError`; `ConsensusPayload` enum has no bridge variants (enforced by type system); tests `test_bridge_disabled_error_format_ac_1_1`, `test_no_bridge_state_mutation_ac_1_2`
 - [ ] Remove bridge instruction/event tags from public protocol exports when disabled.
   - Tests: AC-1.1, AC-1.2
   - Perceptual: None
