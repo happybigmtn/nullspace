@@ -10,6 +10,49 @@ use serde::{Deserialize, Serialize};
 /// Current protocol version for all messages.
 pub const CURRENT_PROTOCOL_VERSION: u8 = 1;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Size Bounds
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Maximum number of seats (players) in a hand.
+///
+/// Standard poker tables support up to 10 players (9 + dealer).
+/// This bound prevents unbounded allocations when decoding `seat_order`.
+pub const MAX_SEATS: usize = 10;
+
+/// Maximum number of artifact hashes in a deal commitment.
+///
+/// A typical deal has 2-4 artifacts (encryption keys, proofs).
+/// This bound prevents unbounded allocations from malicious payloads.
+pub const MAX_ARTIFACT_HASHES: usize = 16;
+
+/// Maximum number of cards that can be revealed in a single message.
+///
+/// At most 7 cards need to be revealed (5 community + 2 hole cards).
+/// This bound provides margin for different poker variants.
+pub const MAX_REVEAL_CARDS: usize = 16;
+
+/// Maximum size of a single reveal data entry in bytes.
+///
+/// Reveal data typically contains decryption shares or plaintext card values.
+/// 256 bytes is generous for any reasonable cryptographic scheme.
+pub const MAX_REVEAL_DATA_SIZE: usize = 256;
+
+/// Maximum size of a timelock proof in bytes.
+///
+/// Timelock proofs (VDF proofs, hash chain proofs) should fit within 4 KiB.
+pub const MAX_TIMELOCK_PROOF_SIZE: usize = 4096;
+
+/// Maximum signature size in bytes.
+///
+/// Signatures (Ed25519, ECDSA, BLS) should fit within 256 bytes.
+pub const MAX_SIGNATURE_SIZE: usize = 256;
+
+/// Maximum artifact data size in bytes.
+///
+/// Individual artifacts should not exceed 1 MiB.
+pub const MAX_ARTIFACT_SIZE: usize = 1024 * 1024;
+
 /// Protocol version embedded in each message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProtocolVersion(pub u8);
