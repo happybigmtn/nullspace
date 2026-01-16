@@ -34,13 +34,46 @@ impl ProtocolVersion {
 // Domain separation prefixes
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Domain separation prefixes prevent cross-protocol hash collisions.
+/// Domain separation prefixes for message hashing.
+///
+/// Domain separation prevents cross-protocol hash collisions by ensuring
+/// that messages of different types can never produce the same hash, even
+/// if their content happens to be identical.
+///
+/// # Security Rationale
+///
+/// Without domain separation, an attacker might craft a message that is
+/// valid as both type A and type B. For example, if `DealCommitment` and
+/// `RevealShare` used the same hash format, an attacker might find a byte
+/// sequence that parses validly as both, enabling protocol confusion attacks.
+///
+/// # Prefix Format
+///
+/// Each prefix follows the pattern: `b"nullspace.<message_type>.v<version>"`
+///
+/// The version suffix allows for hash-incompatible changes in future
+/// protocol versions while maintaining backward compatibility during
+/// migration windows.
+///
+/// # Usage
+///
+/// Every message type's `preimage()` method begins with its domain prefix:
+/// ```text
+/// preimage = domain_prefix || version || ... other fields ...
+/// hash = blake3(preimage)
+/// ```
 pub mod domain {
+    /// Domain prefix for [`super::DealCommitment`] messages.
     pub const DEAL_COMMITMENT: &[u8] = b"nullspace.deal_commitment.v1";
+    /// Domain prefix for [`super::DealCommitmentAck`] messages.
     pub const DEAL_COMMITMENT_ACK: &[u8] = b"nullspace.deal_commitment_ack.v1";
+    /// Domain prefix for [`super::RevealShare`] messages.
     pub const REVEAL_SHARE: &[u8] = b"nullspace.reveal_share.v1";
+    /// Domain prefix for [`super::TimelockReveal`] messages.
     pub const TIMELOCK_REVEAL: &[u8] = b"nullspace.timelock_reveal.v1";
+    /// Domain prefix for [`super::ArtifactRequest`] messages.
     pub const ARTIFACT_REQUEST: &[u8] = b"nullspace.artifact_request.v1";
+    /// Domain prefix for [`super::ArtifactResponse`] messages.
     pub const ARTIFACT_RESPONSE: &[u8] = b"nullspace.artifact_response.v1";
 }
 
@@ -50,16 +83,51 @@ pub mod domain {
 
 /// Binds a message to a specific table, hand, and seat configuration.
 ///
-/// This prevents replay attacks across different contexts.
+/// Scope binding is a critical security mechanism that prevents replay attacks
+/// by ensuring messages are only valid within their intended context. A message
+/// with scope S cannot be replayed in any context where the scope differs.
+///
+/// # Replay Prevention
+///
+/// Without scope binding, an attacker could:
+/// - Replay a valid commitment from one table to manipulate another.
+/// - Replay an old hand's commitment in a new hand.
+/// - Replay a commitment intended for different players.
+///
+/// With scope binding, each message is cryptographically tied to:
+/// - The specific table (`table_id`)
+/// - The specific hand number (`hand_id`)
+/// - The exact set and order of participants (`seat_order`)
+/// - The deck configuration (`deck_length`)
+///
+/// # Deterministic Encoding
+///
+/// The scope encodes to bytes deterministically:
+/// ```text
+/// [table_id: 32 bytes][hand_id: 8 bytes LE][seat_count: 1 byte][seats: N bytes][deck_length: 1 byte]
+/// ```
+///
+/// This encoding is included in message preimages before hashing, ensuring
+/// the scope is bound into every message hash.
+///
+/// # Verification
+///
+/// Verifiers reconstruct the expected scope from current game state and
+/// compare byte-for-byte. Any mismatch (wrong table, wrong hand, wrong
+/// players) causes verification to fail deterministically.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScopeBinding {
-    /// Unique table identifier.
+    /// Unique 32-byte identifier for the game table/room.
+    /// Typically derived from the table's creation parameters or a UUID.
     pub table_id: [u8; 32],
-    /// Hand number within the table session.
+    /// Sequential hand number within the table session.
+    /// Starts at 0 or 1 and increments with each new hand.
     pub hand_id: u64,
-    /// Ordered list of seat positions (player indices).
+    /// Ordered list of seat indices participating in this hand.
+    /// Order matters: `[0, 1, 2]` is different from `[2, 1, 0]`.
     pub seat_order: Vec<u8>,
-    /// Number of cards in the deck (typically 52).
+    /// Number of cards in the deck (typically 52 for standard poker).
+    /// Included to prevent attacks involving non-standard deck sizes.
     pub deck_length: u8,
 }
 

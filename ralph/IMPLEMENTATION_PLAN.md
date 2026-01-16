@@ -23,8 +23,8 @@
 ### M0: Interfaces and Canonical Encodings
 
 - [x] Define canonical message formats (`DealCommitment`, `DealCommitmentAck`, `RevealShare`, `TimelockReveal`, artifact requests).
-- [ ] Add `protocol_version` and domain separation fields to payloads.
-- [ ] Document canonical hashing (`blake3(encode(x))`) and scope binding.
+- [x] Add `protocol_version` and domain separation fields to payloads.
+- [x] Document canonical hashing (`blake3(encode(x))`) and scope binding.
 
 **Exit criteria**
 - Messages compile and encode deterministically.
