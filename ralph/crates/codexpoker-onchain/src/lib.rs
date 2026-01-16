@@ -101,8 +101,14 @@ pub use messages::{
     PayloadError, TimelockProofVerifier, TimelockVerificationInput, GAME_ACTION_DOMAIN, REVEAL_TTL,
 };
 pub use state::{
+    // State management
     InMemoryStateManager, StateAwareExecutor, StateCheckpoint, StateError, StateManager, StateRoot,
     StateUpdate, StateUpdateBatch, StateVerifier, verify_state_root_on_restart,
+    // State sync protocol
+    StateSyncRequest, StateSyncResponse, StateSyncChunk, StateSyncHandler,
+    MAX_SYNC_CHUNK_SIZE, MAX_SYNC_KEYS_PER_REQUEST, sync_domain,
+    // State proofs
+    StateProof, StateProofType, StateProofVerifier, InMemoryProofVerifier,
 };
 pub use storage::{BlockStorage, FileBlockStorage, InMemoryBlockStorage, StorageError};
 

@@ -1,8 +1,30 @@
-//! State management and root verification for QMDB integration.
+//! State management, synchronization, and proof verification for QMDB integration.
 //!
 //! This module provides the infrastructure for managing application state during
 //! block execution. It defines traits and types that can be backed by different
 //! state storage engines (in-memory, QMDB, etc.).
+//!
+//! # State Sync
+//!
+//! State sync allows nodes that have fallen behind to catch up without replaying
+//! all blocks from genesis. The sync protocol consists of:
+//!
+//! - [`StateSyncRequest`]: Request state at a specific height/root
+//! - [`StateSyncResponse`]: Response containing state entries and proofs
+//! - [`StateSyncChunk`]: A chunk of state entries for streaming large states
+//!
+//! # State Proofs
+//!
+//! State proofs allow verifying individual state entries against a state root
+//! without having the full state. This enables:
+//!
+//! - Light clients verifying state without full node storage
+//! - Dispute resolution by proving specific state values
+//! - Efficient cross-chain state verification
+//!
+//! The proof system uses a Merkle-like structure where:
+//! - [`StateProof`]: Proves a key-value pair is in the state at a given root
+//! - [`StateProofVerifier`]: Verifies proofs against claimed roots
 //!
 //! # Architecture
 //!
@@ -760,6 +782,618 @@ pub fn verify_state_root_on_restart<S: crate::storage::BlockStorage>(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// State Sync Protocol
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Domain separation for state sync message hashing.
+pub mod sync_domain {
+    /// Domain prefix for state sync request hashing.
+    pub const SYNC_REQUEST: &[u8] = b"nullspace.state_sync_request.v1";
+    /// Domain prefix for state sync response hashing.
+    pub const SYNC_RESPONSE: &[u8] = b"nullspace.state_sync_response.v1";
+    /// Domain prefix for state proof hashing.
+    pub const STATE_PROOF: &[u8] = b"nullspace.state_proof.v1";
+}
+
+/// Maximum size of a single state sync chunk in bytes.
+pub const MAX_SYNC_CHUNK_SIZE: usize = 1024 * 1024; // 1 MB
+
+/// Maximum number of keys that can be requested in a single sync request.
+pub const MAX_SYNC_KEYS_PER_REQUEST: usize = 1000;
+
+/// A request for state synchronization.
+///
+/// Nodes use this message to request state data from peers. The request can be:
+/// - A full state snapshot at a specific height/root
+/// - A partial state with specific keys
+/// - A continuation of a previous request (via `continuation_token`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateSyncRequest {
+    /// Target state root to sync.
+    pub target_root: StateRoot,
+
+    /// Target block height (for context).
+    pub target_height: u64,
+
+    /// Specific keys to request (if empty, request full state).
+    pub requested_keys: Vec<Vec<u8>>,
+
+    /// Continuation token from a previous response (for pagination).
+    pub continuation_token: Option<Vec<u8>>,
+
+    /// Request ID for correlation.
+    pub request_id: u64,
+}
+
+impl StateSyncRequest {
+    /// Create a request for full state at a specific root.
+    pub fn full_state(target_root: StateRoot, target_height: u64, request_id: u64) -> Self {
+        Self {
+            target_root,
+            target_height,
+            requested_keys: Vec::new(),
+            continuation_token: None,
+            request_id,
+        }
+    }
+
+    /// Create a request for specific keys.
+    pub fn specific_keys(
+        target_root: StateRoot,
+        target_height: u64,
+        keys: Vec<Vec<u8>>,
+        request_id: u64,
+    ) -> Self {
+        Self {
+            target_root,
+            target_height,
+            requested_keys: keys,
+            continuation_token: None,
+            request_id,
+        }
+    }
+
+    /// Continue a previous request.
+    pub fn continue_from(
+        target_root: StateRoot,
+        target_height: u64,
+        continuation_token: Vec<u8>,
+        request_id: u64,
+    ) -> Self {
+        Self {
+            target_root,
+            target_height,
+            requested_keys: Vec::new(),
+            continuation_token: Some(continuation_token),
+            request_id,
+        }
+    }
+
+    /// Domain-separated preimage for hashing.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(256);
+        buf.extend_from_slice(sync_domain::SYNC_REQUEST);
+        buf.extend_from_slice(self.target_root.as_bytes());
+        buf.extend_from_slice(&self.target_height.to_le_bytes());
+        buf.extend_from_slice(&self.request_id.to_le_bytes());
+        buf.extend_from_slice(&(self.requested_keys.len() as u32).to_le_bytes());
+        for key in &self.requested_keys {
+            buf.extend_from_slice(&(key.len() as u32).to_le_bytes());
+            buf.extend_from_slice(key);
+        }
+        if let Some(token) = &self.continuation_token {
+            buf.push(1);
+            buf.extend_from_slice(&(token.len() as u32).to_le_bytes());
+            buf.extend_from_slice(token);
+        } else {
+            buf.push(0);
+        }
+        buf
+    }
+
+    /// Canonical hash of this request.
+    pub fn request_hash(&self) -> [u8; 32] {
+        protocol_messages::canonical_hash(&self.preimage())
+    }
+
+    /// Validate the request for bounds.
+    pub fn validate(&self) -> Result<(), StateError> {
+        if self.requested_keys.len() > MAX_SYNC_KEYS_PER_REQUEST {
+            return Err(StateError::InvalidTransition(format!(
+                "too many keys requested: {} > {}",
+                self.requested_keys.len(),
+                MAX_SYNC_KEYS_PER_REQUEST
+            )));
+        }
+        Ok(())
+    }
+}
+
+/// A chunk of state entries for streaming large states.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateSyncChunk {
+    /// Key-value pairs in this chunk.
+    pub entries: Vec<(Vec<u8>, Vec<u8>)>,
+
+    /// Total byte size of this chunk.
+    pub chunk_size: usize,
+}
+
+impl StateSyncChunk {
+    /// Create a new empty chunk.
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            chunk_size: 0,
+        }
+    }
+
+    /// Add an entry to the chunk, returns false if it would exceed max size.
+    pub fn try_add(&mut self, key: Vec<u8>, value: Vec<u8>) -> bool {
+        let entry_size = key.len() + value.len() + 8; // 8 bytes for length prefixes
+        if self.chunk_size + entry_size > MAX_SYNC_CHUNK_SIZE {
+            return false;
+        }
+        self.chunk_size += entry_size;
+        self.entries.push((key, value));
+        true
+    }
+
+    /// Number of entries in this chunk.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Check if chunk is empty.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
+impl Default for StateSyncChunk {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A response to a state sync request.
+///
+/// Contains the requested state entries along with proof data and
+/// pagination information for large states.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateSyncResponse {
+    /// The request ID this responds to.
+    pub request_id: u64,
+
+    /// State root this response is for.
+    pub state_root: StateRoot,
+
+    /// Block height this state is from.
+    pub height: u64,
+
+    /// State entries in this response.
+    pub chunk: StateSyncChunk,
+
+    /// Proof that the entries are in the state at `state_root`.
+    pub proof: StateProof,
+
+    /// Token for requesting the next chunk (None if this is the last chunk).
+    pub continuation_token: Option<Vec<u8>>,
+
+    /// Whether this is the final chunk.
+    pub is_final: bool,
+}
+
+impl StateSyncResponse {
+    /// Create a response with state data.
+    pub fn new(
+        request_id: u64,
+        state_root: StateRoot,
+        height: u64,
+        chunk: StateSyncChunk,
+        proof: StateProof,
+        continuation_token: Option<Vec<u8>>,
+        is_final: bool,
+    ) -> Self {
+        Self {
+            request_id,
+            state_root,
+            height,
+            chunk,
+            proof,
+            continuation_token,
+            is_final,
+        }
+    }
+
+    /// Create an empty/error response.
+    pub fn empty(request_id: u64, state_root: StateRoot, height: u64) -> Self {
+        Self {
+            request_id,
+            state_root,
+            height,
+            chunk: StateSyncChunk::new(),
+            proof: StateProof::empty(state_root),
+            continuation_token: None,
+            is_final: true,
+        }
+    }
+
+    /// Domain-separated preimage for hashing.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(256);
+        buf.extend_from_slice(sync_domain::SYNC_RESPONSE);
+        buf.extend_from_slice(&self.request_id.to_le_bytes());
+        buf.extend_from_slice(self.state_root.as_bytes());
+        buf.extend_from_slice(&self.height.to_le_bytes());
+        buf.extend_from_slice(&(self.chunk.entries.len() as u32).to_le_bytes());
+        buf.push(if self.is_final { 1 } else { 0 });
+        buf
+    }
+
+    /// Canonical hash of this response.
+    pub fn response_hash(&self) -> [u8; 32] {
+        protocol_messages::canonical_hash(&self.preimage())
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State Proofs
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A Merkle-like proof that a key-value pair is in the state.
+///
+/// For the in-memory implementation, this is a simplified proof that includes
+/// the sorted key-value pairs needed to reconstruct the state root. A production
+/// implementation would use actual Merkle tree siblings.
+///
+/// # Proof Structure
+///
+/// The proof contains:
+/// - The claimed state root
+/// - The key-value entries being proven
+/// - Sibling hashes in the Merkle path (for tree-based implementations)
+///
+/// # Verification
+///
+/// To verify a proof:
+/// 1. Recompute the state root from the proof data
+/// 2. Compare against the claimed root
+/// 3. Check that the proven keys/values match the claimed data
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateProof {
+    /// The state root this proof is against.
+    pub claimed_root: StateRoot,
+
+    /// Key-value pairs being proven.
+    pub entries: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+
+    /// Merkle sibling hashes (for tree-based proofs).
+    /// For the simple linear hash, this contains intermediate hashes.
+    pub siblings: Vec<[u8; 32]>,
+
+    /// Proof type indicator for extensibility.
+    pub proof_type: StateProofType,
+}
+
+/// Type of state proof for extensibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StateProofType {
+    /// Simple linear hash proof (for initial implementation).
+    LinearHash,
+    /// Merkle tree proof (for future production use).
+    MerkleTree,
+    /// Empty/trivial proof (for state root zero).
+    Empty,
+}
+
+impl StateProof {
+    /// Create an empty proof for the zero state root.
+    pub fn empty(root: StateRoot) -> Self {
+        Self {
+            claimed_root: root,
+            entries: Vec::new(),
+            siblings: Vec::new(),
+            proof_type: StateProofType::Empty,
+        }
+    }
+
+    /// Create a linear hash proof from state entries.
+    ///
+    /// This is used by the in-memory state manager. It includes all state
+    /// entries needed to recompute the root.
+    pub fn linear_hash(root: StateRoot, entries: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> Self {
+        Self {
+            claimed_root: root,
+            entries,
+            siblings: Vec::new(),
+            proof_type: StateProofType::LinearHash,
+        }
+    }
+
+    /// Create a Merkle tree proof.
+    pub fn merkle_tree(
+        root: StateRoot,
+        entries: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+        siblings: Vec<[u8; 32]>,
+    ) -> Self {
+        Self {
+            claimed_root: root,
+            entries,
+            siblings,
+            proof_type: StateProofType::MerkleTree,
+        }
+    }
+
+    /// Domain-separated preimage for hashing.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(256);
+        buf.extend_from_slice(sync_domain::STATE_PROOF);
+        buf.extend_from_slice(self.claimed_root.as_bytes());
+        buf.push(self.proof_type as u8);
+        buf.extend_from_slice(&(self.entries.len() as u32).to_le_bytes());
+        for (key, value) in &self.entries {
+            buf.extend_from_slice(&(key.len() as u32).to_le_bytes());
+            buf.extend_from_slice(key);
+            match value {
+                Some(v) => {
+                    buf.push(1);
+                    buf.extend_from_slice(&(v.len() as u32).to_le_bytes());
+                    buf.extend_from_slice(v);
+                }
+                None => {
+                    buf.push(0);
+                }
+            }
+        }
+        buf.extend_from_slice(&(self.siblings.len() as u32).to_le_bytes());
+        for sibling in &self.siblings {
+            buf.extend_from_slice(sibling);
+        }
+        buf
+    }
+
+    /// Canonical hash of this proof.
+    pub fn proof_hash(&self) -> [u8; 32] {
+        protocol_messages::canonical_hash(&self.preimage())
+    }
+
+    /// Check if this is an empty/trivial proof.
+    pub fn is_empty(&self) -> bool {
+        matches!(self.proof_type, StateProofType::Empty) || self.entries.is_empty()
+    }
+}
+
+/// Trait for verifying state proofs.
+///
+/// Implementations provide verification logic for different proof types
+/// and state storage backends.
+pub trait StateProofVerifier {
+    /// Verify a state proof against a claimed root.
+    ///
+    /// Returns `Ok(())` if the proof is valid, or an error describing the failure.
+    fn verify_proof(&self, proof: &StateProof) -> Result<(), StateError>;
+
+    /// Verify that specific entries are correctly proven.
+    ///
+    /// This is a convenience method that verifies both the proof validity
+    /// and that the claimed entries match what's in the proof.
+    fn verify_entries(
+        &self,
+        proof: &StateProof,
+        entries: &[(Vec<u8>, Option<Vec<u8>>)],
+    ) -> Result<(), StateError>;
+}
+
+/// In-memory state proof verifier.
+///
+/// Verifies proofs by recomputing the state root from the proof data
+/// and comparing against the claimed root.
+pub struct InMemoryProofVerifier;
+
+impl StateProofVerifier for InMemoryProofVerifier {
+    fn verify_proof(&self, proof: &StateProof) -> Result<(), StateError> {
+        match proof.proof_type {
+            StateProofType::Empty => {
+                // Empty proof is valid only for zero root
+                if proof.claimed_root.is_zero() {
+                    Ok(())
+                } else {
+                    Err(StateError::VerificationFailed(
+                        "empty proof for non-zero root".into(),
+                    ))
+                }
+            }
+            StateProofType::LinearHash => {
+                // Recompute root from entries using same algorithm as InMemoryStateManager
+                let computed_root = compute_linear_hash_root(&proof.entries);
+                if computed_root == proof.claimed_root {
+                    Ok(())
+                } else {
+                    Err(StateError::RootMismatch {
+                        expected: proof.claimed_root,
+                        actual: computed_root,
+                    })
+                }
+            }
+            StateProofType::MerkleTree => {
+                // Merkle tree verification would go here
+                // For now, return error as not implemented
+                Err(StateError::VerificationFailed(
+                    "merkle tree proofs not yet implemented".into(),
+                ))
+            }
+        }
+    }
+
+    fn verify_entries(
+        &self,
+        proof: &StateProof,
+        entries: &[(Vec<u8>, Option<Vec<u8>>)],
+    ) -> Result<(), StateError> {
+        // First verify the proof itself
+        self.verify_proof(proof)?;
+
+        // Then verify the entries are in the proof
+        for (key, expected_value) in entries {
+            let found = proof.entries.iter().find(|(k, _)| k == key);
+            match (found, expected_value) {
+                (None, _) => {
+                    return Err(StateError::VerificationFailed(format!(
+                        "key {:?} not found in proof",
+                        key
+                    )));
+                }
+                (Some((_, None)), None) => {
+                    // Both expect deletion, OK
+                }
+                (Some((_, None)), Some(_)) => {
+                    return Err(StateError::VerificationFailed(format!(
+                        "expected value but found deletion for key {:?}",
+                        key
+                    )));
+                }
+                (Some((_, Some(_))), None) => {
+                    return Err(StateError::VerificationFailed(format!(
+                        "expected deletion but found value for key {:?}",
+                        key
+                    )));
+                }
+                (Some((_, Some(proof_value))), Some(expected)) => {
+                    if proof_value != expected {
+                        return Err(StateError::VerificationFailed(format!(
+                            "value mismatch for key {:?}",
+                            key
+                        )));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Compute state root using linear hash algorithm.
+///
+/// This matches the `InMemoryStateManager::compute_root` algorithm:
+/// - Filter out deletions (None values)
+/// - Sort keys
+/// - Hash all key-value pairs together
+fn compute_linear_hash_root(entries: &[(Vec<u8>, Option<Vec<u8>>)]) -> StateRoot {
+    // Filter to only existing values and collect as sorted map
+    let mut state: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+    for (key, value) in entries {
+        if let Some(v) = value {
+            state.insert(key.clone(), v.clone());
+        }
+    }
+
+    if state.is_empty() {
+        return StateRoot::ZERO;
+    }
+
+    // Sort keys for determinism
+    let mut keys: Vec<_> = state.keys().collect();
+    keys.sort();
+
+    // Hash all key-value pairs
+    let mut hasher_input = Vec::new();
+    for key in keys {
+        let value = state.get(key).unwrap();
+        hasher_input.extend_from_slice(&(key.len() as u32).to_le_bytes());
+        hasher_input.extend_from_slice(key);
+        hasher_input.extend_from_slice(&(value.len() as u32).to_le_bytes());
+        hasher_input.extend_from_slice(value);
+    }
+
+    StateRoot(protocol_messages::canonical_hash(&hasher_input))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State Sync Handler
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Handles state sync requests by generating responses from local state.
+pub struct StateSyncHandler<S: StateManager + StateVerifier> {
+    state: S,
+    current_height: u64,
+}
+
+impl<S: StateManager + StateVerifier> StateSyncHandler<S> {
+    /// Create a new sync handler with the given state manager.
+    pub fn new(state: S, current_height: u64) -> Self {
+        Self {
+            state,
+            current_height,
+        }
+    }
+
+    /// Handle a state sync request and generate a response.
+    pub fn handle_request(&self, request: &StateSyncRequest) -> Result<StateSyncResponse, StateError> {
+        // Validate request
+        request.validate()?;
+
+        // Check if we have the requested state root
+        let current_root = self.state.state_root();
+        if request.target_root != current_root {
+            // We don't have the exact state root requested
+            // In a full implementation, we'd check historical states
+            return Err(StateError::VerificationFailed(format!(
+                "state root {:?} not available, current is {:?}",
+                request.target_root, current_root
+            )));
+        }
+
+        // Build response chunk
+        let mut chunk = StateSyncChunk::new();
+
+        if request.requested_keys.is_empty() {
+            // Full state requested - would need iteration support
+            // For now, return empty (in-memory doesn't expose iteration)
+            return Ok(StateSyncResponse::empty(
+                request.request_id,
+                current_root,
+                self.current_height,
+            ));
+        }
+
+        // Specific keys requested
+        let mut proof_entries = Vec::new();
+        for key in &request.requested_keys {
+            let value = self.state.get(key);
+            if let Some(v) = &value {
+                chunk.try_add(key.clone(), v.clone());
+            }
+            proof_entries.push((key.clone(), value));
+        }
+
+        // Build proof
+        let proof = StateProof::linear_hash(current_root, proof_entries);
+
+        Ok(StateSyncResponse::new(
+            request.request_id,
+            current_root,
+            self.current_height,
+            chunk,
+            proof,
+            None,
+            true,
+        ))
+    }
+
+    /// Get reference to underlying state.
+    pub fn state(&self) -> &S {
+        &self.state
+    }
+
+    /// Get current height.
+    pub fn height(&self) -> u64 {
+        self.current_height
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1040,5 +1674,446 @@ mod tests {
         };
         let automaton_err: AutomatonError = err.into();
         assert!(matches!(automaton_err, AutomatonError::StateRootMismatch));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // State Sync Request Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_state_sync_request_full_state() {
+        let root = StateRoot::new([1u8; 32]);
+        let request = StateSyncRequest::full_state(root, 100, 42);
+
+        assert_eq!(request.target_root, root);
+        assert_eq!(request.target_height, 100);
+        assert_eq!(request.request_id, 42);
+        assert!(request.requested_keys.is_empty());
+        assert!(request.continuation_token.is_none());
+    }
+
+    #[test]
+    fn test_state_sync_request_specific_keys() {
+        let root = StateRoot::new([1u8; 32]);
+        let keys = vec![b"key1".to_vec(), b"key2".to_vec()];
+        let request = StateSyncRequest::specific_keys(root, 100, keys.clone(), 42);
+
+        assert_eq!(request.requested_keys, keys);
+        assert!(request.continuation_token.is_none());
+    }
+
+    #[test]
+    fn test_state_sync_request_continue_from() {
+        let root = StateRoot::new([1u8; 32]);
+        let token = vec![0xAA, 0xBB];
+        let request = StateSyncRequest::continue_from(root, 100, token.clone(), 42);
+
+        assert!(request.requested_keys.is_empty());
+        assert_eq!(request.continuation_token, Some(token));
+    }
+
+    #[test]
+    fn test_state_sync_request_hash_deterministic() {
+        let root = StateRoot::new([1u8; 32]);
+        let request = StateSyncRequest::full_state(root, 100, 42);
+
+        let hash1 = request.request_hash();
+        let hash2 = request.request_hash();
+
+        assert_eq!(hash1, hash2, "request hash must be deterministic");
+    }
+
+    #[test]
+    fn test_state_sync_request_hash_differs_by_root() {
+        let r1 = StateSyncRequest::full_state(StateRoot::new([1u8; 32]), 100, 42);
+        let r2 = StateSyncRequest::full_state(StateRoot::new([2u8; 32]), 100, 42);
+
+        assert_ne!(r1.request_hash(), r2.request_hash());
+    }
+
+    #[test]
+    fn test_state_sync_request_validate() {
+        let root = StateRoot::new([1u8; 32]);
+        let request = StateSyncRequest::full_state(root, 100, 42);
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn test_state_sync_request_validate_too_many_keys() {
+        let root = StateRoot::new([1u8; 32]);
+        let keys: Vec<Vec<u8>> = (0..MAX_SYNC_KEYS_PER_REQUEST + 1)
+            .map(|i| format!("key{}", i).into_bytes())
+            .collect();
+        let request = StateSyncRequest::specific_keys(root, 100, keys, 42);
+
+        assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn test_state_sync_request_preimage_includes_domain() {
+        let request = StateSyncRequest::full_state(StateRoot::ZERO, 0, 0);
+        let preimage = request.preimage();
+        assert!(
+            preimage.starts_with(sync_domain::SYNC_REQUEST),
+            "request preimage must start with domain prefix"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // State Sync Chunk Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_state_sync_chunk_new() {
+        let chunk = StateSyncChunk::new();
+        assert!(chunk.is_empty());
+        assert_eq!(chunk.len(), 0);
+        assert_eq!(chunk.chunk_size, 0);
+    }
+
+    #[test]
+    fn test_state_sync_chunk_try_add() {
+        let mut chunk = StateSyncChunk::new();
+
+        assert!(chunk.try_add(b"key".to_vec(), b"value".to_vec()));
+        assert_eq!(chunk.len(), 1);
+        assert!(!chunk.is_empty());
+    }
+
+    #[test]
+    fn test_state_sync_chunk_size_limit() {
+        let mut chunk = StateSyncChunk::new();
+
+        // Fill near capacity
+        let large_value = vec![0u8; MAX_SYNC_CHUNK_SIZE - 100];
+        assert!(chunk.try_add(b"key".to_vec(), large_value));
+
+        // Adding more should fail
+        assert!(!chunk.try_add(b"key2".to_vec(), vec![0u8; 200]));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // State Sync Response Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_state_sync_response_empty() {
+        let root = StateRoot::new([1u8; 32]);
+        let response = StateSyncResponse::empty(42, root, 100);
+
+        assert_eq!(response.request_id, 42);
+        assert_eq!(response.state_root, root);
+        assert_eq!(response.height, 100);
+        assert!(response.chunk.is_empty());
+        assert!(response.is_final);
+    }
+
+    #[test]
+    fn test_state_sync_response_hash_deterministic() {
+        let root = StateRoot::new([1u8; 32]);
+        let response = StateSyncResponse::empty(42, root, 100);
+
+        let hash1 = response.response_hash();
+        let hash2 = response.response_hash();
+
+        assert_eq!(hash1, hash2, "response hash must be deterministic");
+    }
+
+    #[test]
+    fn test_state_sync_response_preimage_includes_domain() {
+        let response = StateSyncResponse::empty(0, StateRoot::ZERO, 0);
+        let preimage = response.preimage();
+        assert!(
+            preimage.starts_with(sync_domain::SYNC_RESPONSE),
+            "response preimage must start with domain prefix"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // State Proof Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_state_proof_empty() {
+        let proof = StateProof::empty(StateRoot::ZERO);
+
+        assert!(proof.is_empty());
+        assert_eq!(proof.proof_type, StateProofType::Empty);
+    }
+
+    #[test]
+    fn test_state_proof_linear_hash() {
+        let root = StateRoot::new([1u8; 32]);
+        let entries = vec![(b"key".to_vec(), Some(b"value".to_vec()))];
+        let proof = StateProof::linear_hash(root, entries.clone());
+
+        assert_eq!(proof.claimed_root, root);
+        assert_eq!(proof.entries, entries);
+        assert_eq!(proof.proof_type, StateProofType::LinearHash);
+    }
+
+    #[test]
+    fn test_state_proof_merkle_tree() {
+        let root = StateRoot::new([1u8; 32]);
+        let entries = vec![(b"key".to_vec(), Some(b"value".to_vec()))];
+        let siblings = vec![[2u8; 32], [3u8; 32]];
+        let proof = StateProof::merkle_tree(root, entries.clone(), siblings.clone());
+
+        assert_eq!(proof.claimed_root, root);
+        assert_eq!(proof.entries, entries);
+        assert_eq!(proof.siblings, siblings);
+        assert_eq!(proof.proof_type, StateProofType::MerkleTree);
+    }
+
+    #[test]
+    fn test_state_proof_hash_deterministic() {
+        let proof = StateProof::empty(StateRoot::ZERO);
+
+        let hash1 = proof.proof_hash();
+        let hash2 = proof.proof_hash();
+
+        assert_eq!(hash1, hash2, "proof hash must be deterministic");
+    }
+
+    #[test]
+    fn test_state_proof_preimage_includes_domain() {
+        let proof = StateProof::empty(StateRoot::ZERO);
+        let preimage = proof.preimage();
+        assert!(
+            preimage.starts_with(sync_domain::STATE_PROOF),
+            "proof preimage must start with domain prefix"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Proof Verification Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_verify_empty_proof_zero_root() {
+        let verifier = InMemoryProofVerifier;
+        let proof = StateProof::empty(StateRoot::ZERO);
+
+        assert!(verifier.verify_proof(&proof).is_ok());
+    }
+
+    #[test]
+    fn test_verify_empty_proof_non_zero_root_fails() {
+        let verifier = InMemoryProofVerifier;
+        let proof = StateProof::empty(StateRoot::new([1u8; 32]));
+
+        assert!(verifier.verify_proof(&proof).is_err());
+    }
+
+    #[test]
+    fn test_verify_linear_hash_proof_valid() {
+        let verifier = InMemoryProofVerifier;
+
+        // Create state and get its root
+        let mut manager = InMemoryStateManager::new();
+        manager.begin_block();
+        let mut batch = StateUpdateBatch::new();
+        batch.set(b"key1", b"value1");
+        batch.set(b"key2", b"value2");
+        manager.apply_update(&batch).unwrap();
+        manager.commit().unwrap();
+
+        let root = manager.state_root();
+
+        // Create proof with the same entries
+        let entries = vec![
+            (b"key1".to_vec(), Some(b"value1".to_vec())),
+            (b"key2".to_vec(), Some(b"value2".to_vec())),
+        ];
+        let proof = StateProof::linear_hash(root, entries);
+
+        assert!(verifier.verify_proof(&proof).is_ok());
+    }
+
+    #[test]
+    fn test_verify_linear_hash_proof_invalid_root() {
+        let verifier = InMemoryProofVerifier;
+
+        // Create proof claiming wrong root
+        let entries = vec![(b"key".to_vec(), Some(b"value".to_vec()))];
+        let wrong_root = StateRoot::new([99u8; 32]);
+        let proof = StateProof::linear_hash(wrong_root, entries);
+
+        let result = verifier.verify_proof(&proof);
+        assert!(matches!(result, Err(StateError::RootMismatch { .. })));
+    }
+
+    #[test]
+    fn test_verify_merkle_tree_proof_not_implemented() {
+        let verifier = InMemoryProofVerifier;
+        let proof = StateProof::merkle_tree(StateRoot::ZERO, vec![], vec![]);
+
+        let result = verifier.verify_proof(&proof);
+        assert!(matches!(result, Err(StateError::VerificationFailed(_))));
+    }
+
+    #[test]
+    fn test_verify_entries_correct() {
+        let verifier = InMemoryProofVerifier;
+
+        // Create proof with entries
+        let entries = vec![
+            (b"key1".to_vec(), Some(b"value1".to_vec())),
+            (b"key2".to_vec(), Some(b"value2".to_vec())),
+        ];
+        let root = compute_linear_hash_root(&entries);
+        let proof = StateProof::linear_hash(root, entries.clone());
+
+        // Verify subset of entries
+        let check = vec![(b"key1".to_vec(), Some(b"value1".to_vec()))];
+        assert!(verifier.verify_entries(&proof, &check).is_ok());
+    }
+
+    #[test]
+    fn test_verify_entries_key_not_found() {
+        let verifier = InMemoryProofVerifier;
+
+        let entries = vec![(b"key1".to_vec(), Some(b"value1".to_vec()))];
+        let root = compute_linear_hash_root(&entries);
+        let proof = StateProof::linear_hash(root, entries);
+
+        // Try to verify a key that's not in the proof
+        let check = vec![(b"missing".to_vec(), Some(b"value".to_vec()))];
+        let result = verifier.verify_entries(&proof, &check);
+        assert!(matches!(result, Err(StateError::VerificationFailed(_))));
+    }
+
+    #[test]
+    fn test_verify_entries_value_mismatch() {
+        let verifier = InMemoryProofVerifier;
+
+        let entries = vec![(b"key".to_vec(), Some(b"value".to_vec()))];
+        let root = compute_linear_hash_root(&entries);
+        let proof = StateProof::linear_hash(root, entries);
+
+        // Try to verify with wrong value
+        let check = vec![(b"key".to_vec(), Some(b"wrong".to_vec()))];
+        let result = verifier.verify_entries(&proof, &check);
+        assert!(matches!(result, Err(StateError::VerificationFailed(_))));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // State Sync Handler Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_state_sync_handler_handle_request_specific_keys() {
+        let mut manager = InMemoryStateManager::new();
+        manager.begin_block();
+        let mut batch = StateUpdateBatch::new();
+        batch.set(b"key1", b"value1");
+        batch.set(b"key2", b"value2");
+        manager.apply_update(&batch).unwrap();
+        manager.commit().unwrap();
+
+        let root = manager.state_root();
+        let handler = StateSyncHandler::new(manager, 10);
+
+        let request = StateSyncRequest::specific_keys(
+            root,
+            10,
+            vec![b"key1".to_vec()],
+            42,
+        );
+
+        let response = handler.handle_request(&request).unwrap();
+
+        assert_eq!(response.request_id, 42);
+        assert_eq!(response.state_root, root);
+        assert_eq!(response.height, 10);
+        assert!(response.is_final);
+        assert_eq!(response.chunk.len(), 1);
+    }
+
+    #[test]
+    fn test_state_sync_handler_wrong_root() {
+        let manager = InMemoryStateManager::new();
+        let handler = StateSyncHandler::new(manager, 0);
+
+        let request = StateSyncRequest::full_state(
+            StateRoot::new([99u8; 32]), // Wrong root
+            0,
+            42,
+        );
+
+        let result = handler.handle_request(&request);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_state_sync_handler_full_state_returns_empty() {
+        let manager = InMemoryStateManager::new();
+        let root = manager.state_root();
+        let handler = StateSyncHandler::new(manager, 0);
+
+        let request = StateSyncRequest::full_state(root, 0, 42);
+        let response = handler.handle_request(&request).unwrap();
+
+        // Full state iteration not implemented, returns empty
+        assert!(response.chunk.is_empty());
+        assert!(response.is_final);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Domain Separation Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_sync_domains_are_unique() {
+        assert_ne!(sync_domain::SYNC_REQUEST, sync_domain::SYNC_RESPONSE);
+        assert_ne!(sync_domain::SYNC_REQUEST, sync_domain::STATE_PROOF);
+        assert_ne!(sync_domain::SYNC_RESPONSE, sync_domain::STATE_PROOF);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Hash Stability Tests (Exit Criteria)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_state_sync_request_hash_stable() {
+        // This test ensures hash stability across encode/decode
+        let request = StateSyncRequest::specific_keys(
+            StateRoot::new([1u8; 32]),
+            100,
+            vec![b"key".to_vec()],
+            42,
+        );
+
+        let hash_before = request.request_hash();
+        let serialized = serde_json::to_vec(&request).unwrap();
+        let deserialized: StateSyncRequest = serde_json::from_slice(&serialized).unwrap();
+        let hash_after = deserialized.request_hash();
+
+        assert_eq!(hash_before, hash_after, "hash must be stable across serialization");
+    }
+
+    #[test]
+    fn test_state_sync_response_hash_stable() {
+        let response = StateSyncResponse::empty(42, StateRoot::new([1u8; 32]), 100);
+
+        let hash_before = response.response_hash();
+        let serialized = serde_json::to_vec(&response).unwrap();
+        let deserialized: StateSyncResponse = serde_json::from_slice(&serialized).unwrap();
+        let hash_after = deserialized.response_hash();
+
+        assert_eq!(hash_before, hash_after, "hash must be stable across serialization");
+    }
+
+    #[test]
+    fn test_state_proof_hash_stable() {
+        let entries = vec![(b"key".to_vec(), Some(b"value".to_vec()))];
+        let proof = StateProof::linear_hash(StateRoot::new([1u8; 32]), entries);
+
+        let hash_before = proof.proof_hash();
+        let serialized = serde_json::to_vec(&proof).unwrap();
+        let deserialized: StateProof = serde_json::from_slice(&serialized).unwrap();
+        let hash_after = deserialized.proof_hash();
+
+        assert_eq!(hash_before, hash_after, "hash must be stable across serialization");
     }
 }

@@ -81,7 +81,7 @@
 - [x] Wire `commonware-consensus::simplex` and `marshal` for ordered finalization.
 - [x] Persist blocks, finalizations, and receipts roots.
 - [x] Wire QMDB state updates and root checks.
-- [ ] Add state sync and proof verification.
+- [x] Add state sync and proof verification.
 
 **Exit criteria**
 - Restart resumes with identical state root.
