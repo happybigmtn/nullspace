@@ -409,24 +409,35 @@ pub fn init_game(session: &mut GameSession, rng: &mut GameRng) -> GameResult {
 }
 
 /// Dispatch game move processing to the appropriate game module.
+///
+/// This function accepts both versioned and unversioned payloads for backward
+/// compatibility. Versioned payloads (with a 1-byte version header) are automatically
+/// stripped before being passed to game implementations.
+///
+/// Protocol version support:
+/// - Version 1: Current version, all games supported
+/// - Unversioned: Legacy format, still accepted during migration
 pub fn process_game_move(
     session: &mut GameSession,
     payload: &[u8],
     rng: &mut GameRng,
 ) -> Result<GameResult, GameError> {
+    // Strip version header if present (backward compatible)
+    let inner_payload = payload::strip_version_header_compat(payload);
+
     match session.game_type {
-        GameType::Baccarat => baccarat::Baccarat::process_move(session, payload, rng),
-        GameType::Blackjack => blackjack::Blackjack::process_move(session, payload, rng),
-        GameType::CasinoWar => casino_war::CasinoWar::process_move(session, payload, rng),
-        GameType::Craps => craps::Craps::process_move(session, payload, rng),
-        GameType::HiLo => hilo::HiLo::process_move(session, payload, rng),
-        GameType::Roulette => roulette::Roulette::process_move(session, payload, rng),
-        GameType::SicBo => sic_bo::SicBo::process_move(session, payload, rng),
-        GameType::ThreeCard => three_card::ThreeCardPoker::process_move(session, payload, rng),
+        GameType::Baccarat => baccarat::Baccarat::process_move(session, inner_payload, rng),
+        GameType::Blackjack => blackjack::Blackjack::process_move(session, inner_payload, rng),
+        GameType::CasinoWar => casino_war::CasinoWar::process_move(session, inner_payload, rng),
+        GameType::Craps => craps::Craps::process_move(session, inner_payload, rng),
+        GameType::HiLo => hilo::HiLo::process_move(session, inner_payload, rng),
+        GameType::Roulette => roulette::Roulette::process_move(session, inner_payload, rng),
+        GameType::SicBo => sic_bo::SicBo::process_move(session, inner_payload, rng),
+        GameType::ThreeCard => three_card::ThreeCardPoker::process_move(session, inner_payload, rng),
         GameType::UltimateHoldem => {
-            ultimate_holdem::UltimateHoldem::process_move(session, payload, rng)
+            ultimate_holdem::UltimateHoldem::process_move(session, inner_payload, rng)
         }
-        GameType::VideoPoker => video_poker::VideoPoker::process_move(session, payload, rng),
+        GameType::VideoPoker => video_poker::VideoPoker::process_move(session, inner_payload, rng),
     }
 }
 

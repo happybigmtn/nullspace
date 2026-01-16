@@ -1,5 +1,78 @@
 use super::GameError;
 
+/// Current protocol version for game move payloads.
+pub const PROTOCOL_VERSION: u8 = 1;
+
+/// Minimum supported protocol version.
+pub const MIN_PROTOCOL_VERSION: u8 = 1;
+
+/// Maximum supported protocol version.
+pub const MAX_PROTOCOL_VERSION: u8 = 1;
+
+/// Result of stripping the version header from a payload.
+pub struct VersionedPayload<'a> {
+    /// The protocol version found in the header.
+    pub version: u8,
+    /// The payload bytes after the version header.
+    pub payload: &'a [u8],
+}
+
+/// Strip the version header from a versioned payload.
+///
+/// Game move payloads may include a 1-byte version header as the first byte.
+/// This function validates and strips that header, returning the inner payload.
+///
+/// Returns `Ok(VersionedPayload)` with the version and inner payload.
+/// Returns `Err(GameError::InvalidPayload)` if:
+/// - The payload is empty
+/// - The version is not supported (outside MIN..=MAX range)
+pub fn strip_version_header(payload: &[u8]) -> Result<VersionedPayload<'_>, GameError> {
+    if payload.is_empty() {
+        return Err(GameError::InvalidPayload);
+    }
+
+    let version = payload[0];
+    if version < MIN_PROTOCOL_VERSION || version > MAX_PROTOCOL_VERSION {
+        return Err(GameError::InvalidPayload);
+    }
+
+    Ok(VersionedPayload {
+        version,
+        payload: &payload[1..],
+    })
+}
+
+/// Strip version header if present, otherwise pass through unchanged.
+///
+/// This enables backward compatibility during migration:
+/// - If the first byte is a valid protocol version (1), strip it
+/// - If the first byte looks like a game opcode (0, or > MAX_PROTOCOL_VERSION), pass through
+///
+/// This heuristic works because:
+/// - Protocol version 1 is the only valid version
+/// - Most game opcodes start at 0 (PlaceBet, Hit) or use values > 1
+/// - Versioned payloads have version=1 followed by opcode
+/// - Unversioned payloads start directly with the opcode
+pub fn strip_version_header_compat(payload: &[u8]) -> &[u8] {
+    if payload.is_empty() {
+        return payload;
+    }
+
+    let first_byte = payload[0];
+
+    // If first byte is a valid protocol version AND there's more payload,
+    // strip the version header
+    if first_byte >= MIN_PROTOCOL_VERSION
+        && first_byte <= MAX_PROTOCOL_VERSION
+        && payload.len() > 1
+    {
+        &payload[1..]
+    } else {
+        // Pass through unchanged (legacy unversioned payload)
+        payload
+    }
+}
+
 pub(crate) fn parse_u64_be(payload: &[u8], offset: usize) -> Result<u64, GameError> {
     let end = offset.saturating_add(8);
     if payload.len() < end {
@@ -32,7 +105,11 @@ pub(crate) fn ensure_nonzero_amount(amount: u64) -> Result<(), GameError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_place_bet_payload, parse_u64_be};
+    use super::{
+        parse_place_bet_payload, parse_u64_be, strip_version_header, strip_version_header_compat,
+        MAX_PROTOCOL_VERSION, MIN_PROTOCOL_VERSION, PROTOCOL_VERSION,
+    };
+    use crate::casino::GameError;
     use serde_json::Value;
 
     fn load_vectors() -> Value {
@@ -212,5 +289,88 @@ mod tests {
                 .expect("craps add odds amount parse");
             assert_eq!(amount, expected_amount, "craps add odds amount mismatch");
         }
+    }
+
+    #[test]
+    fn test_protocol_version_constants() {
+        assert_eq!(PROTOCOL_VERSION, 1);
+        assert_eq!(MIN_PROTOCOL_VERSION, 1);
+        assert_eq!(MAX_PROTOCOL_VERSION, 1);
+    }
+
+    #[test]
+    fn test_strip_version_header_valid() {
+        // Version 1 payload: [1, 4] (deal in blackjack)
+        let payload = vec![1u8, 4];
+        let result = strip_version_header(&payload).expect("should strip version");
+        assert_eq!(result.version, 1);
+        assert_eq!(result.payload, &[4u8]);
+    }
+
+    #[test]
+    fn test_strip_version_header_empty() {
+        let payload: Vec<u8> = vec![];
+        assert!(matches!(
+            strip_version_header(&payload),
+            Err(GameError::InvalidPayload)
+        ));
+    }
+
+    #[test]
+    fn test_strip_version_header_unsupported_version() {
+        // Version 0 is below minimum
+        let payload = vec![0u8, 4];
+        assert!(matches!(
+            strip_version_header(&payload),
+            Err(GameError::InvalidPayload)
+        ));
+
+        // Version 2 is above maximum
+        let payload = vec![2u8, 4];
+        assert!(matches!(
+            strip_version_header(&payload),
+            Err(GameError::InvalidPayload)
+        ));
+    }
+
+    #[test]
+    fn test_strip_version_header_compat_versioned() {
+        // Version 1 payload should be stripped
+        let payload = vec![1u8, 4, 5, 6];
+        let result = strip_version_header_compat(&payload);
+        assert_eq!(result, &[4u8, 5, 6]);
+    }
+
+    #[test]
+    fn test_strip_version_header_compat_unversioned() {
+        // Payload starting with 0 (typical opcode) should pass through
+        let payload = vec![0u8, 1, 2, 3];
+        let result = strip_version_header_compat(&payload);
+        assert_eq!(result, &[0u8, 1, 2, 3]);
+
+        // Payload starting with 2+ (above max version) should pass through
+        let payload = vec![2u8, 0, 0];
+        let result = strip_version_header_compat(&payload);
+        assert_eq!(result, &[2u8, 0, 0]);
+    }
+
+    #[test]
+    fn test_strip_version_header_compat_empty() {
+        let payload: Vec<u8> = vec![];
+        let result = strip_version_header_compat(&payload);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_strip_version_header_compat_single_byte() {
+        // Single byte version=1 with no payload should pass through (not enough data)
+        let payload = vec![1u8];
+        let result = strip_version_header_compat(&payload);
+        assert_eq!(result, &[1u8]);
+
+        // Single byte opcode should pass through
+        let payload = vec![4u8];
+        let result = strip_version_header_compat(&payload);
+        assert_eq!(result, &[4u8]);
     }
 }
