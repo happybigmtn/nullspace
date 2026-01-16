@@ -79,6 +79,7 @@
 
 pub mod artifact_registry;
 pub mod block;
+pub mod consensus;
 pub mod messages;
 
 pub use artifact_registry::{
@@ -89,6 +90,7 @@ pub use artifact_registry::{
 pub use block::{
     compute_receipts_root, Block, BlockBody, BlockHeader, Receipt, MAX_RECEIPT_ERROR_LEN,
 };
+pub use consensus::{Automaton, AutomatonError, Digest, Finalization, Marshal};
 pub use messages::{
     action_codes, ActionLogValidator, ConsensusPayload, GameActionMessage, NoOpTimelockVerifier,
     PayloadError, TimelockProofVerifier, TimelockVerificationInput, GAME_ACTION_DOMAIN, REVEAL_TTL,
