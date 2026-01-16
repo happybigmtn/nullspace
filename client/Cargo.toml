@@ -9,6 +9,7 @@ homepage = "https://nullspace.xyz"
 repository = "https://github.com/commonwarexyz/nullspace/tree/main/client"
 documentation = "https://docs.rs/nullspace-client"
 readme = "README.md"
+autobins = false
 
 [dependencies]
 nullspace-execution = { workspace = true, features = ["mocks", "parallel"] }
@@ -42,38 +43,18 @@ commonware-storage = { workspace = true }
 rand = { workspace = true }
 
 [[bin]]
-name = "stress-test"
-path = "src/bin/stress_test.rs"
-required-features = []
-
-[[bin]]
 name = "bridge-relayer"
 path = "src/bin/bridge_relayer.rs"
 required-features = []
 
 [[bin]]
-name = "tournament-scheduler"
-path = "src/bin/tournament_scheduler.rs"
-required-features = []
-
-[[bin]]
-name = "session-dump"
-path = "src/bin/session_dump.rs"
-required-features = []
-
-[[bin]]
-name = "recovery-pool"
-path = "src/bin/recovery_pool.rs"
-required-features = []
-
-[[bin]]
-name = "sybil-scan"
-path = "src/bin/sybil_scan.rs"
-required-features = []
-
-[[bin]]
 name = "seed-submit"
 path = "src/bin/seed_submit.rs"
+required-features = []
+
+[[bin]]
+name = "tournament-scheduler"
+path = "src/bin/tournament_scheduler.rs"
 required-features = []
 
 [dependencies.clap]

@@ -64,6 +64,9 @@ pub struct Config<I: Indexer> {
     /// Buffer size for the mempool stream channel.
     pub mempool_stream_buffer_size: usize,
 
+    /// Max age for oldest pending mempool transaction before emitting SLA warnings (ms).
+    pub mempool_inclusion_sla_ms: u64,
+
     /// Maximum number of entries to retain in the nonce cache.
     pub nonce_cache_capacity: usize,
 

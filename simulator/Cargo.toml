@@ -46,6 +46,7 @@ rusqlite = { version = "0.32.1", features = ["bundled"] }
 postgres = "0.19"
 url = { workspace = true }
 redis = { workspace = true }
+reqwest = { workspace = true }
 
 [dev-dependencies]
 nullspace-execution = { workspace = true, features = ["mocks"] }

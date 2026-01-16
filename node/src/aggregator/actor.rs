@@ -43,7 +43,7 @@ use rand::RngCore;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::atomic::AtomicU64,
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 use tracing::{debug, error, info, warn};
 
@@ -161,6 +161,13 @@ impl From<AggregationCertificate> for FixedCertificate {
     }
 }
 
+fn system_time_ms(now: SystemTime) -> i64 {
+    match now.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis() as i64,
+        Err(_) => 0,
+    }
+}
+
 impl From<FixedCertificate> for AggregationCertificate {
     fn from(fixed_certificate: FixedCertificate) -> Self {
         Self {
@@ -244,6 +251,9 @@ impl<
         let summary_upload_failures: Counter<u64, AtomicU64> = Counter::default();
         let summary_uploads_outstanding: Gauge = Gauge::default();
         let summary_upload_lag: Gauge = Gauge::default();
+        let summary_upload_last_attempt_ms: Gauge = Gauge::default();
+        let aggregation_tip: Gauge = Gauge::default();
+        let aggregation_tip_updated_ms: Gauge = Gauge::default();
         self.context.register(
             "summary_upload_attempts_total",
             "Number of attempts to upload summaries to the indexer",
@@ -263,6 +273,21 @@ impl<
             "summary_upload_lag",
             "Difference between next upload cursor and last contiguous uploaded summary",
             summary_upload_lag.clone(),
+        );
+        self.context.register(
+            "summary_upload_last_attempt_ms",
+            "Unix timestamp (ms) of the last summary upload attempt",
+            summary_upload_last_attempt_ms.clone(),
+        );
+        self.context.register(
+            "aggregation_tip",
+            "Latest aggregation tip index observed by the aggregator",
+            aggregation_tip.clone(),
+        );
+        self.context.register(
+            "aggregation_tip_updated_ms",
+            "Unix timestamp (ms) when aggregation_tip was last updated",
+            aggregation_tip_updated_ms.clone(),
         );
 
         // Proof metrics
@@ -396,6 +421,7 @@ impl<
         info!(cursor, "initial summary cursor");
         summary_uploads_outstanding.set(0);
         summary_upload_lag.set(0);
+        summary_upload_last_attempt_ms.set(0);
 
         // Track pending aggregation work
         let mut proposal_requests: BTreeMap<u64, oneshot::Sender<Digest>> = BTreeMap::new();
@@ -621,6 +647,8 @@ impl<
                 }
                 Message::Tip { index: tip } => {
                     debug!(tip, "new aggregation tip");
+                    aggregation_tip.set(tip as i64);
+                    aggregation_tip_updated_ms.set(system_time_ms(self.context.current()));
                 }
                 Message::Deliver {
                     index,
@@ -696,6 +724,7 @@ impl<
                 // Increment uploads outstanding
                 uploads_outstanding += 1;
                 summary_uploads_outstanding.set(uploads_outstanding as i64);
+                summary_upload_last_attempt_ms.set(system_time_ms(self.context.current()));
 
                 // Get certificate
                 let certificate = match certificates.get(cursor).await {

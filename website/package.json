@@ -22,7 +22,6 @@
     "test:unit:coverage": "vitest run --coverage",
     "test:coverage": "npm run test:unit:coverage",
     "test:unit:watch": "vitest",
-    "e2e:auth": "node scripts/e2e-auth-billing.mjs",
     "build:analyze": "ANALYZE=true npm run build",
     "bundle:check": "node scripts/check-bundle-sizes.mjs"
   },
@@ -64,8 +63,6 @@
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.1.0",
     "node-fetch": "^3.3.2",
-    "pixelmatch": "^6.0.0",
-    "pngjs": "^7.0.0",
     "rollup-plugin-visualizer": "^6.0.5",
     "vitest": "^4.0.16",
     "ws": "^8.18.3"

@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "outputDir": "review/agents",
+  "summaryPath": "review/summary.md",
+  "agents": [
+    {
+      "id": "core-nondeterminism",
+      "title": "Core nondeterminism and time sources",
+      "description": "Locate randomness and wall-clock usage in consensus-critical Rust components.",
+      "paths": ["node", "execution", "simulator", "types", "services"],
+      "globs": ["**/*.rs"],
+      "patterns": [
+        {
+          "id": "system-time",
+          "severity": "high",
+          "regex": "SystemTime::now\\(",
+          "note": "Wall-clock usage can create nondeterminism or inconsistent TTL behavior between nodes."
+        },
+        {
+          "id": "instant-now",
+          "severity": "medium",
+          "regex": "Instant::now\\(",
+          "note": "Monotonic time is fine for metrics, but avoid it in state transitions or consensus decisions."
+        },
+        {
+          "id": "thread-rng",
+          "severity": "high",
+          "regex": "thread_rng\\(",
+          "note": "Thread RNG should not influence consensus or state roots."
+        },
+        {
+          "id": "rand-random",
+          "severity": "high",
+          "regex": "rand::random\\(",
+          "note": "Randomness must be seeded deterministically for consensus-critical paths."
+        },
+        {
+          "id": "os-rng",
+          "severity": "medium",
+          "regex": "OsRng",
+          "note": "OS RNG should be isolated to key generation or non-consensus utilities."
+        }
+      ]
+    },
+    {
+      "id": "core-panic-unwrap",
+      "title": "Core panic/unwrap/expect usage",
+      "description": "Surface crash and trap risks in Rust runtime paths.",
+      "paths": ["node", "execution", "simulator", "types", "services"],
+      "globs": ["**/*.rs"],
+      "patterns": [
+        {
+          "id": "panic",
+          "severity": "high",
+          "regex": "panic!",
+          "note": "Panics in runtime paths can halt consensus or crash nodes."
+        },
+        {
+          "id": "unwrap",
+          "severity": "medium",
+          "regex": "\\bunwrap\\s*\\(",
+          "note": "Unwraps should be guarded or converted to typed errors in production code."
+        },
+        {
+          "id": "expect",
+          "severity": "medium",
+          "regex": "\\bexpect\\s*\\(",
+          "note": "Expect calls should be limited to tests or validated invariants."
+        },
+        {
+          "id": "todo",
+          "severity": "high",
+          "regex": "todo!",
+          "note": "Todo markers are incomplete behavior in production paths."
+        },
+        {
+          "id": "unimplemented",
+          "severity": "high",
+          "regex": "unimplemented!",
+          "note": "Unimplemented markers will panic at runtime."
+        }
+      ]
+    },
+    {
+      "id": "core-unsafe",
+      "title": "Unsafe usage in core Rust",
+      "description": "Identify unsafe blocks that require audit and justification.",
+      "paths": ["node", "execution", "simulator", "types", "services"],
+      "globs": ["**/*.rs"],
+      "patterns": [
+        {
+          "id": "unsafe",
+          "severity": "medium",
+          "regex": "\\bunsafe\\b",
+          "note": "Unsafe blocks need explicit invariants and test coverage."
+        },
+        {
+          "id": "transmute",
+          "severity": "high",
+          "regex": "transmute",
+          "note": "Transmute is high-risk and requires strict invariants."
+        }
+      ]
+    },
+    {
+      "id": "core-unbounded",
+      "title": "Unbounded queues and channels",
+      "description": "Find unbounded structures that can cause memory blowups under load.",
+      "paths": ["node", "execution", "simulator", "types", "services"],
+      "globs": ["**/*.rs"],
+      "patterns": [
+        {
+          "id": "unbounded-channel",
+          "severity": "high",
+          "regex": "unbounded_channel",
+          "note": "Unbounded channels should be replaced with bounded variants or explicit backpressure."
+        },
+        {
+          "id": "unbounded-sender",
+          "severity": "medium",
+          "regex": "UnboundedSender",
+          "note": "Unbounded senders indicate lack of backpressure."
+        },
+        {
+          "id": "unbounded-receiver",
+          "severity": "medium",
+          "regex": "UnboundedReceiver",
+          "note": "Unbounded receivers indicate lack of backpressure."
+        }
+      ]
+    },
+    {
+      "id": "js-nondeterminism",
+      "title": "Frontend/gateway nondeterminism",
+      "description": "Flag time/random usage in JS/TS that can desync clients or analytics.",
+      "paths": ["gateway", "website", "mobile", "client", "packages"],
+      "globs": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+      "patterns": [
+        {
+          "id": "math-random",
+          "severity": "medium",
+          "regex": "Math\\.random\\(",
+          "note": "Randomness should be deterministic for tests or sourced from backend for game logic."
+        },
+        {
+          "id": "date-now",
+          "severity": "low",
+          "regex": "Date\\.now\\(",
+          "note": "Wall-clock usage can introduce flaky tests; prefer injected clocks."
+        },
+        {
+          "id": "performance-now",
+          "severity": "low",
+          "regex": "performance\\.now\\(",
+          "note": "Performance timing is fine for metrics but avoid logic gates."
+        }
+      ]
+    },
+    {
+      "id": "durability-sqlite",
+      "title": "SQLite durability settings",
+      "description": "Detect non-durable PRAGMA settings in persistence code.",
+      "paths": ["simulator", "services", "infrastructure"],
+      "globs": ["**/*.rs", "**/*.sql", "**/*.md", "**/*.yml"],
+      "patterns": [
+        {
+          "id": "pragma-synchronous-normal",
+          "severity": "medium",
+          "regex": "synchronous=NORMAL",
+          "note": "NORMAL may risk durability on crash; verify for consensus-critical stores."
+        },
+        {
+          "id": "pragma-synchronous-off",
+          "severity": "high",
+          "regex": "synchronous=OFF",
+          "note": "OFF is unsafe for durable consensus or state history."
+        },
+        {
+          "id": "journal-mode-off",
+          "severity": "high",
+          "regex": "journal_mode=OFF",
+          "note": "Disabling journaling risks corruption on crash."
+        }
+      ]
+    }
+  ]
+}

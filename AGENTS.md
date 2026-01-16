@@ -79,6 +79,7 @@ hcloud firewall add-rule <firewall> --direction in --protocol tcp --port <port> 
 **Temporary Fix Deployed**: Bypass signature verification in `simulator/src/submission.rs` but still extract proof digests:
 - Seed submissions: Skip signature check, proceed with submission
 - Summary submissions: Log warning, extract state/events digests directly using `verify_proof_and_extract_digests`, then proceed with state sync
+ - **Flag**: `nullspace-simulator --enforce-signature-verification` disables the bypass and fails invalid summaries/seeds
 
 **Key Code Changes** (`simulator/src/submission.rs`):
 ```rust
@@ -153,6 +154,13 @@ pnpm test                            # JS/TS tests (all packages)
 pnpm -C website test                 # Website tests only
 pnpm -C gateway test                 # Gateway tests only
 scripts/health-check.sh              # Staging health check
+scripts/agent-review.sh              # Review agents (line-level audits)
+```
+
+**Recovery Commands:**
+
+```bash
+scripts/recover-consensus.sh          # Non-destructive restarts (set WIPE=1 CONFIRM_RESET=1 to wipe)
 ```
 
 ## Protocol Versioning (US-149)

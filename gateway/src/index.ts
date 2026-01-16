@@ -12,6 +12,7 @@ import { SessionManager, NonceManager, ConnectionLimiter } from './session/index
 import { SubmitClient } from './backend/index.js';
 import { ErrorCodes, createError } from './types/errors.js';
 import { OutboundMessageSchema, type OutboundMessage, getOutboundMessageGameType } from '@nullspace/protocol/mobile';
+import { CURRENT_PROTOCOL_VERSION, MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION } from '@nullspace/protocol';
 import { trackGatewayFaucet, trackGatewayResponse, trackGatewaySession } from './ops.js';
 import { crapsLiveTable } from './live-table/index.js';
 import { logDebug, logError, logInfo, logWarn } from './logger.js';
@@ -448,6 +449,11 @@ const server = createServer(async (req, res) => {
 
   // Readiness probe: Can we serve traffic? Checks backend connectivity and drain state.
   if (req.method === 'GET' && (path === '/healthz' || path === '/readyz')) {
+    const protocolInfo = {
+      current: CURRENT_PROTOCOL_VERSION,
+      minSupported: MIN_PROTOCOL_VERSION,
+      maxSupported: MAX_PROTOCOL_VERSION,
+    };
     // US-154: Report draining state - return 503 when draining so load balancer removes us
     if (isDraining) {
       const elapsedMs = drainStartTime ? Date.now() - drainStartTime : 0;
@@ -461,6 +467,7 @@ const server = createServer(async (req, res) => {
         drainElapsedMs: elapsedMs,
         activeSessions,
         activeGames,
+        protocol: protocolInfo,
       }));
       return;
     }
@@ -469,11 +476,11 @@ const server = createServer(async (req, res) => {
     if (backendHealthy) {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ ok: true, backend: 'connected' }));
+      res.end(JSON.stringify({ ok: true, backend: 'connected', protocol: protocolInfo }));
     } else {
       res.statusCode = 503;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ ok: false, backend: 'unreachable' }));
+      res.end(JSON.stringify({ ok: false, backend: 'unreachable', protocol: protocolInfo }));
     }
     return;
   }
@@ -614,6 +621,11 @@ wss.on('connection', async (ws: WebSocket, req) => {
       publicKey: session.publicKeyHex,
       registered: session.registered,
       hasBalance: session.hasBalance,
+      protocol: {
+        current: CURRENT_PROTOCOL_VERSION,
+        minSupported: MIN_PROTOCOL_VERSION,
+        maxSupported: MAX_PROTOCOL_VERSION,
+      },
     });
     trackGatewaySession(session);
 

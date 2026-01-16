@@ -5,6 +5,25 @@ use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
 use std::sync::atomic::AtomicU64;
 use std::collections::{BTreeMap, HashMap};
 
+#[derive(Clone)]
+struct MempoolEntry {
+    tx: Transaction,
+    inserted_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddRejectReason {
+    GlobalCapacity,
+    DuplicateNonce,
+    BacklogLimit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddResult {
+    Added { trimmed: bool },
+    Rejected(AddRejectReason),
+}
+
 /// The maximum number of transactions a single account can have in the mempool.
 // Increased for higher transaction throughput per account
 #[cfg(test)]
@@ -20,7 +39,8 @@ pub struct Mempool {
     max_backlog: usize,
     max_transactions: usize,
     total_transactions: usize,
-    tracked: HashMap<PublicKey, BTreeMap<u64, Transaction>>,
+    tracked: HashMap<PublicKey, BTreeMap<u64, MempoolEntry>>,
+    min_inserted_at_ms: Option<i64>,
     /// We store the public keys of the transactions to be processed next (rather than transactions
     /// received by digest) because we may receive transactions out-of-order (and/or some may have
     /// already been processed) and should just try return the transaction with the lowest nonce we
@@ -62,6 +82,11 @@ impl Mempool {
             unique.clone(),
         );
         context.register(
+            "mempool_pending_total",
+            "Number of pending transactions in the mempool",
+            unique.clone(),
+        );
+        context.register(
             "accounts",
             "Number of accounts in the mempool",
             accounts.clone(),
@@ -83,6 +108,7 @@ impl Mempool {
             max_transactions,
             total_transactions: 0,
             tracked: HashMap::new(),
+            min_inserted_at_ms: None,
             queue: Vec::new(),
             queue_positions: HashMap::new(),
             queue_cursor: 0,
@@ -129,40 +155,68 @@ impl Mempool {
     }
 
     /// Add a transaction to the mempool.
-    pub fn add(&mut self, tx: Transaction) {
+    pub fn add(&mut self, tx: Transaction, now_ms: i64) -> AddResult {
         // If there are too many transactions, ignore
         if self.total_transactions >= self.max_transactions {
             self.rejected_total.inc();
-            return;
+            return AddResult::Rejected(AddRejectReason::GlobalCapacity);
         }
 
         // Track the transaction.
+        let tx_nonce = tx.nonce;
         let public = tx.public.clone();
-        let (was_empty, entry_len) = {
+        let (was_empty, entry_len, trimmed, trimmed_new_tx) = {
             let entry = self.tracked.entry(public.clone()).or_default();
             let was_empty = entry.is_empty();
 
             // If there already exists a transaction at some nonce, return.
             if entry.contains_key(&tx.nonce) {
-                return;
+                return AddResult::Rejected(AddRejectReason::DuplicateNonce);
             }
 
             // Insert the transaction into the mempool.
-            let replaced = entry.insert(tx.nonce, tx);
+            let replaced = entry.insert(
+                tx.nonce,
+                MempoolEntry {
+                    tx,
+                    inserted_at_ms: now_ms,
+                },
+            );
             debug_assert!(
                 replaced.is_none(),
                 "duplicate nonce per account should have been filtered"
             );
             self.total_transactions += 1;
+            match self.min_inserted_at_ms {
+                Some(current_min) => {
+                    if now_ms < current_min {
+                        self.min_inserted_at_ms = Some(now_ms);
+                    }
+                }
+                None => {
+                    self.min_inserted_at_ms = Some(now_ms);
+                }
+            }
 
             // If there are too many transactions, remove the furthest in the future.
+            let mut trimmed = false;
+            let mut trimmed_new_tx = false;
             if entry.len() > self.max_backlog {
-                entry.pop_last();
+                trimmed = true;
+                let removed = entry.pop_last();
+                if let Some((removed_nonce, removed)) = removed {
+                    if removed_nonce == tx_nonce {
+                        trimmed_new_tx = true;
+                    }
+                    if Some(removed.inserted_at_ms) == self.min_inserted_at_ms {
+                        self.min_inserted_at_ms = None;
+                    }
+                }
                 self.total_transactions = self.total_transactions.saturating_sub(1);
                 self.trimmed_total.inc();
             }
 
-            (was_empty, entry.len())
+            (was_empty, entry.len(), trimmed, trimmed_new_tx)
         };
 
         // Avoid tracking empty per-account entries (can happen if `max_backlog == 0`).
@@ -184,6 +238,12 @@ impl Mempool {
         // Update metrics
         self.unique.set(self.total_transactions as i64);
         self.accounts.set(self.tracked.len() as i64);
+
+        if trimmed_new_tx {
+            return AddResult::Rejected(AddRejectReason::BacklogLimit);
+        }
+
+        AddResult::Added { trimmed }
     }
 
     /// Retain transactions for a given account with a minimum nonce.
@@ -193,11 +253,14 @@ impl Mempool {
             return;
         };
         let removed_account = loop {
-            let Some((nonce, _tx)) = tracked.first_key_value() else {
+            let Some((nonce, entry)) = tracked.first_key_value() else {
                 break true;
             };
             if nonce >= &min {
                 break false;
+            }
+            if Some(entry.inserted_at_ms) == self.min_inserted_at_ms {
+                self.min_inserted_at_ms = None;
             }
             tracked.pop_first();
             self.total_transactions = self.total_transactions.saturating_sub(1);
@@ -241,7 +304,12 @@ impl Mempool {
             };
 
             let (tx, became_empty) = match tracked.pop_first() {
-                Some((_, tx)) => (Some(tx), tracked.is_empty()),
+                Some((_, entry)) => {
+                    if Some(entry.inserted_at_ms) == self.min_inserted_at_ms {
+                        self.min_inserted_at_ms = None;
+                    }
+                    (Some(entry.tx), tracked.is_empty())
+                }
                 None => (None, true),
             };
 
@@ -290,8 +358,8 @@ impl Mempool {
 
             let public = &self.queue[cursor];
             if let Some(tracked) = self.tracked.get(public) {
-                if let Some((_, tx)) = tracked.first_key_value() {
-                    result.push(tx.clone());
+                if let Some((_, entry)) = tracked.first_key_value() {
+                    result.push(entry.tx.clone());
                 }
             }
 
@@ -300,6 +368,35 @@ impl Mempool {
         }
 
         result
+    }
+
+    pub fn stats(&self) -> (usize, usize) {
+        (self.total_transactions, self.tracked.len())
+    }
+
+    /// Return the age in milliseconds of the oldest pending transaction, if any.
+    pub fn oldest_age_ms(&mut self, now_ms: i64) -> Option<u64> {
+        if self.total_transactions == 0 {
+            self.min_inserted_at_ms = None;
+            return None;
+        }
+
+        if self.min_inserted_at_ms.is_none() {
+            let mut min: Option<i64> = None;
+            for entries in self.tracked.values() {
+                for entry in entries.values() {
+                    min = match min {
+                        Some(current) => Some(current.min(entry.inserted_at_ms)),
+                        None => Some(entry.inserted_at_ms),
+                    };
+                }
+            }
+            self.min_inserted_at_ms = min;
+        }
+
+        let min = self.min_inserted_at_ms?;
+        let age = now_ms.saturating_sub(min).max(0) as u64;
+        Some(age)
     }
 }
 
@@ -321,7 +418,7 @@ mod tests {
             let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
             let public = tx.public.clone();
 
-            mempool.add(tx);
+            mempool.add(tx, 0);
 
             assert_eq!(mempool.total_transactions, 1);
             assert_eq!(mempool.tracked.len(), 1);
@@ -329,7 +426,7 @@ mod tests {
             assert_eq!(mempool.queue.len(), 1);
 
             let tracked = mempool.tracked.get(&public).unwrap();
-            let stored_tx = tracked.get(&0).unwrap();
+            let stored_tx = &tracked.get(&0).unwrap().tx;
             assert_eq!(stored_tx.public, public);
             assert_eq!(stored_tx.nonce, 0);
         });
@@ -344,8 +441,8 @@ mod tests {
             let private = PrivateKey::from_seed(1);
             let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
 
-            mempool.add(tx.clone());
-            mempool.add(tx);
+            mempool.add(tx.clone(), 0);
+            mempool.add(tx, 0);
 
             assert_eq!(mempool.total_transactions, 1);
             assert_eq!(mempool.tracked.len(), 1);
@@ -368,16 +465,16 @@ mod tests {
             let digest2 = tx2.digest();
             let public = tx1.public.clone();
 
-            mempool.add(tx1);
+            mempool.add(tx1, 0);
             let tracked = mempool.tracked.get(&public).unwrap();
             assert_eq!(tracked.len(), 1);
-            assert_eq!(tracked.get(&0).unwrap().digest(), digest1);
+            assert_eq!(tracked.get(&0).unwrap().tx.digest(), digest1);
 
-            mempool.add(tx2);
+            mempool.add(tx2, 0);
             let tracked = mempool.tracked.get(&public).unwrap();
             assert_eq!(tracked.len(), 1);
-            assert_eq!(tracked.get(&0).unwrap().digest(), digest1);
-            assert_ne!(tracked.get(&0).unwrap().digest(), digest2);
+            assert_eq!(tracked.get(&0).unwrap().tx.digest(), digest1);
+            assert_ne!(tracked.get(&0).unwrap().tx.digest(), digest2);
             assert_eq!(mempool.total_transactions, 1);
         });
     }
@@ -393,7 +490,7 @@ mod tests {
             for nonce in 0..5 {
                 let tx =
                     Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
-                mempool.add(tx);
+                mempool.add(tx, 0);
             }
 
             assert_eq!(mempool.total_transactions, 5);
@@ -416,7 +513,7 @@ mod tests {
                     nonce as u64,
                     Instruction::CasinoDeposit { amount: 100 },
                 );
-                mempool.add(tx);
+                mempool.add(tx, 0);
             }
 
             assert_eq!(mempool.total_transactions, DEFAULT_MAX_BACKLOG);
@@ -438,7 +535,7 @@ mod tests {
             for seed in 0..5 {
                 let private = PrivateKey::from_seed(seed);
                 let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
-                mempool.add(tx);
+                mempool.add(tx, 0);
             }
 
             assert_eq!(mempool.total_transactions, 5);
@@ -459,7 +556,7 @@ mod tests {
             for nonce in 0..5 {
                 let tx =
                     Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
-                mempool.add(tx);
+                mempool.add(tx, 0);
             }
 
             mempool.retain(&public, 3);
@@ -486,7 +583,7 @@ mod tests {
             for nonce in 0..3 {
                 let tx =
                     Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
-                mempool.add(tx);
+                mempool.add(tx, 0);
             }
 
             mempool.retain(&public, 5);
@@ -522,7 +619,7 @@ mod tests {
             let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
             let expected_nonce = tx.nonce;
 
-            mempool.add(tx);
+            mempool.add(tx, 0);
 
             let next = mempool.next();
             assert!(next.is_some());
@@ -545,7 +642,7 @@ mod tests {
             for nonce in 0..3 {
                 let tx =
                     Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
-                mempool.add(tx);
+                mempool.add(tx, 0);
             }
 
             for expected_nonce in 0..3 {
@@ -577,7 +674,7 @@ mod tests {
                         nonce,
                         Instruction::CasinoDeposit { amount: 100 },
                     );
-                    mempool.add(tx);
+                    mempool.add(tx, 0);
                 }
             }
 
@@ -618,8 +715,8 @@ mod tests {
             let tx1 = Transaction::sign(&private1, 0, Instruction::CasinoDeposit { amount: 100 });
             let tx2 = Transaction::sign(&private2, 0, Instruction::CasinoDeposit { amount: 200 });
 
-            mempool.add(tx1);
-            mempool.add(tx2);
+            mempool.add(tx1, 0);
+            mempool.add(tx2, 0);
 
             mempool.retain(&public1, 1);
 
@@ -643,11 +740,10 @@ mod tests {
                 let private = PrivateKey::from_seed(seed as u64);
                 let public = private.public_key();
                 accounts.push(public.clone());
-                mempool.add(Transaction::sign(
-                    &private,
+                mempool.add(
+                    Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 1 }),
                     0,
-                    Instruction::CasinoDeposit { amount: 1 },
-                ));
+                );
             }
             assert_eq!(mempool.total_transactions, account_count);
             assert_eq!(mempool.queue.len(), account_count);
@@ -677,7 +773,7 @@ mod tests {
             for seed in 0..=DEFAULT_MAX_TRANSACTIONS {
                 let private = PrivateKey::from_seed(seed as u64);
                 let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
-                mempool.add(tx);
+                mempool.add(tx, 0);
             }
 
             assert_eq!(mempool.total_transactions, DEFAULT_MAX_TRANSACTIONS);
@@ -695,7 +791,7 @@ mod tests {
 
             let private = PrivateKey::from_seed(1);
             let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
-            mempool.add(tx);
+            mempool.add(tx, 0);
 
             assert_eq!(mempool.unique.get(), 1);
             assert_eq!(mempool.accounts.get(), 1);

@@ -10,7 +10,6 @@ A fully on-chain casino platform with global table architecture, supporting tens
 - [Project Structure](#project-structure)
 - [Backend Services](#backend-services)
 - [Data Persistence](#data-persistence)
-- [Observability](#observability)
 - [Resource Sizing](#resource-sizing)
 - [Limits Reference](#limits-reference)
 - [Security](#security)
@@ -98,7 +97,6 @@ echo "UI: http://127.0.0.1:${WEB_PORT}"
   - Mock/deterministic (fastest): `SMOKE_BACKEND=mock ./scripts/agent-loop.sh`
   - Real stack validation: `SMOKE_BACKEND=real ./scripts/agent-loop.sh`
 - `./scripts/agent-up.sh` / `./scripts/agent-down.sh` boot/stop the stack for longer sessions (configurable via `SKIP_*` and `WEB_PORT`).
-- `./scripts/agent-next.sh` surfaces the next automation priorities from `plans/automation-roadmap.yml` so agents can self-select work without a human queue.
 - All loops are non-interactive and idempotent: they seed missing config (`website/.env.local`, Convex env), reclaim ports, and log to `/tmp/*` so agents can parse results automatically.
 
 ### Stop Services
@@ -191,8 +189,6 @@ Each game runs a repeating schedule tuned for excitement and clarity:
 | Three Card Poker | Cards | 3.4% | Progressive jackpot |
 | Ultimate Texas | Cards | 2.2% | Hold'em variant |
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed game implementations and bet limits.
-
 ### RNG/Fairness
 
 All outcomes derived from a cryptographic hash chain seeded by validator consensus:
@@ -213,10 +209,9 @@ outcome = SHA256(network_seed || session_id || move_number)
 
 ```
 nullspace/
-+-- client/              # Operational tooling (bridge relayer, stress tests, diagnostics)
++-- client/              # Operational tooling (bridge relayer, seed submitter, tournament scheduler)
 +-- configs/             # Environment configs (local, staging, production)
-+-- docker/              # Docker compose files (Convex, observability)
-+-- docs/                # Additional documentation
++-- docker/              # Docker compose files (Convex)
 +-- evm/                  # EVM contracts (BridgeLockbox, RNG token)
 +-- execution/           # Rust execution layer (casino game logic)
 +-- gateway/             # TypeScript WebSocket gateway
@@ -240,7 +235,7 @@ nullspace/
 | `nullspace-node` | Consensus validators with metrics on port 9100+ |
 | `services/auth` | Session auth + AI proxy endpoint (`POST /ai/strategy`) |
 | `gateway` | WebSocket session manager for app clients (registration, deposits, updates stream) |
-| `client` bins | Operational tooling (bridge relayer, tournament scheduler, stress-test bots, diagnostics) |
+| `client` bins | Operational tooling (bridge relayer, seed submitter, tournament scheduler) |
 
 ## Backend Services
 
@@ -251,7 +246,6 @@ nullspace/
 - Lock poisoning is handled gracefully in simulator/state tracking
 
 ### Configuration
-- Deployment limits documented in `docs/limits.md`
 - Node tunables configured via `configs/*/nodeN.yaml`
 - Simulator rate limits via config/CLI and env overrides:
   - `RATE_LIMIT_HTTP_PER_SEC`, `RATE_LIMIT_HTTP_BURST`
@@ -279,13 +273,6 @@ nullspace/
 | `GATEWAY_LIVE_TABLE_MIN_BET` | 5 | Minimum bet amount |
 | `GATEWAY_LIVE_TABLE_MAX_BET` | 1000 | Maximum bet amount |
 | `GATEWAY_LIVE_TABLE_MAX_BETS_PER_ROUND` | 12 | Max bets per player per round |
-
-### Operational Tooling
-
-- **Tournament scheduler**: `client/src/bin/tournament_scheduler.rs` (wrap via `scripts/run-tournament-scheduler.sh`)
-- **Bot load runner**: `client/src/bin/stress_test.rs` (wrap via `scripts/run-bots.sh`)
-- **Session diagnostics**: `client/src/bin/session_dump.rs` for quick state and history inspection
-- **Multi-node soak test**: `scripts/soak-test.sh` (requires simulator + nodes)
 
 ## Data Persistence
 
@@ -319,59 +306,6 @@ nullspace/
 - **RPO**: 15 minutes
 - **RTO**: 4 hours
 - Quarterly restore drills, annual full failover rehearsal
-
-## Observability
-
-### Metrics Endpoints
-
-| Service | Endpoint | Port |
-|---------|----------|------|
-| Simulator | `/metrics/prometheus` | 8080 |
-| Simulator | `/metrics/http`, `/metrics/ws`, `/metrics/system` | 8080 |
-| Auth service | `/metrics/prometheus`, `/metrics` | 4000 |
-| Node | `/metrics` | 9100+ |
-
-**Note**: Production deployments require `METRICS_AUTH_TOKEN` for metrics endpoints.
-
-### Prometheus + Grafana (Local)
-
-```bash
-cd docker/observability
-docker compose up -d
-```
-
-- Grafana: `http://localhost:3001` (admin/admin)
-- Alertmanager: `http://localhost:9093`
-- Preloaded dashboard: "Nullspace / Nullspace SLO Overview"
-
-### Baseline SLOs
-
-| Metric | Target |
-|--------|--------|
-| Availability (simulator + auth) | 99.5% monthly |
-| Simulator submit latency (p95) | <= 250ms at 5k concurrent |
-| Simulator submit latency (p99) | <= 500ms at 5k concurrent |
-| Auth request latency (p95) | <= 200ms |
-| WS send errors | 0 sustained rate |
-| Explorer persistence drops | 0 sustained rate |
-| Casino errors | 0 sustained rate |
-
-### Alert Thresholds
-
-- `nullspace_simulator_update_index_failures_total` increases over 5m
-- `nullspace_simulator_ws_updates_send_errors_total` rate > 0 for 5m
-- `nullspace_simulator_explorer_persistence_queue_depth` > 50% buffer for 10m
-- Auth 5xx rate > 1% for 5m
-- `nullspace_simulator_casino_errors_total` rate > 0 for 5m
-
-### Tracing (OTLP)
-
-```bash
-OTEL_EXPORTER_OTLP_ENDPOINT=http://<OTEL_COLLECTOR>:4318
-OTEL_SERVICE_NAME=nullspace-<service>
-OTEL_TRACES_SAMPLER=traceidratio
-OTEL_TRACES_SAMPLER_ARG=0.05  # 5% sampling
-```
 
 ## Resource Sizing
 
@@ -490,14 +424,7 @@ Report vulnerabilities privately:
 
 ## Additional Documentation
 
-| Document | Description |
-|----------|-------------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Complete technical architecture for auditors and CTO |
-| [docs/RUNBOOK.md](docs/RUNBOOK.md) | Operations procedures, deployment, incident response |
-| [docs/STRATEGY.md](docs/STRATEGY.md) | Business strategy, token economics, roadmap |
-| [docs/convex-guidelines.md](docs/convex-guidelines.md) | Convex development guidelines |
-| [docs/SERVERS.md](docs/SERVERS.md) | Staging infrastructure inventory |
-| [AGENTS.md](AGENTS.md) | Agent/automation instructions |
+- [AGENTS.md](AGENTS.md) for agent/automation instructions.
 
 ## License
 

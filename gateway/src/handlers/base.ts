@@ -16,7 +16,7 @@ import type { SubmitClient } from '../backend/http.js';
 import type { NonceManager } from '../session/nonce.js';
 import { ErrorCodes, createError, type ErrorResponse } from '../types/errors.js';
 import { logDebug, logInfo, logWarn } from '../logger.js';
-import { stripVersionHeader } from '@nullspace/protocol';
+import { stripVersionHeader, UnsupportedProtocolVersionError } from '@nullspace/protocol';
 
 /** Timeout for waiting for game events (ms) */
 function getGameEventTimeout(): number {
@@ -275,16 +275,22 @@ export abstract class GameHandler {
       strippedPayload = stripped.payload;
       protocolVersion = stripped.version;
     } catch (err) {
+      const isUnsupported = err instanceof UnsupportedProtocolVersionError;
       logWarn('[GameHandler] Invalid protocol payload (missing/unsupported version header)', {
         sessionId: gameSessionId.toString(),
         gameType: this.gameType,
         payloadLen: payload.length,
         payloadPreview: payloadPreviewHex(payload),
         error: err instanceof Error ? err.message : String(err),
+        unsupportedVersion: isUnsupported ? err.version : undefined,
       });
       return {
         success: false,
-        error: createError(ErrorCodes.INVALID_MESSAGE, 'Unsupported protocol version'),
+        error: createError(
+          isUnsupported ? ErrorCodes.UNSUPPORTED_PROTOCOL : ErrorCodes.INVALID_MESSAGE,
+          isUnsupported ? 'Unsupported protocol version' : 'Invalid protocol payload',
+          isUnsupported ? { version: err.version } : undefined
+        ),
       };
     }
 

@@ -5,6 +5,7 @@
 export const ErrorCodes = {
   // Client errors (4xx equivalent)
   INVALID_MESSAGE: 'INVALID_MESSAGE',           // Malformed JSON or unknown type
+  UNSUPPORTED_PROTOCOL: 'UNSUPPORTED_PROTOCOL', // Protocol version not supported
   INVALID_GAME_TYPE: 'INVALID_GAME_TYPE',       // Unknown game type
   INVALID_BET: 'INVALID_BET',                   // Bet amount out of range
   NO_ACTIVE_GAME: 'NO_ACTIVE_GAME',             // Move without active game

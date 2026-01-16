@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     aggregator,
-    application::mempool::Mempool,
+    application::mempool::{AddRejectReason, AddResult, Mempool},
     backoff::jittered_backoff,
     indexer::Indexer,
     seeder,
@@ -39,7 +39,7 @@ use nullspace_types::{
     execution::{Key, Output, Value, MAX_BLOCK_TRANSACTIONS},
     genesis_block, genesis_digest, Block, Identity,
 };
-use prometheus_client::metrics::{counter::Counter, histogram::Histogram};
+use prometheus_client::metrics::{counter::Counter, gauge::Gauge, histogram::Histogram};
 use rand::{CryptoRng, Rng};
 use std::{
     collections::{HashMap, VecDeque},
@@ -186,6 +186,13 @@ where
     {
         Some(Value::Account(account)) => Ok(account.nonce),
         _ => Ok(0),
+    }
+}
+
+fn system_time_ms(now: SystemTime) -> i64 {
+    match now.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis() as i64,
+        Err(_) => 0,
     }
 }
 
@@ -337,6 +344,7 @@ pub struct Actor<
     mempool_max_backlog: usize,
     mempool_max_transactions: usize,
     mempool_stream_buffer_size: usize,
+    mempool_inclusion_sla_ms: u64,
     nonce_cache_capacity: usize,
     nonce_cache_ttl: Duration,
     prune_interval: u64,
@@ -383,6 +391,7 @@ impl<
                 mempool_max_backlog: config.mempool_max_backlog,
                 mempool_max_transactions: config.mempool_max_transactions,
                 mempool_stream_buffer_size: config.mempool_stream_buffer_size,
+                mempool_inclusion_sla_ms: config.mempool_inclusion_sla_ms,
                 nonce_cache_capacity: config.nonce_cache_capacity,
                 nonce_cache_ttl: config.nonce_cache_ttl,
                 prune_interval: config.prune_interval,
@@ -425,6 +434,10 @@ impl<
         let pending_batches: Counter<u64, AtomicU64> = Counter::default();
         let pending_transactions: Counter<u64, AtomicU64> = Counter::default();
         let pending_transactions_added: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions_trimmed: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions_rejected_capacity: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions_rejected_backlog: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions_duplicate: Counter<u64, AtomicU64> = Counter::default();
         let pending_transactions_dropped_nonce: Counter<u64, AtomicU64> = Counter::default();
         let pending_transactions_future_nonce: Counter<u64, AtomicU64> = Counter::default();
         let pending_transactions_cache_hits: Counter<u64, AtomicU64> = Counter::default();
@@ -433,6 +446,13 @@ impl<
         let candidate_prepare_errors: Counter<u64, AtomicU64> = Counter::default();
         let state_transition_errors: Counter<u64, AtomicU64> = Counter::default();
         let storage_prune_errors: Counter<u64, AtomicU64> = Counter::default();
+        let proposed_blocks: Counter<u64, AtomicU64> = Counter::default();
+        let proposed_empty_blocks: Counter<u64, AtomicU64> = Counter::default();
+        let proposed_empty_blocks_with_candidates: Counter<u64, AtomicU64> = Counter::default();
+        let mempool_oldest_age_ms: Gauge = Gauge::default();
+        let mempool_oldest_age_updated_ms: Gauge = Gauge::default();
+        let finalized_height: Gauge = Gauge::default();
+        let finalized_height_updated_ms: Gauge = Gauge::default();
         let ancestry_latency = Histogram::new(LATENCY.into_iter());
         let propose_latency = Histogram::new(LATENCY.into_iter());
         let verify_latency = Histogram::new(LATENCY.into_iter());
@@ -476,6 +496,26 @@ impl<
             pending_transactions_added.clone(),
         );
         self.context.register(
+            "pending_transactions_trimmed",
+            "Number of mempool transactions trimmed due to per-account backlog limits",
+            pending_transactions_trimmed.clone(),
+        );
+        self.context.register(
+            "pending_transactions_rejected_capacity",
+            "Number of mempool transactions rejected due to global capacity limits",
+            pending_transactions_rejected_capacity.clone(),
+        );
+        self.context.register(
+            "pending_transactions_rejected_backlog",
+            "Number of mempool transactions rejected due to per-account backlog limits",
+            pending_transactions_rejected_backlog.clone(),
+        );
+        self.context.register(
+            "pending_transactions_duplicate",
+            "Number of mempool transactions rejected due to duplicate nonces",
+            pending_transactions_duplicate.clone(),
+        );
+        self.context.register(
             "pending_transactions_dropped_nonce",
             "Number of mempool transactions dropped due to nonce below next",
             pending_transactions_dropped_nonce.clone(),
@@ -514,6 +554,41 @@ impl<
             "storage_prune_errors",
             "Number of storage prune errors in application actor",
             storage_prune_errors.clone(),
+        );
+        self.context.register(
+            "proposed_blocks_total",
+            "Number of blocks proposed by the application actor",
+            proposed_blocks.clone(),
+        );
+        self.context.register(
+            "proposed_empty_blocks_total",
+            "Number of proposed blocks with zero transactions",
+            proposed_empty_blocks.clone(),
+        );
+        self.context.register(
+            "proposed_empty_blocks_with_candidates_total",
+            "Number of proposed empty blocks when mempool candidates existed",
+            proposed_empty_blocks_with_candidates.clone(),
+        );
+        self.context.register(
+            "mempool_oldest_age_ms",
+            "Age in milliseconds of the oldest pending transaction in the mempool",
+            mempool_oldest_age_ms.clone(),
+        );
+        self.context.register(
+            "mempool_oldest_age_updated_ms",
+            "Unix timestamp (ms) when mempool_oldest_age_ms was last updated",
+            mempool_oldest_age_updated_ms.clone(),
+        );
+        self.context.register(
+            "finalized_height",
+            "Latest finalized block height applied by the application actor",
+            finalized_height.clone(),
+        );
+        self.context.register(
+            "finalized_height_updated_ms",
+            "Unix timestamp (ms) when finalized_height was last updated",
+            finalized_height_updated_ms.clone(),
         );
         self.context.register(
             "ancestry_latency",
@@ -686,6 +761,7 @@ impl<
             self.mempool_max_backlog,
             self.mempool_max_transactions,
         );
+        let mut last_mempool_sla_warning_ms: Option<i64> = None;
         let mut next_nonce_cache =
             NonceCache::new(self.nonce_cache_capacity, self.nonce_cache_ttl);
 
@@ -943,6 +1019,11 @@ impl<
                                 // Transactions remain in mempool until finalized (via retain).
                                 // Peek more than needed to account for nonce validation rejections.
                                 let candidates = mempool.peek_batch(MAX_BLOCK_TRANSACTIONS * 2);
+                                let now_ms = system_time_ms(self.context.current());
+                                let oldest_age_ms = mempool.oldest_age_ms(now_ms);
+                                mempool_oldest_age_ms
+                                    .set(oldest_age_ms.map(|age| age as i64).unwrap_or(0));
+                                mempool_oldest_age_updated_ms.set(now_ms);
                                 let considered = candidates.len();
                                 let mut transactions = Vec::new();
                                 let mut rejected_nonce = 0u64;
@@ -996,6 +1077,20 @@ impl<
 
                                 // Update metrics
                                 txs_considered.inc_by(considered as u64);
+                                proposed_blocks.inc();
+                                if txs == 0 {
+                                    proposed_empty_blocks.inc();
+                                    if considered > 0 {
+                                        proposed_empty_blocks_with_candidates.inc();
+                                        warn!(
+                                            view = view.get(),
+                                            considered,
+                                            rejected_nonce,
+                                            rejected_other,
+                                            "proposed empty block with pending candidates"
+                                        );
+                                    }
+                                }
                                 if rejected_nonce > 0 || rejected_other > 0 {
                                     debug!(
                                         considered,
@@ -1003,6 +1098,35 @@ impl<
                                         rejected_other,
                                         "candidate transactions rejected during propose"
                                     );
+                                }
+
+                                if let Some(age_ms) = oldest_age_ms {
+                                    if self.mempool_inclusion_sla_ms > 0
+                                        && age_ms > self.mempool_inclusion_sla_ms
+                                    {
+                                        let should_warn = match last_mempool_sla_warning_ms {
+                                            Some(prev) => {
+                                                now_ms.saturating_sub(prev)
+                                                    >= self.mempool_inclusion_sla_ms as i64
+                                            }
+                                            None => true,
+                                        };
+                                        if should_warn {
+                                            let (pending_total, pending_accounts) = mempool.stats();
+                                            warn!(
+                                                view = view.get(),
+                                                age_ms,
+                                                sla_ms = self.mempool_inclusion_sla_ms,
+                                                pending_total,
+                                                pending_accounts,
+                                                considered,
+                                                rejected_nonce,
+                                                rejected_other,
+                                                "mempool inclusion SLA exceeded"
+                                            );
+                                            last_mempool_sla_warning_ms = Some(now_ms);
+                                        }
+                                    }
                                 }
 
                                 // When ancestry for propose is provided, we can attempt to pack a block.
@@ -1234,6 +1358,9 @@ impl<
 
                                 // Update metrics
                                 txs_executed.inc_by(result.executed_transactions);
+                                finalized_height.set(height as i64);
+                                finalized_height_updated_ms
+                                    .set(system_time_ms(self.context.current()));
 
                                 // Update mempool based on processed transactions
                                 let now = self.context.current();
@@ -1300,6 +1427,8 @@ impl<
                     let mut future_nonce = 0u64;
                     let mut added = 0u64;
                     let mut sample_dropped = 0u64;
+                    let mut sample_rejected = 0u64;
+                    let now_ms = system_time_ms(self.context.current());
                     for tx in pending.transactions {
                         // Check if below next
                         let now = self.context.current();
@@ -1349,9 +1478,39 @@ impl<
                         }
 
                         // Add to mempool
-                        mempool.add(tx);
-                        pending_transactions_added.inc();
-                        added = added.saturating_add(1);
+                        let public = tx.public.clone();
+                        let tx_nonce = tx.nonce;
+                        match mempool.add(tx, now_ms) {
+                            AddResult::Added { trimmed } => {
+                                pending_transactions_added.inc();
+                                added = added.saturating_add(1);
+                                if trimmed {
+                                    pending_transactions_trimmed.inc();
+                                }
+                            }
+                            AddResult::Rejected(reason) => {
+                                match reason {
+                                    AddRejectReason::GlobalCapacity => {
+                                        pending_transactions_rejected_capacity.inc();
+                                    }
+                                    AddRejectReason::BacklogLimit => {
+                                        pending_transactions_rejected_backlog.inc();
+                                    }
+                                    AddRejectReason::DuplicateNonce => {
+                                        pending_transactions_duplicate.inc();
+                                    }
+                                }
+                                if sample_rejected < 3 {
+                                    info!(
+                                        public = ?public,
+                                        tx_nonce,
+                                        ?reason,
+                                        "mempool rejected transaction"
+                                    );
+                                    sample_rejected = sample_rejected.saturating_add(1);
+                                }
+                            }
+                        }
                     }
                     if dropped_nonce > 0 || future_nonce > 0 {
                         info!(

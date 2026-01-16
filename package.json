@@ -9,11 +9,7 @@
     "type-check": "turbo type-check",
     "test": "turbo test",
     "test:all": "pnpm test && cargo test --workspace && (cd evm && npm test)",
-    "test:presence": "node scripts/test-presence.js",
     "coverage:all": "node scripts/coverage-all.mjs",
-    "slo:check": "node scripts/check-slo.mjs",
-    "api:validate": "node scripts/validate-openapi.mjs",
-    "audit:monochrome": "node scripts/audit-monochrome.mjs",
     "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {

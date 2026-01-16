@@ -33,7 +33,7 @@ use std::{
     pin::Pin,
     sync::atomic::AtomicU64,
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 use tracing::{error, info, warn};
 
@@ -165,6 +165,7 @@ where
     rx: mpsc::Receiver<Result<Pending, I::Error>>,
     _handle: Handle<()>,
     queue_depth: Gauge,
+    mempool_connected: Gauge,
 }
 
 impl<I> ReconnectingStream<I>
@@ -184,6 +185,8 @@ where
         let forwarded_batches: Counter<u64, AtomicU64> = Counter::default();
         let queue_backpressure: Counter<u64, AtomicU64> = Counter::default();
         let queue_depth: Gauge = Gauge::default();
+        let mempool_connected: Gauge = Gauge::default();
+        let mempool_connected_updated_ms: Gauge = Gauge::default();
         context.register(
             "connect_attempts_total",
             "Number of attempts to connect to the indexer mempool websocket",
@@ -224,6 +227,16 @@ where
             "Approximate number of mempool batches queued for processing",
             queue_depth.clone(),
         );
+        context.register(
+            "mempool_connected",
+            "Whether the node is currently connected to the indexer mempool stream (1=connected, 0=disconnected)",
+            mempool_connected.clone(),
+        );
+        context.register(
+            "mempool_connected_updated_ms",
+            "Unix timestamp (ms) when mempool connection state last changed",
+            mempool_connected_updated_ms.clone(),
+        );
 
         // Spawn background task that manages connections
         let buffer_size = if buffer_size == 0 {
@@ -234,9 +247,13 @@ where
         let (mut tx, rx) = mpsc::channel(buffer_size);
         // Clone queue_depth for the closure - the original is used in the struct
         let queue_depth_inner = queue_depth.clone();
+        let mempool_connected_inner = mempool_connected.clone();
+        let mempool_connected_updated_ms_inner = mempool_connected_updated_ms.clone();
         let handle = context.spawn({
             move |mut context| async move {
                 let queue_depth = queue_depth_inner;
+                let mempool_connected = mempool_connected_inner;
+                let mempool_connected_updated_ms = mempool_connected_updated_ms_inner;
                 let mut backoff = Duration::from_millis(200);
                 loop {
                     // Try to connect
@@ -245,6 +262,8 @@ where
                         Ok(stream) => {
                             connect_success.inc();
                             info!("connected to mempool stream");
+                            mempool_connected.set(1);
+                            mempool_connected_updated_ms.set(system_time_ms(context.current()));
                             let mut stream = Box::pin(stream);
                             backoff = Duration::from_millis(200);
 
@@ -299,10 +318,14 @@ where
                             }
 
                             warn!("mempool stream ended");
+                            mempool_connected.set(0);
+                            mempool_connected_updated_ms.set(system_time_ms(context.current()));
                         }
                         Err(e) => {
                             connect_failures.inc();
                             error!(?e, "failed to connect mempool stream");
+                            mempool_connected.set(0);
+                            mempool_connected_updated_ms.set(system_time_ms(context.current()));
                         }
                     }
 
@@ -318,6 +341,7 @@ where
             rx,
             _handle: handle,
             queue_depth,
+            mempool_connected,
         }
     }
 }
@@ -334,6 +358,13 @@ where
             self.queue_depth.dec();
         }
         poll
+    }
+}
+
+fn system_time_ms(now: SystemTime) -> i64 {
+    match now.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis() as i64,
+        Err(_) => 0,
     }
 }
 

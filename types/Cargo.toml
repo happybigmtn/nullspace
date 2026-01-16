@@ -9,6 +9,7 @@ readme = "README.md"
 homepage = "https://nullspace.xyz"
 repository = "https://github.com/commonwarexyz/nullspace/tree/main/types"
 documentation = "https://docs.rs/nullspace-types"
+autobins = false
 
 [features]
 default = ["root-reexports"]
@@ -38,5 +39,5 @@ name = "tournament_membership"
 harness = false
 
 [[bin]]
-name = "keyhash"
-path = "src/bin/keyhash.rs"
+name = "export_ts"
+path = "src/bin/export_ts.rs"

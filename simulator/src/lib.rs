@@ -490,6 +490,10 @@ impl Simulator {
         self.identity
     }
 
+    pub fn enforce_signature_verification(&self) -> bool {
+        self.config.enforce_signature_verification
+    }
+
     pub fn update_global_table_presence(
         &self,
         gateway_id: String,

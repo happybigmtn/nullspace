@@ -14,22 +14,6 @@ documentation = "https://docs.rs/nullspace-node"
 name = "generate-keys"
 path = "src/bin/generate_keys.rs"
 
-[[bin]]
-name = "test-transactions"
-path = "src/bin/test_transactions.rs"
-
-[[bin]]
-name = "init-amm"
-path = "src/bin/init_amm.rs"
-
-[[bin]]
-name = "game-round-trip"
-path = "src/bin/game_round_trip.rs"
-
-[[bin]]
-name = "decode-submission"
-path = "src/bin/decode_submission.rs"
-
 [dependencies]
 nullspace-types = { workspace = true }
 nullspace-client = { workspace = true }

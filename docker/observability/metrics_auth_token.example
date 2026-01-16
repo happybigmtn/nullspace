@@ -1,4 +1,0 @@
-# Copy this file to metrics_auth_token and replace with your actual token
-# This token must match METRICS_AUTH_TOKEN env var in all services
-# Generate with: openssl rand -base64 32
-REPLACE_WITH_YOUR_METRICS_AUTH_TOKEN

@@ -572,13 +572,19 @@ pub(super) async fn submit(
     }
 
     let start = Instant::now();
-    let status = match Submission::decode(&mut body.as_ref()) {
+    let response = match Submission::decode(&mut body.as_ref()) {
         Ok(submission) => match apply_submission(Arc::clone(&simulator), submission, true).await {
             Ok(()) => {
                 simulator.publish_submission(body.as_ref()).await;
-                StatusCode::OK
+                (StatusCode::OK, "").into_response()
             }
-            Err(_) => StatusCode::BAD_REQUEST,
+            Err(err) => {
+                let message = match err {
+                    crate::submission::SubmitError::InvalidSeed => "invalid_seed",
+                    crate::submission::SubmitError::InvalidSummary => "invalid_summary",
+                };
+                (StatusCode::BAD_REQUEST, message).into_response()
+            }
         },
         Err(e) => {
             let preview_len = std::cmp::min(32, body.len());
@@ -589,12 +595,12 @@ pub(super) async fn submit(
                 "Failed to decode submission: {:?}",
                 e
             );
-            StatusCode::BAD_REQUEST
+            (StatusCode::BAD_REQUEST, "decode_error").into_response()
         }
     };
 
     simulator.http_metrics().record_submit(start.elapsed());
-    status
+    response
 }
 
 pub(super) async fn query_state(
@@ -660,18 +666,21 @@ pub(super) async fn query_seed(
         Some(raw) => match ChainQuery::decode(&mut raw.as_slice()) {
             Ok(query) => match simulator.query_seed(&query).await {
                 Some(seed) => (StatusCode::OK, seed.encode().to_vec()).into_response(),
-                None => {
-                    // Staging fallback: when no seeds have been submitted yet, return
-                    // a zeroed seed so clients can proceed instead of treating the
-                    // chain as offline. This avoids 404s that block the QA harness.
-                    let round = commonware_consensus::types::Round::zero();
-                    let mut rng = StdRng::seed_from_u64(0);
-                    let (sk, _) = ops::keypair::<_, MinSig>(&mut rng);
-                    let seed_namespace = union(NAMESPACE, b"_SEED");
-                    let sig = ops::sign_message::<MinSig>(&sk, Some(&seed_namespace), &round.encode());
-                    let fallback = Seed::new(round, sig);
-                    (StatusCode::OK, fallback.encode().to_vec()).into_response()
-                }
+                None => match query {
+                    ChainQuery::Latest => {
+                        // Staging fallback: when no seeds have been submitted yet, return
+                        // a zeroed seed so clients can proceed instead of treating the
+                        // chain as offline. This avoids 404s that block the QA harness.
+                        let round = commonware_consensus::types::Round::zero();
+                        let mut rng = StdRng::seed_from_u64(0);
+                        let (sk, _) = ops::keypair::<_, MinSig>(&mut rng);
+                        let seed_namespace = union(NAMESPACE, b"_SEED");
+                        let sig = ops::sign_message::<MinSig>(&sk, Some(&seed_namespace), &round.encode());
+                        let fallback = Seed::new(round, sig);
+                        (StatusCode::OK, fallback.encode().to_vec()).into_response()
+                    }
+                    ChainQuery::Index(_) => StatusCode::NOT_FOUND.into_response(),
+                },
             },
             Err(_) => StatusCode::BAD_REQUEST.into_response(),
         },

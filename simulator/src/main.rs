@@ -1,9 +1,11 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use commonware_codec::DecodeExt;
+use commonware_codec::{DecodeExt, Encode};
 use nullspace_simulator::{Api, Simulator, SimulatorConfig, SummaryPersistence};
 use nullspace_types::Identity;
 use opentelemetry_otlp::WithExportConfig;
+use reqwest::Client;
+use serde_json::Value;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -211,6 +213,10 @@ struct Args {
     /// Redis cache TTL in seconds (0 disables).
     #[arg(long)]
     cache_redis_ttl_seconds: Option<u64>,
+
+    /// Enforce summary/seed signature verification (disable staging bypass).
+    #[arg(long, default_value_t = false)]
+    enforce_signature_verification: bool,
 }
 
 fn is_production() -> bool {
@@ -281,6 +287,100 @@ fn ensure_production_env() -> Result<()> {
     Ok(())
 }
 
+fn parse_identity_hex(body: &str) -> Result<String> {
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("empty identity response");
+    }
+    if trimmed.starts_with('{') {
+        let value: Value = serde_json::from_str(trimmed)
+            .context("invalid identity response JSON")?;
+        if let Some(hex) = value.get("identity").and_then(|value| value.as_str()) {
+            return Ok(hex.trim().to_string());
+        }
+        anyhow::bail!("identity field missing in response JSON");
+    }
+    Ok(trimmed.to_string())
+}
+
+async fn verify_validator_identities(identity: &Identity) -> Result<()> {
+    let urls_raw = match std::env::var("VALIDATOR_IDENTITY_URLS") {
+        Ok(value) => value,
+        Err(_) => return Ok(()),
+    };
+    let urls = urls_raw
+        .split(',')
+        .map(|url| url.trim())
+        .filter(|url| !url.is_empty())
+        .map(|url| url.to_string())
+        .collect::<Vec<_>>();
+    if urls.is_empty() {
+        return Ok(());
+    }
+
+    let token = std::env::var("VALIDATOR_IDENTITY_AUTH_TOKEN")
+        .ok()
+        .and_then(|value| (!value.trim().is_empty()).then_some(value))
+        .or_else(|| {
+            std::env::var("METRICS_AUTH_TOKEN")
+                .ok()
+                .and_then(|value| (!value.trim().is_empty()).then_some(value))
+        });
+
+    let expected = identity.encode();
+    let expected_hex = commonware_utils::hex(expected.as_ref());
+    let client = Client::new();
+    info!(
+        expected = %expected_hex,
+        count = urls.len(),
+        "verifying validator identities"
+    );
+
+    let mut mismatches = Vec::new();
+    for url in urls {
+        let mut request = client.get(&url);
+        if let Some(token) = token.as_deref() {
+            request = request.header("x-metrics-token", token);
+        }
+        let response = request
+            .send()
+            .await
+            .with_context(|| format!("failed to fetch validator identity from {url}"))?;
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .with_context(|| format!("failed to read validator identity from {url}"))?;
+        if !status.is_success() {
+            anyhow::bail!(
+                "validator identity fetch failed ({url}): HTTP {}",
+                status.as_u16()
+            );
+        }
+        let identity_hex = parse_identity_hex(&body)
+            .with_context(|| format!("invalid identity response from {url}"))?;
+        let bytes = commonware_utils::from_hex(&identity_hex)
+            .with_context(|| format!("invalid identity hex from {url}"))?;
+        let decoded =
+            Identity::decode(&mut bytes.as_slice()).with_context(|| format!("decode failed for {url}"))?;
+        if decoded.encode().as_ref() != expected.as_ref() {
+            mismatches.push((url, commonware_utils::hex(decoded.encode().as_ref())));
+        }
+    }
+
+    if !mismatches.is_empty() {
+        let summary = mismatches
+            .into_iter()
+            .map(|(url, found)| format!("{url}={found}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        anyhow::bail!("validator identity mismatch: expected {expected_hex}, found {summary}");
+    }
+
+    info!("validator identities verified");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Parse args
@@ -296,6 +396,12 @@ async fn main() -> anyhow::Result<()> {
         commonware_utils::from_hex(&args.identity).context("invalid identity hex format")?;
     let identity: Identity =
         Identity::decode(&mut bytes.as_slice()).context("failed to decode identity")?;
+    info!(
+        identity = %commonware_utils::hex(identity.encode().as_ref()),
+        "simulator identity loaded"
+    );
+
+    verify_validator_identities(&identity).await?;
 
     let defaults = SimulatorConfig::default();
     let explorer_persistence_backpressure = match args.explorer_persistence_backpressure.as_deref()
@@ -305,6 +411,10 @@ async fn main() -> anyhow::Result<()> {
         })?),
         None => defaults.explorer_persistence_backpressure,
     };
+    let enforce_signature_verification =
+        args.enforce_signature_verification || std::env::var("VALIDATOR_IDENTITY_URLS")
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false);
     let config = SimulatorConfig {
         explorer_max_blocks: map_optional_limit(args.explorer_max_blocks, defaults.explorer_max_blocks),
         explorer_max_account_entries: map_optional_limit(args.explorer_max_account_entries, defaults.explorer_max_account_entries),
@@ -341,7 +451,13 @@ async fn main() -> anyhow::Result<()> {
         cache_redis_url: args.cache_redis_url,
         cache_redis_prefix: args.cache_redis_prefix.or_else(|| defaults.cache_redis_prefix.clone()),
         cache_redis_ttl_seconds: map_optional_limit(args.cache_redis_ttl_seconds, defaults.cache_redis_ttl_seconds),
+        enforce_signature_verification,
     };
+    if !config.enforce_signature_verification {
+        tracing::warn!(
+            "signature verification bypass enabled; set --enforce-signature-verification or VALIDATOR_IDENTITY_URLS to disable"
+        );
+    }
 
     let (summary_persistence, summaries) = if let Some(path) = &args.summary_persistence_path {
         let (persistence, summaries) = SummaryPersistence::load_and_start_sqlite(

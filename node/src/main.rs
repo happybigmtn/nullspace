@@ -8,7 +8,7 @@ use axum::{
     Router,
 };
 use clap::{Arg, ArgAction, Command};
-use commonware_codec::DecodeExt;
+use commonware_codec::{DecodeExt, Encode};
 use commonware_cryptography::{ed25519::PublicKey, Signer};
 use commonware_deployer::ec2::Hosts;
 use commonware_p2p::authenticated::discovery as authenticated;
@@ -79,6 +79,7 @@ fn resolve_trace_config() -> Option<TraceConfig> {
 struct MetricsState {
     context: tokio::Context,
     auth_token: Option<String>,
+    identity_hex: String,
 }
 
 fn metrics_auth_token() -> Option<String> {
@@ -110,11 +111,8 @@ fn ensure_metrics_auth_token() -> Result<()> {
     Ok(())
 }
 
-async fn metrics_handler(
-    State(state): State<Arc<MetricsState>>,
-    headers: HeaderMap,
-) -> Result<Response<Body>, StatusCode> {
-    if let Some(token) = state.auth_token.as_deref() {
+fn authorize_metrics(headers: &HeaderMap, token: Option<&str>) -> Result<(), StatusCode> {
+    if let Some(token) = token {
         let bearer = headers
             .get(header::AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
@@ -127,6 +125,14 @@ async fn metrics_handler(
             return Err(StatusCode::UNAUTHORIZED);
         }
     }
+    Ok(())
+}
+
+async fn metrics_handler(
+    State(state): State<Arc<MetricsState>>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, StatusCode> {
+    authorize_metrics(&headers, state.auth_token.as_deref())?;
 
     Response::builder()
         .status(StatusCode::OK)
@@ -138,10 +144,27 @@ async fn metrics_handler(
         })
 }
 
-fn spawn_metrics_server(context: tokio::Context, addr: SocketAddr) {
+async fn identity_handler(
+    State(state): State<Arc<MetricsState>>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, StatusCode> {
+    authorize_metrics(&headers, state.auth_token.as_deref())?;
+    let body = format!(r#"{{"identity":"{}"}}"#, state.identity_hex);
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body))
+        .map_err(|err| {
+            error!("identity response build failed: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
+}
+
+fn spawn_metrics_server(context: tokio::Context, addr: SocketAddr, identity_hex: String) {
     let state = Arc::new(MetricsState {
         context: context.clone(),
         auth_token: metrics_auth_token(),
+        identity_hex,
     });
     context.with_label("metrics").spawn(move |_context| async move {
         let listener = match ::tokio::net::TcpListener::bind(addr).await {
@@ -153,6 +176,7 @@ fn spawn_metrics_server(context: tokio::Context, addr: SocketAddr) {
         };
         let app = Router::new()
             .route("/metrics", get(metrics_handler))
+            .route("/identity", get(identity_handler))
             .with_state(state);
         if let Err(err) = axum::serve(listener, app.into_make_service()).await {
             error!("metrics server failed on {addr}: {err}");
@@ -389,10 +413,6 @@ fn main_result() -> Result<()> {
                 None,
                 resolve_trace_config(),
             );
-            spawn_metrics_server(
-                context.clone(),
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), config.metrics_port),
-            );
             info!(config = ?config.redacted_debug(), "loaded config file");
 
             let signer = config.parse_signer().context("Private key is invalid")?;
@@ -411,6 +431,12 @@ fn main_result() -> Result<()> {
 
             let config = config.validate_with_signer(signer, peers_u32)?;
             let identity = config.identity;
+            let identity_hex = commonware_utils::hex(identity.encode().as_ref());
+            spawn_metrics_server(
+                context.clone(),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), config.metrics_port),
+                identity_hex,
+            );
             info!(
                 ?config.public_key,
                 ?identity,
@@ -511,6 +537,14 @@ fn main_result() -> Result<()> {
                 .context("Failed to create indexer client")?;
 
             // Create engine
+            let mempool_inclusion_sla_ms = {
+                let sla = config.leader_timeout.as_millis().saturating_mul(2);
+                if sla > u64::MAX as u128 {
+                    u64::MAX
+                } else {
+                    sla as u64
+                }
+            };
             let config = engine::Config {
                 blocker: oracle,
                 identity: engine::IdentityConfig {
@@ -564,6 +598,7 @@ fn main_result() -> Result<()> {
                     mempool_max_transactions: config.mempool_max_transactions,
                     max_pending_seed_listeners: config.max_pending_seed_listeners,
                     mempool_stream_buffer_size: config.mempool_stream_buffer_size,
+                    mempool_inclusion_sla_ms,
                     nonce_cache_capacity: config.nonce_cache_capacity,
                     nonce_cache_ttl: config.nonce_cache_ttl,
                     prune_interval: config.prune_interval,
