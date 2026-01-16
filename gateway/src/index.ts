@@ -14,7 +14,6 @@ import { ErrorCodes, createError } from './types/errors.js';
 import { OutboundMessageSchema, type OutboundMessage, getOutboundMessageGameType } from '@nullspace/protocol/mobile';
 import { CURRENT_PROTOCOL_VERSION, MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION } from '@nullspace/protocol';
 import { trackGatewayFaucet, trackGatewayResponse, trackGatewaySession } from './ops.js';
-import { crapsLiveTable } from './live-table/index.js';
 import { logDebug, logError, logInfo, logWarn } from './logger.js';
 import { validateProductionConfigOrThrow, validateDevelopmentConfig } from './config/validation.js';
 import { handleMetrics, trackConnection, trackMessage, trackSession, updateSessionCount } from './metrics/index.js';
@@ -185,7 +184,9 @@ const connectionLimiter = new ConnectionLimiter({
 });
 const handlers = createHandlerRegistry();
 
-crapsLiveTable.configure({ submitClient, nonceManager, backendUrl: BACKEND_URL, origin: GATEWAY_ORIGIN });
+// NOTE: Live-table mode disabled per specs/gateway-live-mode-deferment.md (AC-1.1)
+// Live craps table features are deferred to reduce runtime complexity.
+// Standard session-based craps remains fully functional.
 
 // Graceful shutdown state (US-154)
 let isDraining = false;
@@ -648,7 +649,6 @@ wss.on('connection', async (ws: WebSocket, req) => {
       logDebug(`[Gateway] Client disconnected: ${session.id} (code=${code}, reason=${reason.toString()})`);
       const destroyed = sessionManager.destroySession(ws);
       if (destroyed) {
-        crapsLiveTable.removeSession(destroyed);
         trackSession('destroyed');
       }
       connectionLimiter.unregisterConnection(clientIp, connectionId);

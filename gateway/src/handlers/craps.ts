@@ -7,21 +7,21 @@
  * Payload format from execution/src/casino/craps.rs:
  * [4, bet_count, bets...] - Atomic batch: place all bets + roll in one transaction
  * Each bet is 10 bytes: [bet_type:u8, target:u8, amount:u64 BE]
+ *
+ * NOTE: Live-table mode is disabled per specs/gateway-live-mode-deferment.md.
+ * Live craps messages (craps_live_join, craps_live_leave, craps_live_bet) return
+ * LIVE_MODE_DISABLED errors. Standard session-based craps remains fully functional.
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
 import type {
-  CrapsLiveBetRequest,
-  CrapsLiveJoinRequest,
-  CrapsLiveLeaveRequest,
   CrapsRollRequest,
   CrapsSingleBetRequest,
   OutboundMessage,
 } from '@nullspace/protocol/mobile';
 import { encodeAtomicBatchPayload, type CrapsAtomicBetInput } from '@nullspace/protocol';
-import { crapsLiveTable } from '../live-table/craps.js';
 
 export class CrapsHandler extends GameHandler {
   constructor() {
@@ -33,12 +33,17 @@ export class CrapsHandler extends GameHandler {
     msg: OutboundMessage
   ): Promise<HandleResult> {
     switch (msg.type) {
+      // Live-table mode disabled (AC-1.2)
       case 'craps_live_join':
-        return this.handleLiveJoin(ctx, msg);
       case 'craps_live_leave':
-        return this.handleLiveLeave(ctx, msg);
       case 'craps_live_bet':
-        return this.handleLiveBet(ctx, msg);
+        return {
+          success: false,
+          error: createError(
+            ErrorCodes.LIVE_MODE_DISABLED,
+            'Live table mode is disabled. Use standard craps_bet/craps_roll for session-based play.'
+          ),
+        };
       case 'craps_bet':
         return this.handleBet(ctx, msg);
       case 'craps_roll':
@@ -92,26 +97,5 @@ export class CrapsHandler extends GameHandler {
         error: createError(ErrorCodes.INVALID_BET, message),
       };
     }
-  }
-
-  private async handleLiveJoin(
-    ctx: HandlerContext,
-    _msg: CrapsLiveJoinRequest
-  ): Promise<HandleResult> {
-    return crapsLiveTable.join(ctx.session);
-  }
-
-  private async handleLiveLeave(
-    ctx: HandlerContext,
-    _msg: CrapsLiveLeaveRequest
-  ): Promise<HandleResult> {
-    return crapsLiveTable.leave(ctx.session);
-  }
-
-  private async handleLiveBet(
-    ctx: HandlerContext,
-    msg: CrapsLiveBetRequest
-  ): Promise<HandleResult> {
-    return crapsLiveTable.placeBets(ctx.session, msg.bets);
   }
 }
