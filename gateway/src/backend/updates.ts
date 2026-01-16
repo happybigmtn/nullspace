@@ -13,14 +13,12 @@ import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import {
   extractCasinoEvents,
-  extractGlobalTableEvents,
   type CasinoGameEvent,
-  type GlobalTableEvent,
 } from '../codec/events.js';
 import { logDebug, logError, logInfo, logWarn } from '../logger.js';
 
 // Re-export CasinoGameEvent for convenience
-export type { CasinoGameEvent, GlobalTableEvent } from '../codec/events.js';
+export type { CasinoGameEvent } from '../codec/events.js';
 
 /**
  * UpdatesFilter types matching backend
@@ -105,13 +103,8 @@ export class UpdatesClient extends EventEmitter {
     return this.connect(filter);
   }
 
-  /**
-   * Connect to the updates stream for all events
-   */
-  async connectForAll(): Promise<void> {
-    const filter = encodeUpdatesFilter(UpdatesFilterType.All);
-    return this.connect(filter);
-  }
+  // NOTE: connectForAll() removed per AC-1.3 - no global-table background client.
+  // Live mode is disabled (specs/gateway-live-mode-deferment.md).
 
   /**
    * Connect to the updates stream with a hex-encoded filter
@@ -210,13 +203,8 @@ export class UpdatesClient extends EventEmitter {
         this.emit('gameEvent', event);
       }
 
-      const globalEvents = extractGlobalTableEvents(new Uint8Array(data));
-      if (globalEvents.length > 0) {
-        logDebug(`[UpdatesClient] Extracted ${globalEvents.length} global table events`);
-        for (const event of globalEvents) {
-          this.emit('globalTableEvent', event);
-        }
-      }
+      // NOTE: Global table event extraction removed per AC-1.3
+      // (specs/gateway-live-mode-deferment.md) - live mode is disabled.
     } catch (err) {
       logError('[UpdatesClient] Failed to parse events:', err);
     }
