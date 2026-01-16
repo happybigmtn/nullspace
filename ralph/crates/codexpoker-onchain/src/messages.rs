@@ -29,6 +29,7 @@ use protocol_messages::{
     ShuffleContextMismatch, TimelockReveal, CURRENT_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use thiserror::Error;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -223,6 +224,125 @@ pub enum PayloadError {
     /// malformed proof or an attempt to reveal incorrect values.
     #[error("timelock proof verification failed: {reason}")]
     TimelockProofInvalid { reason: String },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Timelock Proof Verifier Trait
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Input data for timelock proof verification.
+///
+/// This struct provides all the information a proof verifier needs to validate
+/// a timelock reveal. The verifier should check that the `timelock_proof` is
+/// cryptographically valid for revealing the specified `card_indices` with the
+/// given `revealed_values`, in the context of the original `commitment_hash`.
+#[derive(Debug, Clone)]
+pub struct TimelockVerificationInput<'a> {
+    /// Hash of the deal commitment this reveal is for.
+    ///
+    /// The verifier may need this to look up the original encryption parameters
+    /// or to verify the proof was created for this specific deal.
+    pub commitment_hash: &'a [u8; 32],
+
+    /// Game phase being revealed (Preflop, Flop, Turn, River, Showdown).
+    ///
+    /// Some timelock schemes may encode the phase into the proof structure.
+    pub phase: RevealPhase,
+
+    /// Card indices being revealed.
+    ///
+    /// These indices (0-51 for standard deck) identify which cards are being
+    /// revealed via timelock decryption.
+    pub card_indices: &'a [u8],
+
+    /// The timelock proof data.
+    ///
+    /// Format depends on the timelock scheme in use (e.g., VDF proof, hash
+    /// chain proof, etc.). The verifier should parse and validate this.
+    pub timelock_proof: &'a [u8],
+
+    /// The revealed card values after timelock decryption.
+    ///
+    /// Each entry corresponds to the card at the same position in `card_indices`.
+    /// The verifier should confirm these values match what the proof produces.
+    pub revealed_values: &'a [Vec<u8>],
+
+    /// The seat that timed out, triggering the timelock reveal.
+    ///
+    /// This identifies which player's timelock is being used.
+    pub timeout_seat: u8,
+}
+
+/// Trait for verifying timelock proofs in the consensus path.
+///
+/// Different timelock schemes (VDF-based, hash-based, etc.) implement this
+/// trait to provide cryptographic verification of timelock reveals. The
+/// validator calls this during consensus to ensure revealed values are correct.
+///
+/// # Security
+///
+/// The verifier MUST:
+/// 1. Verify the proof is cryptographically valid for the given parameters
+/// 2. Verify the revealed values match what the proof produces
+/// 3. Reject proofs that don't match the commitment context
+/// 4. Be deterministic: same inputs must produce same verification result
+///
+/// # Example Implementation
+///
+/// ```ignore
+/// struct MyTimelockVerifier {
+///     // ... scheme-specific state (e.g., VDF parameters)
+/// }
+///
+/// impl TimelockProofVerifier for MyTimelockVerifier {
+///     fn verify_timelock_proof(
+///         &self,
+///         input: &TimelockVerificationInput<'_>,
+///     ) -> Result<(), String> {
+///         // 1. Parse the proof format
+///         // 2. Verify cryptographic validity
+///         // 3. Check revealed values match proof output
+///         // 4. Return Ok(()) or Err(reason)
+///         Ok(())
+///     }
+/// }
+/// ```
+pub trait TimelockProofVerifier: Send + Sync {
+    /// Verify a timelock proof is cryptographically valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - All data needed for verification
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(())` if the proof is valid
+    /// - `Err(reason)` with a human-readable explanation if invalid
+    ///
+    /// # Determinism
+    ///
+    /// This method MUST be deterministic. Given the same input, it must always
+    /// return the same result. This is required for consensus: all validators
+    /// must agree on whether a proof is valid.
+    fn verify_timelock_proof(&self, input: &TimelockVerificationInput<'_>) -> Result<(), String>;
+}
+
+/// A no-op timelock verifier that accepts all proofs.
+///
+/// **WARNING**: This verifier provides NO security. It is intended only for:
+/// - Testing and development
+/// - Environments where timelock verification is handled externally
+/// - Backward compatibility during migration
+///
+/// In production, use a proper cryptographic verifier implementation.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoOpTimelockVerifier;
+
+impl TimelockProofVerifier for NoOpTimelockVerifier {
+    fn verify_timelock_proof(&self, _input: &TimelockVerificationInput<'_>) -> Result<(), String> {
+        // Accept all proofs (no verification)
+        Ok(())
+    }
 }
 
 /// The consensus payload schema wrapping all onchain message types.
@@ -471,7 +591,7 @@ impl GameActionMessage {
 /// // Now game actions are allowed
 /// assert!(validator.all_acks_received());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ActionLogValidator {
     /// The commitment hash for this hand, set after seeing the first DealCommitment.
     commitment_hash: Option<[u8; 32]>,
@@ -518,6 +638,35 @@ pub struct ActionLogValidator {
     /// This is set when the `DealCommitment` is processed and used to validate
     /// that card indices in reveals are within bounds.
     deck_length: Option<u8>,
+    /// Optional timelock proof verifier for cryptographic validation.
+    ///
+    /// When set, `TimelockReveal` payloads will have their proofs verified
+    /// against this verifier. If `None`, no cryptographic verification is
+    /// performed (scope and structural validation still happens).
+    ///
+    /// Use [`with_proof_verifier`](Self::with_proof_verifier) to configure.
+    timelock_verifier: Option<Arc<dyn TimelockProofVerifier>>,
+}
+
+impl std::fmt::Debug for ActionLogValidator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ActionLogValidator")
+            .field("commitment_hash", &self.commitment_hash)
+            .field("payload_count", &self.payload_count)
+            .field("required_seats", &self.required_seats)
+            .field("acked_seats", &self.acked_seats)
+            .field("expected_context", &self.expected_context)
+            .field("completed_phases", &self.completed_phases)
+            .field("awaiting_reveal_phase", &self.awaiting_reveal_phase)
+            .field("reveal_phase_entered_at", &self.reveal_phase_entered_at)
+            .field("reveal_expected_from_seat", &self.reveal_expected_from_seat)
+            .field("deck_length", &self.deck_length)
+            .field(
+                "timelock_verifier",
+                &self.timelock_verifier.as_ref().map(|_| "<verifier>"),
+            )
+            .finish()
+    }
 }
 
 impl Default for ActionLogValidator {
@@ -544,6 +693,7 @@ impl ActionLogValidator {
             reveal_phase_entered_at: None,
             reveal_expected_from_seat: None,
             deck_length: None,
+            timelock_verifier: None,
         }
     }
 
@@ -583,7 +733,73 @@ impl ActionLogValidator {
             reveal_phase_entered_at: None,
             reveal_expected_from_seat: None,
             deck_length: None,
+            timelock_verifier: None,
         }
+    }
+
+    /// Create a new validator with a timelock proof verifier.
+    ///
+    /// When a `TimelockReveal` is processed, the verifier will be called to
+    /// cryptographically validate the proof. This is in addition to the scope
+    /// and structural validation that always occurs.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use codexpoker_onchain::{ActionLogValidator, NoOpTimelockVerifier};
+    /// use std::sync::Arc;
+    ///
+    /// // Use NoOpTimelockVerifier for testing (accepts all proofs)
+    /// let verifier = Arc::new(NoOpTimelockVerifier);
+    /// let validator = ActionLogValidator::with_proof_verifier(verifier);
+    /// ```
+    pub fn with_proof_verifier(verifier: Arc<dyn TimelockProofVerifier>) -> Self {
+        Self {
+            commitment_hash: None,
+            payload_count: 0,
+            required_seats: Vec::new(),
+            acked_seats: Vec::new(),
+            expected_context: None,
+            completed_phases: Vec::new(),
+            awaiting_reveal_phase: None,
+            reveal_phase_entered_at: None,
+            reveal_expected_from_seat: None,
+            deck_length: None,
+            timelock_verifier: Some(verifier),
+        }
+    }
+
+    /// Configure this validator with a timelock proof verifier.
+    ///
+    /// This is a builder-style method that allows chaining with other
+    /// configuration methods.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use codexpoker_onchain::{ActionLogValidator, NoOpTimelockVerifier};
+    /// use protocol_messages::{ProtocolVersion, ShuffleContext};
+    /// use std::sync::Arc;
+    ///
+    /// let expected = ShuffleContext::new(
+    ///     ProtocolVersion::current(),
+    ///     [1u8; 32],
+    ///     42,
+    ///     vec![0, 1],
+    ///     52,
+    /// );
+    ///
+    /// let validator = ActionLogValidator::with_expected_context(expected)
+    ///     .set_proof_verifier(Arc::new(NoOpTimelockVerifier));
+    /// ```
+    pub fn set_proof_verifier(mut self, verifier: Arc<dyn TimelockProofVerifier>) -> Self {
+        self.timelock_verifier = Some(verifier);
+        self
+    }
+
+    /// Returns whether a timelock proof verifier is configured.
+    pub fn has_proof_verifier(&self) -> bool {
+        self.timelock_verifier.is_some()
     }
 
     /// Returns the commitment hash if one has been established.
@@ -759,17 +975,21 @@ impl ActionLogValidator {
         Ok(())
     }
 
-    /// Validate the scope binding and structural integrity of a timelock reveal.
+    /// Validate the scope binding, structural integrity, and optionally cryptographic
+    /// validity of a timelock reveal.
     ///
     /// This validates that:
     /// 1. The `timeout_seat` is a valid seat from the commitment's scope
     /// 2. All `card_indices` are within the deck length bounds
     /// 3. The number of `card_indices` matches the number of `revealed_values`
     /// 4. If `revealed_values` is non-empty, `timelock_proof` must also be non-empty
+    /// 5. If a proof verifier is configured, the proof is cryptographically valid
     ///
-    /// This method does NOT verify the cryptographic validity of the timelock proof.
-    /// Cryptographic verification is delegated to a separate proof verifier that
-    /// can be plugged in based on the timelock scheme in use.
+    /// # Cryptographic Verification
+    ///
+    /// If a [`TimelockProofVerifier`] was configured via [`with_proof_verifier`](Self::with_proof_verifier)
+    /// or [`set_proof_verifier`](Self::set_proof_verifier), the verifier will be called to validate
+    /// the proof cryptographically. If no verifier is configured, only structural validation occurs.
     ///
     /// # Arguments
     ///
@@ -781,6 +1001,7 @@ impl ActionLogValidator {
     /// - [`PayloadError::TimelockCardIndexOutOfBounds`] if any card index >= deck_length
     /// - [`PayloadError::TimelockCardValueMismatch`] if card_indices.len() != revealed_values.len()
     /// - [`PayloadError::TimelockMissingProof`] if revealed_values is non-empty but proof is empty
+    /// - [`PayloadError::TimelockProofInvalid`] if the proof verifier rejects the proof
     pub fn validate_timelock_scope_and_proof(
         &self,
         tr: &TimelockReveal,
@@ -818,6 +1039,22 @@ impl ActionLogValidator {
             return Err(PayloadError::TimelockMissingProof {
                 values_count: tr.revealed_values.len(),
             });
+        }
+
+        // Perform cryptographic proof verification if a verifier is configured
+        if let Some(verifier) = &self.timelock_verifier {
+            let input = TimelockVerificationInput {
+                commitment_hash: &tr.commitment_hash,
+                phase: tr.phase,
+                card_indices: &tr.card_indices,
+                timelock_proof: &tr.timelock_proof,
+                revealed_values: &tr.revealed_values,
+                timeout_seat: tr.timeout_seat,
+            };
+
+            verifier
+                .verify_timelock_proof(&input)
+                .map_err(|reason| PayloadError::TimelockProofInvalid { reason })?;
         }
 
         Ok(())
@@ -3907,5 +4144,341 @@ mod tests {
     fn test_deck_length_getter() {
         let (validator, _) = setup_validator_ready_for_reveals();
         assert_eq!(validator.deck_length(), Some(52));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Timelock Proof Verifier Integration Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// A test verifier that rejects proofs based on configurable criteria.
+    struct RejectingTimelockVerifier {
+        reject_reason: String,
+    }
+
+    impl RejectingTimelockVerifier {
+        fn new(reason: &str) -> Self {
+            Self {
+                reject_reason: reason.to_string(),
+            }
+        }
+    }
+
+    impl TimelockProofVerifier for RejectingTimelockVerifier {
+        fn verify_timelock_proof(
+            &self,
+            _input: &TimelockVerificationInput<'_>,
+        ) -> Result<(), String> {
+            Err(self.reject_reason.clone())
+        }
+    }
+
+    /// A test verifier that checks specific proof content.
+    struct ContentCheckingVerifier {
+        expected_proof_prefix: Vec<u8>,
+    }
+
+    impl ContentCheckingVerifier {
+        fn new(expected_prefix: &[u8]) -> Self {
+            Self {
+                expected_proof_prefix: expected_prefix.to_vec(),
+            }
+        }
+    }
+
+    impl TimelockProofVerifier for ContentCheckingVerifier {
+        fn verify_timelock_proof(
+            &self,
+            input: &TimelockVerificationInput<'_>,
+        ) -> Result<(), String> {
+            if input.timelock_proof.starts_with(&self.expected_proof_prefix) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "proof does not start with expected prefix: {:?}",
+                    self.expected_proof_prefix
+                ))
+            }
+        }
+    }
+
+    #[test]
+    fn test_noop_verifier_accepts_all_proofs() {
+        let verifier = NoOpTimelockVerifier;
+        let input = TimelockVerificationInput {
+            commitment_hash: &[0u8; 32],
+            phase: protocol_messages::RevealPhase::Flop,
+            card_indices: &[0, 1, 2],
+            timelock_proof: &[],
+            revealed_values: &[],
+            timeout_seat: 1,
+        };
+
+        assert!(
+            verifier.verify_timelock_proof(&input).is_ok(),
+            "NoOpTimelockVerifier should accept all proofs"
+        );
+    }
+
+    #[test]
+    fn test_validator_without_verifier_skips_proof_verification() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Validator has no verifier configured by default
+        assert!(
+            !validator.has_proof_verifier(),
+            "default validator should not have proof verifier"
+        );
+
+        // Any timelock with valid structure should be accepted (no crypto check)
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        assert!(
+            validator.validate(&ConsensusPayload::TimelockReveal(timelock)).is_ok(),
+            "validator without verifier should accept structurally valid timelock"
+        );
+    }
+
+    #[test]
+    fn test_validator_with_noop_verifier_accepts_all_proofs() {
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        // Create validator with NoOpTimelockVerifier
+        let mut validator =
+            ActionLogValidator::with_proof_verifier(Arc::new(NoOpTimelockVerifier));
+
+        // Process commitment and acks
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        assert!(
+            validator.has_proof_verifier(),
+            "validator should have proof verifier configured"
+        );
+
+        // Timelock should be accepted (NoOp accepts everything)
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        assert!(
+            validator.validate(&ConsensusPayload::TimelockReveal(timelock)).is_ok(),
+            "NoOpTimelockVerifier should accept the timelock"
+        );
+    }
+
+    #[test]
+    fn test_validator_with_rejecting_verifier_rejects_proofs() {
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        // Create validator with rejecting verifier
+        let verifier = Arc::new(RejectingTimelockVerifier::new("test rejection reason"));
+        let mut validator = ActionLogValidator::with_proof_verifier(verifier);
+
+        // Process commitment and acks
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        // Timelock should be rejected by the verifier
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(timelock));
+
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::TimelockProofInvalid { reason })
+                    if reason == "test rejection reason"
+            ),
+            "rejecting verifier should produce TimelockProofInvalid error"
+        );
+    }
+
+    #[test]
+    fn test_validator_with_content_checking_verifier() {
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        // Create validator with content-checking verifier expecting "VALID" prefix
+        let verifier = Arc::new(ContentCheckingVerifier::new(b"VALID"));
+        let mut validator = ActionLogValidator::with_proof_verifier(verifier);
+
+        // Process commitment and acks
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        // Timelock with wrong proof prefix should be rejected
+        let mut bad_timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        bad_timelock.timelock_proof = b"INVALID_PROOF".to_vec();
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(bad_timelock));
+        assert!(
+            matches!(result, Err(PayloadError::TimelockProofInvalid { .. })),
+            "verifier should reject proof with wrong prefix"
+        );
+    }
+
+    #[test]
+    fn test_validator_with_content_checking_verifier_accepts_valid_proof() {
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        // Create validator with content-checking verifier expecting "VALID" prefix
+        let verifier = Arc::new(ContentCheckingVerifier::new(b"VALID"));
+        let mut validator = ActionLogValidator::with_proof_verifier(verifier);
+
+        // Process commitment and acks
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        // Timelock with correct proof prefix should be accepted
+        let mut good_timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        good_timelock.timelock_proof = b"VALID_PROOF_DATA".to_vec();
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(good_timelock));
+        assert!(
+            result.is_ok(),
+            "verifier should accept proof with correct prefix"
+        );
+    }
+
+    #[test]
+    fn test_set_proof_verifier_builder_method() {
+        let expected = ShuffleContext::new(
+            ProtocolVersion::current(),
+            [1u8; 32],
+            42,
+            vec![0, 1, 2, 3],
+            52,
+        );
+
+        // Use builder pattern to configure both context and verifier
+        let validator = ActionLogValidator::with_expected_context(expected)
+            .set_proof_verifier(Arc::new(NoOpTimelockVerifier));
+
+        assert!(validator.has_expected_context());
+        assert!(validator.has_proof_verifier());
+    }
+
+    #[test]
+    fn test_timelock_proof_invalid_error_display() {
+        let err = PayloadError::TimelockProofInvalid {
+            reason: "VDF verification failed: invalid output".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("timelock proof verification failed"));
+        assert!(msg.contains("VDF verification failed"));
+    }
+
+    #[test]
+    fn test_timelock_verification_input_contains_all_fields() {
+        let commitment_hash = [42u8; 32];
+        let card_indices = vec![0, 1, 2];
+        let timelock_proof = vec![0xAB, 0xCD];
+        let revealed_values = vec![vec![10], vec![20], vec![30]];
+
+        let input = TimelockVerificationInput {
+            commitment_hash: &commitment_hash,
+            phase: protocol_messages::RevealPhase::Flop,
+            card_indices: &card_indices,
+            timelock_proof: &timelock_proof,
+            revealed_values: &revealed_values,
+            timeout_seat: 2,
+        };
+
+        // Verify all fields are accessible
+        assert_eq!(input.commitment_hash, &commitment_hash);
+        assert_eq!(input.phase, protocol_messages::RevealPhase::Flop);
+        assert_eq!(input.card_indices, &card_indices[..]);
+        assert_eq!(input.timelock_proof, &timelock_proof[..]);
+        assert_eq!(input.revealed_values, &revealed_values[..]);
+        assert_eq!(input.timeout_seat, 2);
+    }
+
+    #[test]
+    fn test_structural_validation_runs_before_proof_verification() {
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        // Create validator with rejecting verifier
+        let verifier = Arc::new(RejectingTimelockVerifier::new("should not reach this"));
+        let mut validator = ActionLogValidator::with_proof_verifier(verifier);
+
+        // Process commitment and acks
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        // Timelock with invalid timeout_seat should fail structural validation
+        // BEFORE reaching the proof verifier
+        let mut bad_timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        bad_timelock.timeout_seat = 99; // Invalid seat
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(bad_timelock));
+        assert!(
+            matches!(result, Err(PayloadError::InvalidTimelockTimeoutSeat { .. })),
+            "structural validation should fail before proof verification"
+        );
     }
 }
