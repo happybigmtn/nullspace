@@ -87,9 +87,10 @@
   - Tests: AC-1.1, AC-1.2
   - Perceptual: None
   - Implemented: `FeatureDisabled { feature: "bridge" }` error in `messages.rs:PayloadError`; `ConsensusPayload` enum has no bridge variants (enforced by type system); tests `test_bridge_disabled_error_format_ac_1_1`, `test_no_bridge_state_mutation_ac_1_2`
-- [ ] Remove bridge instruction/event tags from public protocol exports when disabled.
+- [x] Remove bridge instruction/event tags from public protocol exports when disabled.
   - Tests: AC-1.1, AC-1.2
   - Perceptual: None
+  - Implemented: `disabled_features` module exports `BRIDGE_DISABLED`, `DISABLED_INSTRUCTION_TAGS`, `TAG_BRIDGE_*` constants, `is_tag_disabled()`, `bridge_disabled_error()`; tests `test_bridge_disabled_constant_exported_ac_1_1`, `test_bridge_instruction_tags_listed_ac_1_2`, `test_is_tag_disabled_helper_ac_1_1`, `test_bridge_disabled_error_helper_ac_1_1`, `test_disabled_features_are_public_exports`
 - [ ] Remove Bridge UI + relayer tooling (website + `client` bin).
   - Tests: AC-2.1, AC-2.2
   - Perceptual: AC-PQ.1 (no bridge UI entry points in navigation)
