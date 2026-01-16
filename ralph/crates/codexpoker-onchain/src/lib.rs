@@ -80,7 +80,8 @@
 pub mod messages;
 
 pub use messages::{
-    action_codes, ConsensusPayload, GameActionMessage, PayloadError, GAME_ACTION_DOMAIN,
+    action_codes, ActionLogValidator, ConsensusPayload, GameActionMessage, PayloadError,
+    GAME_ACTION_DOMAIN,
 };
 
 // Re-export core protocol types for convenience

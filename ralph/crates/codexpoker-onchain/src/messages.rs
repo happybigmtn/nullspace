@@ -53,6 +53,18 @@ pub enum PayloadError {
     /// Scope mismatch.
     #[error("scope mismatch: expected {expected}, got {got}")]
     ScopeMismatch { expected: String, got: String },
+
+    /// First payload must be a DealCommitment.
+    #[error("first payload must be a DealCommitment, got {got}")]
+    MissingInitialCommitment { got: &'static str },
+
+    /// Duplicate DealCommitment in action log.
+    #[error("duplicate DealCommitment: only one allowed per hand")]
+    DuplicateCommitment,
+
+    /// Payload references wrong commitment hash.
+    #[error("commitment hash mismatch: expected {expected:?}, got {got:?}")]
+    CommitmentHashMismatch { expected: [u8; 32], got: [u8; 32] },
 }
 
 /// The consensus payload schema wrapping all onchain message types.
@@ -229,6 +241,178 @@ impl GameActionMessage {
     /// Canonical hash of this action message.
     pub fn action_hash(&self) -> [u8; 32] {
         protocol_messages::canonical_hash(&self.preimage())
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Action Log Validator
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Validates the ordering and commitment binding of an action log.
+///
+/// This validator enforces the critical invariant that:
+/// 1. The first payload in any hand must be a `DealCommitment`
+/// 2. Exactly one `DealCommitment` is allowed per hand
+/// 3. All subsequent payloads must reference the commitment hash
+///
+/// # Deterministic Validation
+///
+/// Given the same ordered sequence of payloads, this validator produces
+/// identical accept/reject decisions on all validators. This is essential
+/// for consensus: all honest nodes must agree on whether an action log
+/// is valid.
+///
+/// # Usage
+///
+/// ```
+/// use codexpoker_onchain::{ActionLogValidator, ConsensusPayload, GameActionMessage, action_codes};
+/// use protocol_messages::{DealCommitment, DealCommitmentAck, ProtocolVersion, ScopeBinding};
+///
+/// let mut validator = ActionLogValidator::new();
+///
+/// // First payload must be a DealCommitment
+/// let scope = ScopeBinding::new([1u8; 32], 1, vec![0, 1], 52);
+/// let deal = DealCommitment {
+///     version: ProtocolVersion::current(),
+///     scope,
+///     shuffle_commitment: [2u8; 32],
+///     artifact_hashes: vec![],
+///     timestamp_ms: 1700000000000,
+///     dealer_signature: vec![],
+/// };
+/// let commitment_hash = deal.commitment_hash();
+/// let payload = ConsensusPayload::DealCommitment(deal);
+///
+/// assert!(validator.validate(&payload).is_ok());
+///
+/// // Subsequent payloads must reference the commitment
+/// let ack = DealCommitmentAck {
+///     version: ProtocolVersion::current(),
+///     commitment_hash,
+///     seat_index: 0,
+///     player_signature: vec![],
+/// };
+/// assert!(validator.validate(&ConsensusPayload::DealCommitmentAck(ack)).is_ok());
+/// ```
+#[derive(Debug, Clone)]
+pub struct ActionLogValidator {
+    /// The commitment hash for this hand, set after seeing the first DealCommitment.
+    commitment_hash: Option<[u8; 32]>,
+    /// Number of payloads processed.
+    payload_count: usize,
+}
+
+impl Default for ActionLogValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ActionLogValidator {
+    /// Create a new validator for a fresh action log.
+    pub fn new() -> Self {
+        Self {
+            commitment_hash: None,
+            payload_count: 0,
+        }
+    }
+
+    /// Returns the commitment hash if one has been established.
+    pub fn commitment_hash(&self) -> Option<[u8; 32]> {
+        self.commitment_hash
+    }
+
+    /// Returns the number of payloads processed.
+    pub fn payload_count(&self) -> usize {
+        self.payload_count
+    }
+
+    /// Returns true if the validator has seen a DealCommitment.
+    pub fn has_commitment(&self) -> bool {
+        self.commitment_hash.is_some()
+    }
+
+    /// Validate a payload and update validator state.
+    ///
+    /// This method enforces:
+    /// 1. First payload must be `DealCommitment`
+    /// 2. Only one `DealCommitment` allowed
+    /// 3. All other payloads must reference the established commitment hash
+    ///
+    /// # Errors
+    ///
+    /// - [`PayloadError::MissingInitialCommitment`] if first payload is not a DealCommitment
+    /// - [`PayloadError::DuplicateCommitment`] if a second DealCommitment is seen
+    /// - [`PayloadError::CommitmentHashMismatch`] if payload references wrong commitment
+    pub fn validate(&mut self, payload: &ConsensusPayload) -> Result<(), PayloadError> {
+        // First payload must be a DealCommitment
+        if self.payload_count == 0 {
+            match payload {
+                ConsensusPayload::DealCommitment(dc) => {
+                    self.commitment_hash = Some(dc.commitment_hash());
+                    self.payload_count += 1;
+                    return Ok(());
+                }
+                ConsensusPayload::DealCommitmentAck(_) => {
+                    return Err(PayloadError::MissingInitialCommitment {
+                        got: "DealCommitmentAck",
+                    });
+                }
+                ConsensusPayload::GameAction(_) => {
+                    return Err(PayloadError::MissingInitialCommitment {
+                        got: "GameAction",
+                    });
+                }
+                ConsensusPayload::RevealShare(_) => {
+                    return Err(PayloadError::MissingInitialCommitment {
+                        got: "RevealShare",
+                    });
+                }
+                ConsensusPayload::TimelockReveal(_) => {
+                    return Err(PayloadError::MissingInitialCommitment {
+                        got: "TimelockReveal",
+                    });
+                }
+            }
+        }
+
+        // After the first payload, no more DealCommitments allowed
+        if payload.is_deal_commitment() {
+            return Err(PayloadError::DuplicateCommitment);
+        }
+
+        // All other payloads must reference the established commitment hash
+        let expected = self
+            .commitment_hash
+            .expect("commitment_hash must be set after first payload");
+
+        if let Some(got) = payload.referenced_commitment_hash() {
+            if got != expected {
+                return Err(PayloadError::CommitmentHashMismatch { expected, got });
+            }
+        }
+
+        self.payload_count += 1;
+        Ok(())
+    }
+
+    /// Validate an entire action log at once.
+    ///
+    /// This is a convenience method that processes all payloads in order
+    /// and returns the first error encountered, if any.
+    pub fn validate_log(payloads: &[ConsensusPayload]) -> Result<[u8; 32], PayloadError> {
+        if payloads.is_empty() {
+            return Err(PayloadError::MissingField("action log is empty"));
+        }
+
+        let mut validator = Self::new();
+        for payload in payloads {
+            validator.validate(payload)?;
+        }
+
+        Ok(validator
+            .commitment_hash
+            .expect("commitment hash must be set after validating non-empty log"))
     }
 }
 
@@ -501,5 +685,296 @@ mod tests {
                 "all non-commitment payloads must reference the deal commitment hash"
             );
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ActionLogValidator tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_validator_accepts_commitment_first() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let payload = ConsensusPayload::DealCommitment(dc);
+
+        assert!(validator.validate(&payload).is_ok());
+        assert!(validator.has_commitment());
+        assert_eq!(validator.payload_count(), 1);
+    }
+
+    #[test]
+    fn test_validator_rejects_action_before_commitment() {
+        let mut validator = ActionLogValidator::new();
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: [0xAA; 32],
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+        let payload = ConsensusPayload::GameAction(action);
+
+        let result = validator.validate(&payload);
+        assert!(matches!(
+            result,
+            Err(PayloadError::MissingInitialCommitment { got: "GameAction" })
+        ));
+    }
+
+    #[test]
+    fn test_validator_rejects_ack_before_commitment() {
+        let mut validator = ActionLogValidator::new();
+        let ack = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash: [0xAA; 32],
+            seat_index: 0,
+            player_signature: vec![],
+        };
+        let payload = ConsensusPayload::DealCommitmentAck(ack);
+
+        let result = validator.validate(&payload);
+        assert!(matches!(
+            result,
+            Err(PayloadError::MissingInitialCommitment {
+                got: "DealCommitmentAck"
+            })
+        ));
+    }
+
+    #[test]
+    fn test_validator_rejects_reveal_before_commitment() {
+        let mut validator = ActionLogValidator::new();
+        let reveal = RevealShare {
+            version: ProtocolVersion::current(),
+            commitment_hash: [0xAA; 32],
+            phase: protocol_messages::RevealPhase::Flop,
+            card_indices: vec![0, 1, 2],
+            reveal_data: vec![vec![1], vec![2], vec![3]],
+            from_seat: 0,
+            signature: vec![],
+        };
+        let payload = ConsensusPayload::RevealShare(reveal);
+
+        let result = validator.validate(&payload);
+        assert!(matches!(
+            result,
+            Err(PayloadError::MissingInitialCommitment { got: "RevealShare" })
+        ));
+    }
+
+    #[test]
+    fn test_validator_rejects_timelock_before_commitment() {
+        let mut validator = ActionLogValidator::new();
+        let reveal = TimelockReveal {
+            version: ProtocolVersion::current(),
+            commitment_hash: [0xAA; 32],
+            phase: protocol_messages::RevealPhase::Turn,
+            card_indices: vec![3],
+            timelock_proof: vec![],
+            revealed_values: vec![vec![4]],
+            timeout_seat: 1,
+        };
+        let payload = ConsensusPayload::TimelockReveal(reveal);
+
+        let result = validator.validate(&payload);
+        assert!(matches!(
+            result,
+            Err(PayloadError::MissingInitialCommitment {
+                got: "TimelockReveal"
+            })
+        ));
+    }
+
+    #[test]
+    fn test_validator_rejects_duplicate_commitment() {
+        let mut validator = ActionLogValidator::new();
+        let dc1 = test_deal_commitment();
+        let dc2 = test_deal_commitment();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc1))
+            .is_ok());
+
+        let result = validator.validate(&ConsensusPayload::DealCommitment(dc2));
+        assert!(matches!(result, Err(PayloadError::DuplicateCommitment)));
+    }
+
+    #[test]
+    fn test_validator_accepts_matching_commitment_hash() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // Ack with matching hash
+        let ack = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            seat_index: 0,
+            player_signature: vec![],
+        };
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitmentAck(ack))
+            .is_ok());
+
+        // Action with matching hash
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+        assert!(validator
+            .validate(&ConsensusPayload::GameAction(action))
+            .is_ok());
+
+        assert_eq!(validator.payload_count(), 3);
+    }
+
+    #[test]
+    fn test_validator_rejects_mismatched_commitment_hash() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let correct_hash = dc.commitment_hash();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // Ack with wrong hash
+        let wrong_hash = [0xFF; 32];
+        let ack = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash: wrong_hash,
+            seat_index: 0,
+            player_signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::DealCommitmentAck(ack));
+        assert!(matches!(
+            result,
+            Err(PayloadError::CommitmentHashMismatch { expected, got })
+                if expected == correct_hash && got == wrong_hash
+        ));
+    }
+
+    #[test]
+    fn test_validator_rejects_mismatched_action_hash() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let correct_hash = dc.commitment_hash();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // Action with wrong hash
+        let wrong_hash = [0xEE; 32];
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: wrong_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::GameAction(action));
+        assert!(matches!(
+            result,
+            Err(PayloadError::CommitmentHashMismatch { expected, got })
+                if expected == correct_hash && got == wrong_hash
+        ));
+    }
+
+    #[test]
+    fn test_validate_log_valid_sequence() {
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        let payloads = vec![
+            ConsensusPayload::DealCommitment(dc),
+            ConsensusPayload::DealCommitmentAck(DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: 0,
+                player_signature: vec![],
+            }),
+            ConsensusPayload::GameAction(GameActionMessage {
+                version: ProtocolVersion::current(),
+                deal_commitment_hash: commitment_hash,
+                seat_index: 0,
+                action_type: action_codes::BET,
+                amount: 100,
+                sequence: 1,
+                signature: vec![],
+            }),
+        ];
+
+        let result = ActionLogValidator::validate_log(&payloads);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), commitment_hash);
+    }
+
+    #[test]
+    fn test_validate_log_empty() {
+        let result = ActionLogValidator::validate_log(&[]);
+        assert!(matches!(result, Err(PayloadError::MissingField(_))));
+    }
+
+    #[test]
+    fn test_validate_log_no_commitment() {
+        let payloads = vec![ConsensusPayload::GameAction(GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: [0xAA; 32],
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        })];
+
+        let result = ActionLogValidator::validate_log(&payloads);
+        assert!(matches!(
+            result,
+            Err(PayloadError::MissingInitialCommitment { .. })
+        ));
+    }
+
+    #[test]
+    fn test_validate_log_duplicate_commitment() {
+        let dc1 = test_deal_commitment();
+        let dc2 = test_deal_commitment();
+
+        let payloads = vec![
+            ConsensusPayload::DealCommitment(dc1),
+            ConsensusPayload::DealCommitment(dc2),
+        ];
+
+        let result = ActionLogValidator::validate_log(&payloads);
+        assert!(matches!(result, Err(PayloadError::DuplicateCommitment)));
+    }
+
+    #[test]
+    fn test_validator_commitment_hash_accessor() {
+        let mut validator = ActionLogValidator::new();
+        assert!(validator.commitment_hash().is_none());
+
+        let dc = test_deal_commitment();
+        let expected_hash = dc.commitment_hash();
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        assert_eq!(validator.commitment_hash(), Some(expected_hash));
     }
 }

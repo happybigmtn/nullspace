@@ -32,9 +32,9 @@
 
 ### M1: Deal Commitment Integration
 
-- [ ] Add `DealCommitment` to consensus payload schema (`crates/codexpoker-onchain/src/messages.rs`).
-- [ ] Enforce: exactly one commitment before first action.
-- [ ] Bind `deal_commitment_hash` into `GameActionMessage` signature preimage.
+- [x] Add `DealCommitment` to consensus payload schema (`crates/codexpoker-onchain/src/messages.rs`).
+- [x] Enforce: exactly one commitment before first action.
+- [x] Bind `deal_commitment_hash` into `GameActionMessage` signature preimage.
 - [ ] Add commitment ack gating (sigset or per-player acks).
 - [ ] Update ordering harness to reject actions without commitment binding.
 
