@@ -95,6 +95,8 @@ pub use codec::{
     bet_layouts,
     // Per-game bet type enums
     RouletteBetType, CrapsBetType, SicBoBetType, BaccaratBetType,
+    // Dual-decode migration layer (AC-4.1, AC-4.2)
+    DualDecoder, EncodingVersion, VersionError, PayloadInfo,
 };
 
 pub use payload::{

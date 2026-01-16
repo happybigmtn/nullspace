@@ -1765,3 +1765,583 @@ mod bet_descriptor_tests {
         assert!(bytes.len() <= 4, "baccarat bet too large: {} bytes", bytes.len());
     }
 }
+
+// ============================================================================
+// Dual-Decode Migration Layer (AC-4.1, AC-4.2)
+// ============================================================================
+
+/// Protocol version for the dual-decode layer.
+///
+/// This is intentionally separate from `payload::ProtocolVersion` to keep
+/// codec concerns isolated. The values are compatible: v1=legacy, v2+=compact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EncodingVersion {
+    /// Legacy byte-aligned encoding (v1).
+    ///
+    /// V1 payloads use traditional byte-aligned formats:
+    /// - Amounts are fixed-width (typically 8 bytes)
+    /// - Headers may be 2-4 bytes
+    /// - No bitwise packing
+    V1,
+    /// Compact bitwise encoding (v2).
+    ///
+    /// V2 payloads use the `BitWriter`/`BitReader` format:
+    /// - Header: 3-bit version + 5-bit opcode = 1 byte
+    /// - Amounts: ULEB128 varint encoding
+    /// - Fields: bit-packed according to game layouts
+    V2,
+}
+
+impl EncodingVersion {
+    /// Minimum supported version (v1).
+    pub const MIN: u8 = 1;
+    /// Maximum supported version (v2).
+    pub const MAX: u8 = 2;
+
+    /// Create from raw version byte.
+    ///
+    /// Returns `None` if version is outside the supported range [1, 2].
+    #[must_use]
+    pub fn from_byte(version: u8) -> Option<Self> {
+        match version {
+            1 => Some(Self::V1),
+            2 => Some(Self::V2),
+            _ => None,
+        }
+    }
+
+    /// Convert to raw version byte.
+    #[must_use]
+    pub const fn to_byte(self) -> u8 {
+        match self {
+            Self::V1 => 1,
+            Self::V2 => 2,
+        }
+    }
+
+    /// Check if this version uses compact (bitwise) encoding.
+    #[must_use]
+    pub const fn is_compact(self) -> bool {
+        matches!(self, Self::V2)
+    }
+
+    /// Check if this version is legacy (v1).
+    #[must_use]
+    pub const fn is_legacy(self) -> bool {
+        matches!(self, Self::V1)
+    }
+}
+
+/// Error returned when version detection or validation fails.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum VersionError {
+    /// Buffer is empty; cannot detect version.
+    #[error("empty buffer: cannot detect version")]
+    EmptyBuffer,
+
+    /// Version is below minimum supported.
+    #[error("version {version} is below minimum {min}")]
+    BelowMinimum { version: u8, min: u8 },
+
+    /// Version is above maximum supported.
+    #[error("version {version} is above maximum {max}")]
+    AboveMaximum { version: u8, max: u8 },
+
+    /// Version header is malformed.
+    #[error("malformed version header")]
+    MalformedHeader,
+}
+
+/// Detected payload information from version inspection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PayloadInfo {
+    /// Detected encoding version.
+    pub version: EncodingVersion,
+    /// Opcode (for v2) or 0 for v1.
+    pub opcode: u8,
+    /// Byte offset where payload data begins (after header).
+    pub data_offset: usize,
+}
+
+impl PayloadInfo {
+    /// Create a new PayloadInfo.
+    #[must_use]
+    pub const fn new(version: EncodingVersion, opcode: u8, data_offset: usize) -> Self {
+        Self {
+            version,
+            opcode,
+            data_offset,
+        }
+    }
+}
+
+/// Dual-decode migration layer for accepting both v1 and v2 payloads.
+///
+/// This struct provides version detection and routing for the v1→v2 migration
+/// window. It satisfies AC-4.1 by explicitly checking versions and routing
+/// to the appropriate decoder.
+///
+/// # Version Detection
+///
+/// The decoder distinguishes v1 and v2 payloads by inspecting the first byte:
+///
+/// - **V2 format**: First byte encodes version (3 bits) + opcode (5 bits).
+///   Version bits 010 (decimal 2) indicate v2 compact encoding.
+///
+/// - **V1 format**: First byte is typically a type discriminant or length.
+///   V1 payloads never have version bits that equal 2 in the low 3 bits
+///   while also being a valid v1 discriminant.
+///
+/// # Migration Window
+///
+/// During migration:
+/// 1. Both v1 and v2 are accepted
+/// 2. V2 payloads are decoded using `BitReader`
+/// 3. V1 payloads are passed to legacy decoders unchanged
+/// 4. After migration completes, v1 support can be removed
+///
+/// # Example
+///
+/// ```
+/// use protocol_messages::codec::{DualDecoder, EncodingVersion};
+///
+/// // V2 payload: version=2 (bits 010), opcode=5 (bits 00101)
+/// // Combined: 00101_010 = 0b00101010 = 0x2A
+/// let v2_payload = vec![0x2A, 0x64]; // header + ULEB128(100)
+/// let info = DualDecoder::detect_version(&v2_payload).unwrap();
+/// assert_eq!(info.version, EncodingVersion::V2);
+/// assert_eq!(info.opcode, 5);
+///
+/// // V1 payload: starts with something that isn't a valid v2 header
+/// // For example, 0x01 has version bits = 1, not 2
+/// let v1_payload = vec![0x01, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00];
+/// let info = DualDecoder::detect_version(&v1_payload).unwrap();
+/// assert_eq!(info.version, EncodingVersion::V1);
+/// ```
+pub struct DualDecoder;
+
+impl DualDecoder {
+    /// Detect the encoding version from a payload buffer.
+    ///
+    /// This method inspects the first byte to determine whether the payload
+    /// uses v1 (legacy) or v2 (compact) encoding.
+    ///
+    /// # Version Detection Logic
+    ///
+    /// For v2 payloads, the first byte is structured as:
+    /// - Bits 0-2: version (must be 2 for v2)
+    /// - Bits 3-7: opcode (0-31)
+    ///
+    /// For v1 payloads, the first byte is interpreted as a legacy discriminant.
+    /// V1 formats never use 2 as a discriminant in the same bit position.
+    ///
+    /// # Errors
+    ///
+    /// - `VersionError::EmptyBuffer`: Input is empty
+    /// - `VersionError::BelowMinimum`: Version 0 detected (reserved)
+    /// - `VersionError::AboveMaximum`: Version > 2 detected (future)
+    pub fn detect_version(payload: &[u8]) -> Result<PayloadInfo, VersionError> {
+        if payload.is_empty() {
+            return Err(VersionError::EmptyBuffer);
+        }
+
+        let first_byte = payload[0];
+
+        // Extract version bits (low 3 bits for v2 format)
+        let version_bits = first_byte & 0x07;
+
+        match version_bits {
+            0 => {
+                // Version 0 is reserved/invalid
+                Err(VersionError::BelowMinimum {
+                    version: 0,
+                    min: EncodingVersion::MIN,
+                })
+            }
+            1 => {
+                // V1: legacy encoding
+                // For v1, the entire first byte is a discriminant, not a header
+                // Data starts at offset 0 (no header to skip, or header is app-specific)
+                Ok(PayloadInfo::new(EncodingVersion::V1, 0, 0))
+            }
+            2 => {
+                // V2: compact encoding with header
+                // Extract opcode from bits 3-7
+                let opcode = (first_byte >> 3) & 0x1F;
+                // Data starts after the 1-byte header
+                Ok(PayloadInfo::new(EncodingVersion::V2, opcode, 1))
+            }
+            3..=7 => {
+                // Future versions not yet supported
+                Err(VersionError::AboveMaximum {
+                    version: version_bits,
+                    max: EncodingVersion::MAX,
+                })
+            }
+            _ => unreachable!(), // 0x07 mask ensures 0-7 range
+        }
+    }
+
+    /// Validate a version byte against the supported range.
+    ///
+    /// This is a simpler check that doesn't parse the header structure,
+    /// just validates that a known version byte is acceptable.
+    pub fn validate_version(version: u8) -> Result<EncodingVersion, VersionError> {
+        EncodingVersion::from_byte(version).ok_or_else(|| {
+            if version < EncodingVersion::MIN {
+                VersionError::BelowMinimum {
+                    version,
+                    min: EncodingVersion::MIN,
+                }
+            } else {
+                VersionError::AboveMaximum {
+                    version,
+                    max: EncodingVersion::MAX,
+                }
+            }
+        })
+    }
+
+    /// Check if a payload appears to be v2 compact format.
+    ///
+    /// This is a quick predicate for routing decisions.
+    #[must_use]
+    pub fn is_v2_payload(payload: &[u8]) -> bool {
+        matches!(Self::detect_version(payload), Ok(info) if info.version.is_compact())
+    }
+
+    /// Check if a payload appears to be v1 legacy format.
+    ///
+    /// This is a quick predicate for routing decisions.
+    #[must_use]
+    pub fn is_v1_payload(payload: &[u8]) -> bool {
+        matches!(Self::detect_version(payload), Ok(info) if info.version.is_legacy())
+    }
+
+    /// Create a BitReader positioned after the v2 header.
+    ///
+    /// For v2 payloads, this skips the 1-byte header and returns a reader
+    /// positioned at the payload data. For v1 payloads, returns an error.
+    ///
+    /// # Errors
+    ///
+    /// - `VersionError::*`: If version detection fails
+    /// - Returns `None` if payload is v1 (caller should use legacy decoder)
+    pub fn v2_reader(payload: &[u8]) -> Result<Option<(PayloadInfo, BitReader<'_>)>, VersionError> {
+        let info = Self::detect_version(payload)?;
+
+        if info.version.is_legacy() {
+            return Ok(None);
+        }
+
+        // For v2, create reader starting after header
+        let data = &payload[info.data_offset..];
+        Ok(Some((info, BitReader::new(data))))
+    }
+
+    /// Encode a v2 header byte.
+    ///
+    /// Creates the combined version + opcode byte for v2 payloads.
+    #[must_use]
+    pub const fn encode_v2_header(opcode: u8) -> u8 {
+        // Version 2 in bits 0-2, opcode in bits 3-7
+        (EncodingVersion::V2.to_byte() & 0x07) | ((opcode & 0x1F) << 3)
+    }
+}
+
+#[cfg(test)]
+mod dual_decode_tests {
+    use super::*;
+
+    // ========================================================================
+    // AC-4.1: v1 and v2 both accepted during migration with explicit checks
+    // ========================================================================
+
+    #[test]
+    fn test_v1_payload_accepted_ac_4_1() {
+        // V1 payload: first byte has version bits = 1
+        // 0x01 = 0b00000001, version bits (low 3) = 001 = 1
+        let v1_payload = vec![0x01, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00];
+        let info = DualDecoder::detect_version(&v1_payload).expect("v1 must be accepted");
+        assert_eq!(info.version, EncodingVersion::V1, "AC-4.1: v1 must be detected");
+    }
+
+    #[test]
+    fn test_v2_payload_accepted_ac_4_1() {
+        // V2 payload: first byte has version bits = 2, opcode = 5
+        // 0x2A = 0b00101010, version bits (low 3) = 010 = 2
+        let v2_payload = vec![0x2A, 0x64];
+        let info = DualDecoder::detect_version(&v2_payload).expect("v2 must be accepted");
+        assert_eq!(info.version, EncodingVersion::V2, "AC-4.1: v2 must be detected");
+        assert_eq!(info.opcode, 5, "opcode must be extracted correctly");
+    }
+
+    #[test]
+    fn test_explicit_version_check_ac_4_1() {
+        // AC-4.1 requires "explicit version checks"
+        // Verify that version validation is explicit, not implicit
+
+        // Valid versions
+        assert!(DualDecoder::validate_version(1).is_ok(), "v1 validation");
+        assert!(DualDecoder::validate_version(2).is_ok(), "v2 validation");
+
+        // Invalid versions with explicit errors
+        let v0_result = DualDecoder::validate_version(0);
+        assert!(
+            matches!(v0_result, Err(VersionError::BelowMinimum { version: 0, min: 1 })),
+            "v0 must return explicit BelowMinimum error"
+        );
+
+        let v99_result = DualDecoder::validate_version(99);
+        assert!(
+            matches!(v99_result, Err(VersionError::AboveMaximum { version: 99, max: 2 })),
+            "v99 must return explicit AboveMaximum error"
+        );
+    }
+
+    #[test]
+    fn test_both_versions_coexist_ac_4_1() {
+        // Demonstrate that both v1 and v2 payloads can be processed
+        // in the same codebase during migration
+
+        let v1_payloads = [
+            vec![0x01], // minimal v1
+            vec![0x09], // 0b00001001, version bits = 1
+            vec![0x11], // 0b00010001, version bits = 1
+            vec![0x19], // 0b00011001, version bits = 1
+        ];
+
+        let v2_payloads = [
+            vec![0x02],       // version=2, opcode=0
+            vec![0x0A],       // version=2, opcode=1
+            vec![0x2A, 0x64], // version=2, opcode=5, + data
+            vec![0xFA],       // version=2, opcode=31 (max)
+        ];
+
+        for payload in v1_payloads {
+            let info = DualDecoder::detect_version(&payload).unwrap();
+            assert!(info.version.is_legacy(), "must detect as v1: {:02X?}", payload);
+        }
+
+        for payload in v2_payloads {
+            let info = DualDecoder::detect_version(&payload).unwrap();
+            assert!(info.version.is_compact(), "must detect as v2: {:02X?}", payload);
+        }
+    }
+
+    #[test]
+    fn test_version_error_messages_ac_4_1() {
+        // Verify error messages are clear for AC-4.1 compliance
+
+        let empty_err = DualDecoder::detect_version(&[]);
+        assert!(matches!(empty_err, Err(VersionError::EmptyBuffer)));
+        assert!(empty_err.unwrap_err().to_string().contains("empty"));
+
+        let below_err = DualDecoder::validate_version(0).unwrap_err();
+        assert!(below_err.to_string().contains("below"));
+        assert!(below_err.to_string().contains("minimum"));
+
+        let above_err = DualDecoder::validate_version(5).unwrap_err();
+        assert!(above_err.to_string().contains("above"));
+        assert!(above_err.to_string().contains("maximum"));
+    }
+
+    // ========================================================================
+    // Version Detection Tests
+    // ========================================================================
+
+    #[test]
+    fn test_empty_buffer_error() {
+        let result = DualDecoder::detect_version(&[]);
+        assert!(matches!(result, Err(VersionError::EmptyBuffer)));
+    }
+
+    #[test]
+    fn test_version_0_rejected() {
+        // 0x00 = version bits 000 = 0
+        let payload = vec![0x00, 0x01, 0x02];
+        let result = DualDecoder::detect_version(&payload);
+        assert!(matches!(result, Err(VersionError::BelowMinimum { version: 0, min: 1 })));
+    }
+
+    #[test]
+    fn test_version_3_through_7_rejected() {
+        // Versions 3-7 are future versions, not yet supported
+        for version_bits in 3u8..=7 {
+            let payload = vec![version_bits]; // version bits in low 3 bits
+            let result = DualDecoder::detect_version(&payload);
+            assert!(
+                matches!(result, Err(VersionError::AboveMaximum { version, max: 2 }) if version == version_bits),
+                "version {} must be rejected as above maximum",
+                version_bits
+            );
+        }
+    }
+
+    #[test]
+    fn test_v2_opcode_extraction() {
+        // Test all opcode values (0-31)
+        for opcode in 0u8..=31 {
+            let header = DualDecoder::encode_v2_header(opcode);
+            let payload = vec![header, 0x00]; // header + dummy data
+
+            let info = DualDecoder::detect_version(&payload).unwrap();
+            assert_eq!(info.version, EncodingVersion::V2);
+            assert_eq!(info.opcode, opcode, "opcode {} must roundtrip", opcode);
+            assert_eq!(info.data_offset, 1, "v2 data starts at offset 1");
+        }
+    }
+
+    #[test]
+    fn test_v1_data_offset() {
+        // V1 has no header to skip (offset 0)
+        let payload = vec![0x01, 0x02, 0x03];
+        let info = DualDecoder::detect_version(&payload).unwrap();
+        assert_eq!(info.version, EncodingVersion::V1);
+        assert_eq!(info.data_offset, 0, "v1 data starts at offset 0");
+    }
+
+    #[test]
+    fn test_v2_header_encoding() {
+        // Verify header encoding matches expected bit layout
+        assert_eq!(DualDecoder::encode_v2_header(0), 0x02);  // 00000_010
+        assert_eq!(DualDecoder::encode_v2_header(1), 0x0A);  // 00001_010
+        assert_eq!(DualDecoder::encode_v2_header(5), 0x2A);  // 00101_010
+        assert_eq!(DualDecoder::encode_v2_header(31), 0xFA); // 11111_010
+    }
+
+    // ========================================================================
+    // Predicate Tests
+    // ========================================================================
+
+    #[test]
+    fn test_is_v1_payload_predicate() {
+        assert!(DualDecoder::is_v1_payload(&[0x01]));
+        assert!(DualDecoder::is_v1_payload(&[0x09]));
+        assert!(!DualDecoder::is_v1_payload(&[0x02]));
+        assert!(!DualDecoder::is_v1_payload(&[]));
+    }
+
+    #[test]
+    fn test_is_v2_payload_predicate() {
+        assert!(DualDecoder::is_v2_payload(&[0x02]));
+        assert!(DualDecoder::is_v2_payload(&[0x2A]));
+        assert!(!DualDecoder::is_v2_payload(&[0x01]));
+        assert!(!DualDecoder::is_v2_payload(&[]));
+    }
+
+    // ========================================================================
+    // BitReader Integration Tests
+    // ========================================================================
+
+    #[test]
+    fn test_v2_reader_returns_reader_for_v2() {
+        // V2 payload: header (0x2A = v2, opcode 5) + ULEB128(100)
+        let payload = vec![0x2A, 0x64]; // 100 in ULEB128 is 0x64
+
+        let result = DualDecoder::v2_reader(&payload).unwrap();
+        assert!(result.is_some(), "v2 payload must return reader");
+
+        let (info, mut reader) = result.unwrap();
+        assert_eq!(info.opcode, 5);
+
+        // Reader should be positioned at data (after header)
+        let amount = reader.read_uleb128().unwrap();
+        assert_eq!(amount, 100);
+    }
+
+    #[test]
+    fn test_v2_reader_returns_none_for_v1() {
+        // V1 payload
+        let payload = vec![0x01, 0x00, 0x00, 0x00];
+
+        let result = DualDecoder::v2_reader(&payload).unwrap();
+        assert!(result.is_none(), "v1 payload must return None");
+    }
+
+    #[test]
+    fn test_v2_reader_propagates_errors() {
+        // Empty payload
+        let result = DualDecoder::v2_reader(&[]);
+        assert!(matches!(result, Err(VersionError::EmptyBuffer)));
+    }
+
+    // ========================================================================
+    // EncodingVersion Tests
+    // ========================================================================
+
+    #[test]
+    fn test_encoding_version_roundtrip() {
+        assert_eq!(EncodingVersion::from_byte(1), Some(EncodingVersion::V1));
+        assert_eq!(EncodingVersion::from_byte(2), Some(EncodingVersion::V2));
+        assert_eq!(EncodingVersion::from_byte(0), None);
+        assert_eq!(EncodingVersion::from_byte(3), None);
+
+        assert_eq!(EncodingVersion::V1.to_byte(), 1);
+        assert_eq!(EncodingVersion::V2.to_byte(), 2);
+    }
+
+    #[test]
+    fn test_encoding_version_predicates() {
+        assert!(EncodingVersion::V1.is_legacy());
+        assert!(!EncodingVersion::V1.is_compact());
+
+        assert!(!EncodingVersion::V2.is_legacy());
+        assert!(EncodingVersion::V2.is_compact());
+    }
+
+    // ========================================================================
+    // AC-4.2: Golden vector parity (basic encoding determinism)
+    // ========================================================================
+
+    #[test]
+    fn test_v2_encoding_deterministic_ac_4_2() {
+        // Same input must produce same output (required for golden vectors)
+        let encode = |opcode: u8, amount: u64| {
+            let mut writer = BitWriter::new();
+            let header = PayloadHeader::with_version(2, opcode);
+            header.encode(&mut writer).unwrap();
+            writer.write_uleb128(amount).unwrap();
+            writer.finish()
+        };
+
+        let first = encode(5, 1000);
+        let second = encode(5, 1000);
+        assert_eq!(first, second, "AC-4.2: encoding must be deterministic");
+    }
+
+    #[test]
+    fn test_v2_decode_deterministic_ac_4_2() {
+        // Same input bytes must produce same decoded values
+        let payload = vec![0x2A, 0xE8, 0x07]; // v2, opcode=5, ULEB128(1000)
+
+        let decode = || {
+            let info = DualDecoder::detect_version(&payload).unwrap();
+            let mut reader = BitReader::new(&payload[info.data_offset..]);
+            reader.read_uleb128().unwrap()
+        };
+
+        let first = decode();
+        let second = decode();
+        assert_eq!(first, second, "AC-4.2: decoding must be deterministic");
+        assert_eq!(first, 1000);
+    }
+
+    #[test]
+    fn test_v1_v2_distinguishable_by_version_ac_4_2() {
+        // Golden vectors require v1 and v2 to be clearly distinguishable
+        // This test ensures version detection is reliable for parity tests
+
+        // Create unambiguous v1 and v2 payloads
+        let v1_payload = vec![0x01, 0x00, 0x00, 0x00, 0xE8, 0x03, 0x00, 0x00]; // v1 format: discriminant + u64
+        let v2_payload = vec![0x2A, 0xE8, 0x07]; // v2 format: header + ULEB128(1000)
+
+        let v1_info = DualDecoder::detect_version(&v1_payload).unwrap();
+        let v2_info = DualDecoder::detect_version(&v2_payload).unwrap();
+
+        assert_ne!(
+            v1_info.version, v2_info.version,
+            "AC-4.2: v1 and v2 must be distinguishable"
+        );
+    }
+}
