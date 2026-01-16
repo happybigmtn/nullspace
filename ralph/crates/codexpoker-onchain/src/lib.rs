@@ -86,6 +86,8 @@ mod adversarial_tests;
 #[cfg(test)]
 mod fuzz_tests;
 #[cfg(test)]
+mod perf_tests;
+#[cfg(test)]
 mod proptest_replay;
 pub mod state;
 pub mod storage;

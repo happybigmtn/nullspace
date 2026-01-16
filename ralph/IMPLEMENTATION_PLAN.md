@@ -92,7 +92,7 @@
 - [x] Property tests: replay determinism and commitment binding.
 - [x] Adversarial tests: missing reveal, invalid proofs, altered commitment.
 - [x] Fuzz tests for payload decoding and size bounds.
-- [ ] Performance tests for reveal verification and artifact retrieval.
+- [x] Performance tests for reveal verification and artifact retrieval.
 
 **Exit criteria**
 - All tests pass in CI and locally.
