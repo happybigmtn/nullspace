@@ -52,7 +52,7 @@
 
 ### M0b: Historical Chain Failure Remediation
 
-- [ ] Reconcile threshold signature verification and remove staging bypass.
+- [x] Reconcile threshold signature verification and remove staging bypass.
   - Tests: AC-1.1, AC-1.2, AC-3.1
   - Perceptual: None
 - [ ] Add mempool connectivity and tx inclusion liveness signals (health check + metrics).

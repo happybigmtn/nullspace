@@ -213,10 +213,6 @@ struct Args {
     /// Redis cache TTL in seconds (0 disables).
     #[arg(long)]
     cache_redis_ttl_seconds: Option<u64>,
-
-    /// Enforce summary/seed signature verification (disable staging bypass).
-    #[arg(long, default_value_t = false)]
-    enforce_signature_verification: bool,
 }
 
 fn is_production() -> bool {
@@ -411,10 +407,6 @@ async fn main() -> anyhow::Result<()> {
         })?),
         None => defaults.explorer_persistence_backpressure,
     };
-    let enforce_signature_verification =
-        args.enforce_signature_verification || std::env::var("VALIDATOR_IDENTITY_URLS")
-            .map(|value| !value.trim().is_empty())
-            .unwrap_or(false);
     let config = SimulatorConfig {
         explorer_max_blocks: map_optional_limit(args.explorer_max_blocks, defaults.explorer_max_blocks),
         explorer_max_account_entries: map_optional_limit(args.explorer_max_account_entries, defaults.explorer_max_account_entries),
@@ -451,13 +443,7 @@ async fn main() -> anyhow::Result<()> {
         cache_redis_url: args.cache_redis_url,
         cache_redis_prefix: args.cache_redis_prefix.or_else(|| defaults.cache_redis_prefix.clone()),
         cache_redis_ttl_seconds: map_optional_limit(args.cache_redis_ttl_seconds, defaults.cache_redis_ttl_seconds),
-        enforce_signature_verification,
     };
-    if !config.enforce_signature_verification {
-        tracing::warn!(
-            "signature verification bypass enabled; set --enforce-signature-verification or VALIDATOR_IDENTITY_URLS to disable"
-        );
-    }
 
     let (summary_persistence, summaries) = if let Some(path) = &args.summary_persistence_path {
         let (persistence, summaries) = SummaryPersistence::load_and_start_sqlite(

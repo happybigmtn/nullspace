@@ -490,10 +490,6 @@ impl Simulator {
         self.identity
     }
 
-    pub fn enforce_signature_verification(&self) -> bool {
-        self.config.enforce_signature_verification
-    }
-
     pub fn update_global_table_presence(
         &self,
         gateway_id: String,
@@ -1115,5 +1111,108 @@ mod tests {
             guard5.is_ok(),
             "After dropping one connection, new connection should succeed"
         );
+    }
+
+    /// Test that summaries signed with wrong identity are rejected (AC-1.2)
+    #[test]
+    fn test_invalid_summary_rejected() {
+        let executor = cw_tokio::Runner::new(cw_tokio::Config::default());
+        executor.start(|context| async move {
+            use crate::submission::{apply_submission, SubmitError};
+            use nullspace_types::api::Submission;
+
+            // Create two different network keypairs
+            let (network_secret, network_identity) = create_network_keypair();
+            // Create a different identity for the simulator (mismatch)
+            let (_, wrong_identity) = {
+                use commonware_cryptography::bls12381::primitives::{ops, variant::MinSig};
+                use rand::{rngs::StdRng, SeedableRng};
+                let mut rng = StdRng::seed_from_u64(999); // Different seed
+                ops::keypair::<_, MinSig>(&mut rng)
+            };
+
+            // Simulator uses the wrong identity
+            let simulator = Arc::new(Simulator::new(wrong_identity));
+            let (mut state, mut events) = create_adbs(&context).await;
+
+            // Create a transaction
+            let (private, _) = create_account_keypair(1);
+            let tx = Transaction::sign(
+                &private,
+                0,
+                Instruction::CasinoRegister {
+                    name: "TestPlayer".to_string(),
+                },
+            );
+
+            // Create summary signed with the correct network secret
+            let (_, summary) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                1,
+                vec![tx],
+            )
+            .await;
+
+            // Summary verifies against correct identity
+            assert!(
+                summary.verify(&network_identity).is_ok(),
+                "Summary should verify against correct identity"
+            );
+
+            // Summary fails to verify against wrong identity
+            assert!(
+                summary.verify(&wrong_identity).is_err(),
+                "Summary should NOT verify against wrong identity"
+            );
+
+            // Submit summary to simulator with mismatched identity
+            let result =
+                apply_submission(Arc::clone(&simulator), Submission::Summary(summary), false).await;
+
+            // Should be rejected
+            assert!(
+                matches!(result, Err(SubmitError::InvalidSummary)),
+                "Summary with wrong identity should be rejected"
+            );
+        });
+    }
+
+    /// Test that seeds signed with wrong identity are rejected
+    #[test]
+    fn test_invalid_seed_rejected() {
+        let executor = cw_tokio::Runner::new(cw_tokio::Config::default());
+        executor.start(|_context| async move {
+            use crate::submission::{apply_submission, SubmitError};
+            use nullspace_types::api::Submission;
+
+            // Create two different network keypairs
+            let (network_secret, _network_identity) = create_network_keypair();
+            // Create a different identity for the simulator (mismatch)
+            let (_, wrong_identity) = {
+                use commonware_cryptography::bls12381::primitives::{ops, variant::MinSig};
+                use rand::{rngs::StdRng, SeedableRng};
+                let mut rng = StdRng::seed_from_u64(999); // Different seed
+                ops::keypair::<_, MinSig>(&mut rng)
+            };
+
+            // Simulator uses the wrong identity
+            let simulator = Arc::new(Simulator::new(wrong_identity));
+
+            // Create seed signed with the correct network secret
+            let seed = create_seed(&network_secret, 1);
+
+            // Submit seed to simulator with mismatched identity
+            let result =
+                apply_submission(Arc::clone(&simulator), Submission::Seed(seed), false).await;
+
+            // Should be rejected
+            assert!(
+                matches!(result, Err(SubmitError::InvalidSeed)),
+                "Seed with wrong identity should be rejected"
+            );
+        });
     }
 }

@@ -121,7 +121,6 @@ pub struct SimulatorConfig {
     pub cache_redis_url: Option<String>,
     pub cache_redis_prefix: Option<String>,
     pub cache_redis_ttl_seconds: Option<u64>,
-    pub enforce_signature_verification: bool,
 }
 
 impl Default for SimulatorConfig {
@@ -162,7 +161,6 @@ impl Default for SimulatorConfig {
             cache_redis_url: None,
             cache_redis_prefix: Some(DEFAULT_CACHE_REDIS_PREFIX.to_string()),
             cache_redis_ttl_seconds: Some(DEFAULT_CACHE_REDIS_TTL_SECONDS),
-            enforce_signature_verification: false,
         }
     }
 }
