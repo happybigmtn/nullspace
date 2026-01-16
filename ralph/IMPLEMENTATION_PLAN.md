@@ -44,7 +44,7 @@
 
 ### M2: Shuffle Context Binding
 
-- [ ] Extend shuffle context to include `table_id`, `hand_id`, seat order, deck length.
+- [x] Extend shuffle context to include `table_id`, `hand_id`, seat order, deck length.
 - [ ] Update L2 deal plan builder (`crates/codexpoker/src/l2.rs`) to use new context.
 - [ ] Update verification to reject mismatched context.
 
