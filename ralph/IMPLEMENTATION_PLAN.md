@@ -102,7 +102,7 @@
 
 - [x] Structured audit logs for commitments, reveals, timelock usage.
 - [x] Metrics for backfill latency, artifact misses, and state root mismatches.
-- [ ] Operational docs for retention and snapshot schedules.
+- [x] Operational docs for retention and snapshot schedules.
 
 **Exit criteria**
 - Logs/metrics cover the full deal and reveal lifecycle.
