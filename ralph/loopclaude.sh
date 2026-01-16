@@ -99,17 +99,20 @@ filter_output() {
     done
 }
 
+# Resolve script directory for prompt paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Parse arguments
 WORK_SCOPE=""
 if [ "$1" = "plan" ]; then
     # Plan mode
     MODE="plan"
-    PROMPT_FILE="PROMPT_plan.md"
+    PROMPT_FILE="$SCRIPT_DIR/PROMPT_plan.md"
     MAX_ITERATIONS=${2:-0}
 elif [ "$1" = "plan-work" ]; then
     # Scoped plan mode for work branches
     MODE="plan-work"
-    PROMPT_FILE="PROMPT_plan_work.md"
+    PROMPT_FILE="$SCRIPT_DIR/PROMPT_plan_work.md"
     WORK_SCOPE="$2"
     MAX_ITERATIONS=${3:-0}
     if [ -z "$WORK_SCOPE" ]; then
@@ -120,12 +123,12 @@ elif [ "$1" = "plan-work" ]; then
 elif [[ "$1" =~ ^[0-9]+$ ]]; then
     # Build mode with max iterations
     MODE="build"
-    PROMPT_FILE="PROMPT_build.md"
+    PROMPT_FILE="$SCRIPT_DIR/PROMPT_build.md"
     MAX_ITERATIONS=$1
 else
     # Build mode, unlimited (no arguments or invalid input)
     MODE="build"
-    PROMPT_FILE="PROMPT_build.md"
+    PROMPT_FILE="$SCRIPT_DIR/PROMPT_build.md"
     MAX_ITERATIONS=0
 fi
 

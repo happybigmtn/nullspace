@@ -1336,7 +1336,11 @@ impl ActionLogValidator {
     /// - [`PayloadError::RevealPhaseAlreadyCompleted`] if reveal is for an already-completed phase
     /// - [`PayloadError::RevealPhaseTooEarly`] if reveal is for a later phase than expected
     /// - [`PayloadError::ActionDuringRevealOnlyPhase`] if game action received during reveal-only phase
+    /// - [`PayloadError::UnsupportedVersion`] if payload uses an unsupported protocol version
     pub fn validate(&mut self, payload: &ConsensusPayload) -> Result<(), PayloadError> {
+        // Validate protocol version before any other checks
+        payload.validate_version()?;
+
         // First payload must be a DealCommitment
         if self.payload_count == 0 {
             match payload {
@@ -1971,6 +1975,189 @@ mod tests {
                 got: "TimelockReveal"
             })
         ));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Version validation tests (AC-2.1, AC-3.1)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_validator_rejects_unsupported_commitment_version() {
+        let mut validator = ActionLogValidator::new();
+        let mut dc = test_deal_commitment();
+        dc.version = ProtocolVersion::new(99);
+        let payload = ConsensusPayload::DealCommitment(dc);
+
+        let result = validator.validate(&payload);
+        assert!(matches!(
+            result,
+            Err(PayloadError::UnsupportedVersion { expected, got })
+                if expected == CURRENT_PROTOCOL_VERSION && got == 99
+        ));
+    }
+
+    #[test]
+    fn test_validator_rejects_unsupported_ack_version() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+        validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .unwrap();
+
+        let ack = DealCommitmentAck {
+            version: ProtocolVersion::new(0), // version 0 is unsupported
+            commitment_hash,
+            seat_index: 0,
+            player_signature: vec![],
+        };
+        let payload = ConsensusPayload::DealCommitmentAck(ack);
+
+        let result = validator.validate(&payload);
+        assert!(matches!(
+            result,
+            Err(PayloadError::UnsupportedVersion { expected, got })
+                if expected == CURRENT_PROTOCOL_VERSION && got == 0
+        ));
+    }
+
+    #[test]
+    fn test_validator_rejects_unsupported_action_version() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+        validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .unwrap();
+
+        // Add all required acks
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .unwrap();
+        }
+
+        let action = GameActionMessage {
+            version: ProtocolVersion::new(255), // version 255 is unsupported
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+        let payload = ConsensusPayload::GameAction(action);
+
+        let result = validator.validate(&payload);
+        assert!(matches!(
+            result,
+            Err(PayloadError::UnsupportedVersion { expected, got })
+                if expected == CURRENT_PROTOCOL_VERSION && got == 255
+        ));
+    }
+
+    #[test]
+    fn test_validator_rejects_unsupported_reveal_version() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+        validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .unwrap();
+
+        // Add all required acks
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .unwrap();
+        }
+
+        let reveal = RevealShare {
+            version: ProtocolVersion::new(2), // version 2 is unsupported
+            commitment_hash,
+            phase: protocol_messages::RevealPhase::Preflop,
+            card_indices: vec![0, 1],
+            reveal_data: vec![vec![1], vec![2]],
+            from_seat: 0,
+            signature: vec![],
+        };
+        let payload = ConsensusPayload::RevealShare(reveal);
+
+        let result = validator.validate(&payload);
+        assert!(matches!(
+            result,
+            Err(PayloadError::UnsupportedVersion { expected, got })
+                if expected == CURRENT_PROTOCOL_VERSION && got == 2
+        ));
+    }
+
+    #[test]
+    fn test_validator_rejects_unsupported_timelock_version() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+        validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .unwrap();
+
+        // Add all required acks
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .unwrap();
+        }
+
+        let reveal = TimelockReveal {
+            version: ProtocolVersion::new(42), // version 42 is unsupported
+            commitment_hash,
+            phase: protocol_messages::RevealPhase::Preflop,
+            card_indices: vec![0],
+            timelock_proof: vec![0xAB],
+            revealed_values: vec![vec![1]],
+            timeout_seat: 0,
+        };
+        let payload = ConsensusPayload::TimelockReveal(reveal);
+
+        let result = validator.validate(&payload);
+        assert!(matches!(
+            result,
+            Err(PayloadError::UnsupportedVersion { expected, got })
+                if expected == CURRENT_PROTOCOL_VERSION && got == 42
+        ));
+    }
+
+    #[test]
+    fn test_version_error_has_correct_format() {
+        // Verify the error message is clear (AC-2.1 requires "clear error code")
+        let err = PayloadError::UnsupportedVersion {
+            expected: 1,
+            got: 99,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("99"), "error must include the received version");
+        assert!(msg.contains("1"), "error must include the expected version");
+        assert!(
+            msg.to_lowercase().contains("version"),
+            "error must mention version"
+        );
     }
 
     #[test]
