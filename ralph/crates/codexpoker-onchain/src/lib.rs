@@ -78,12 +78,16 @@
 //! ```
 
 pub mod artifact_registry;
+pub mod block;
 pub mod messages;
 
 pub use artifact_registry::{
     ArtifactMetadata, ArtifactRegistry, ArtifactRegistryError, ArtifactType, AuditEntry,
     AuditEventType, AuditLog, AuditedArtifactRegistry, BackfillResult, InMemoryArtifactRegistry,
     InMemoryAuditLog, RegistryConfig, DEFAULT_MAX_ARTIFACT_SIZE, DEFAULT_MAX_TOTAL_SIZE,
+};
+pub use block::{
+    compute_receipts_root, Block, BlockBody, BlockHeader, Receipt, MAX_RECEIPT_ERROR_LEN,
 };
 pub use messages::{
     action_codes, ActionLogValidator, ConsensusPayload, GameActionMessage, NoOpTimelockVerifier,

@@ -77,7 +77,7 @@
 
 ### M5: Chain History + State Persistence (Commonware)
 
-- [ ] Implement block header/body structs with receipts root.
+- [x] Implement block header/body structs with receipts root.
 - [ ] Wire `commonware-consensus::simplex` and `marshal` for ordered finalization.
 - [ ] Persist blocks, finalizations, and receipts roots.
 - [ ] Wire QMDB state updates and root checks.
