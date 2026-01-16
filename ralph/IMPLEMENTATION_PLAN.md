@@ -67,7 +67,7 @@
 
 ### M1: Defer Gateway Live Mode
 
-- [ ] Remove live-table wiring from `gateway/src/index.ts` and archive live-table modules.
+- [x] Remove live-table wiring from `gateway/src/index.ts` and archive live-table modules.
   - Tests: AC-1.1, AC-1.2, AC-1.3
   - Perceptual: None
 - [ ] Remove global-table event decode usage in gateway runtime (no background global-table client).
