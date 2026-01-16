@@ -82,6 +82,8 @@ pub mod block;
 pub mod consensus;
 pub mod messages;
 #[cfg(test)]
+mod adversarial_tests;
+#[cfg(test)]
 mod proptest_replay;
 pub mod state;
 pub mod storage;

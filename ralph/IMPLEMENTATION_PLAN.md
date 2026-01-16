@@ -90,7 +90,7 @@
 ### M6: Verification and Adversarial Tests
 
 - [x] Property tests: replay determinism and commitment binding.
-- [ ] Adversarial tests: missing reveal, invalid proofs, altered commitment.
+- [x] Adversarial tests: missing reveal, invalid proofs, altered commitment.
 - [ ] Fuzz tests for payload decoding and size bounds.
 - [ ] Performance tests for reveal verification and artifact retrieval.
 
