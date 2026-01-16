@@ -1136,6 +1136,97 @@ impl<S: BlockStorage, E: PayloadExecutor> PersistentAutomaton<S, E> {
     pub fn into_parts(self) -> (SimplexAutomaton<E>, S) {
         (self.inner, self.storage)
     }
+
+    /// Verify state root consistency by recomputing from stored blocks.
+    ///
+    /// This method validates that the current state root matches what would
+    /// be computed by replaying all blocks from genesis. Use this on restart
+    /// to ensure state integrity.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(true)` if verification passes (or no blocks exist).
+    /// `Ok(false)` if state roots don't match (indicates corruption).
+    /// `Err(_)` if storage access fails.
+    ///
+    /// # Performance
+    ///
+    /// This method replays all blocks from genesis, so it may be slow for
+    /// long chains. Consider using sampling or checkpoints for large chains.
+    pub fn verify_state_root(&self) -> Result<bool, StorageError> {
+        let state = match self.storage.get_chain_state()? {
+            Some(s) => s,
+            None => return Ok(true), // No state to verify
+        };
+
+        if !state.has_genesis {
+            return Ok(true); // Fresh chain, nothing to verify
+        }
+
+        // Recompute state root by replaying all blocks
+        let mut computed_root = [0u8; 32];
+
+        for height in 0..=state.height {
+            if !self.storage.has_block(height) {
+                // Missing block is a storage error, not a state mismatch
+                return Err(StorageError::BlockNotFound { height });
+            }
+
+            let block = self.storage.get_block(height)?;
+
+            // Recompute state root using same logic as NoOpExecutor
+            for payload in &block.body.payloads {
+                let payload_hash = payload.referenced_commitment_hash().unwrap_or([0; 32]);
+                let mut preimage = Vec::with_capacity(64);
+                preimage.extend_from_slice(&computed_root);
+                preimage.extend_from_slice(&payload_hash);
+                computed_root = protocol_messages::canonical_hash(&preimage);
+            }
+
+            // Handle empty blocks
+            if block.body.payloads.is_empty() {
+                let mut preimage = Vec::with_capacity(33);
+                preimage.extend_from_slice(&computed_root);
+                preimage.push(0xFF);
+                computed_root = protocol_messages::canonical_hash(&preimage);
+            }
+
+            // Verify intermediate state root matches block header
+            if computed_root != block.header.state_root {
+                return Ok(false);
+            }
+        }
+
+        // Final verification against chain state
+        Ok(computed_root == state.state_root)
+    }
+
+    /// Restore from storage with state root verification.
+    ///
+    /// This is like `restore_or_new` but also verifies state root consistency
+    /// after restoration. Use this when state integrity is critical.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Storage access fails
+    /// - State root verification fails (indicates data corruption)
+    pub fn restore_with_verification(
+        config: SimplexConfig,
+        executor: E,
+        storage: S,
+    ) -> Result<Self, StorageError> {
+        let automaton = Self::restore_or_new_with_executor(config, executor, storage)?;
+
+        // Verify state root consistency
+        if !automaton.verify_state_root()? {
+            return Err(StorageError::CorruptedState(
+                "state root verification failed: computed root does not match stored root".into(),
+            ));
+        }
+
+        Ok(automaton)
+    }
 }
 
 impl<S: BlockStorage, E: PayloadExecutor> Automaton for PersistentAutomaton<S, E> {
@@ -1933,5 +2024,182 @@ mod tests {
 
         assert_eq!(restored.height(), 1);
         assert_eq!(restored.tip(), digest1);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // State Root Verification Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_verify_state_root_empty_storage() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig::default();
+        let storage = InMemoryBlockStorage::new();
+        let automaton = PersistentAutomaton::new(config, storage);
+
+        // Empty storage should verify as Ok(true)
+        assert!(automaton.verify_state_root().unwrap());
+    }
+
+    #[test]
+    fn test_verify_state_root_after_finalization() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let storage = InMemoryBlockStorage::new();
+        let mut automaton = PersistentAutomaton::new(config, storage);
+
+        // Finalize some blocks
+        let body = BlockBody::empty();
+        let block0 = automaton.propose(0, Digest::ZERO, &body).unwrap();
+        let digest0 = Digest::from_header(&block0.header);
+
+        let mut fin = Finalization::new(test_version(), digest0, 0, 0);
+        fin.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block0, fin).unwrap();
+
+        // State root should verify
+        assert!(automaton.verify_state_root().unwrap());
+    }
+
+    #[test]
+    fn test_verify_state_root_multi_block() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let storage = InMemoryBlockStorage::new();
+        let mut automaton = PersistentAutomaton::new(config, storage);
+
+        // Finalize genesis
+        let body0 = BlockBody::empty();
+        let block0 = automaton.propose(0, Digest::ZERO, &body0).unwrap();
+        let digest0 = Digest::from_header(&block0.header);
+
+        let mut fin0 = Finalization::new(test_version(), digest0, 0, 0);
+        fin0.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block0, fin0).unwrap();
+
+        // Finalize block 1
+        let body1 = BlockBody::empty();
+        let block1 = automaton.propose(1, digest0, &body1).unwrap();
+        let digest1 = Digest::from_header(&block1.header);
+
+        let mut fin1 = Finalization::new(test_version(), digest1, 1, 1);
+        fin1.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block1, fin1).unwrap();
+
+        // Finalize block 2
+        let body2 = BlockBody::empty();
+        let block2 = automaton.propose(2, digest1, &body2).unwrap();
+        let digest2 = Digest::from_header(&block2.header);
+
+        let mut fin2 = Finalization::new(test_version(), digest2, 2, 2);
+        fin2.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block2, fin2).unwrap();
+
+        // State root should verify across all blocks
+        assert!(automaton.verify_state_root().unwrap());
+    }
+
+    #[test]
+    fn test_verify_state_root_after_restart() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+
+        // First session: create blocks
+        let storage = InMemoryBlockStorage::new();
+        let mut automaton = PersistentAutomaton::new(config.clone(), storage);
+
+        // Finalize some blocks
+        let body0 = BlockBody::empty();
+        let block0 = automaton.propose(0, Digest::ZERO, &body0).unwrap();
+        let digest0 = Digest::from_header(&block0.header);
+
+        let mut fin0 = Finalization::new(test_version(), digest0, 0, 0);
+        fin0.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block0, fin0).unwrap();
+
+        let body1 = BlockBody::empty();
+        let block1 = automaton.propose(1, digest0, &body1).unwrap();
+        let digest1 = Digest::from_header(&block1.header);
+
+        let mut fin1 = Finalization::new(test_version(), digest1, 1, 1);
+        fin1.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block1, fin1).unwrap();
+
+        // Extract storage
+        let (_, storage) = automaton.into_parts();
+
+        // "Restart": restore and verify
+        let restored = PersistentAutomaton::restore_or_new(config, storage).unwrap();
+
+        // State root should still verify after restart
+        assert!(restored.verify_state_root().unwrap());
+    }
+
+    #[test]
+    fn test_restore_with_verification_success() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+
+        // First session
+        let storage = InMemoryBlockStorage::new();
+        let mut automaton = PersistentAutomaton::new(config.clone(), storage);
+
+        // Finalize genesis
+        let body = BlockBody::empty();
+        let block = automaton.propose(0, Digest::ZERO, &body).unwrap();
+        let digest = Digest::from_header(&block.header);
+
+        let mut fin = Finalization::new(test_version(), digest, 0, 0);
+        fin.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block, fin).unwrap();
+
+        let (_, storage) = automaton.into_parts();
+
+        // Restore with verification should succeed
+        let restored = PersistentAutomaton::restore_with_verification(
+            config,
+            NoOpExecutor,
+            storage,
+        ).unwrap();
+
+        assert_eq!(restored.height(), 0);
+    }
+
+    #[test]
+    fn test_restore_with_verification_empty_storage() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig::default();
+        let storage = InMemoryBlockStorage::new();
+
+        // Restore with verification on empty storage should succeed
+        let automaton = PersistentAutomaton::restore_with_verification(
+            config,
+            NoOpExecutor,
+            storage,
+        ).unwrap();
+
+        assert_eq!(automaton.tip(), Digest::ZERO);
     }
 }

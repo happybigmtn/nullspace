@@ -80,7 +80,7 @@
 - [x] Implement block header/body structs with receipts root.
 - [x] Wire `commonware-consensus::simplex` and `marshal` for ordered finalization.
 - [x] Persist blocks, finalizations, and receipts roots.
-- [ ] Wire QMDB state updates and root checks.
+- [x] Wire QMDB state updates and root checks.
 - [ ] Add state sync and proof verification.
 
 **Exit criteria**

@@ -81,6 +81,7 @@ pub mod artifact_registry;
 pub mod block;
 pub mod consensus;
 pub mod messages;
+pub mod state;
 pub mod storage;
 
 pub use artifact_registry::{
@@ -98,6 +99,10 @@ pub use consensus::{
 pub use messages::{
     action_codes, ActionLogValidator, ConsensusPayload, GameActionMessage, NoOpTimelockVerifier,
     PayloadError, TimelockProofVerifier, TimelockVerificationInput, GAME_ACTION_DOMAIN, REVEAL_TTL,
+};
+pub use state::{
+    InMemoryStateManager, StateAwareExecutor, StateCheckpoint, StateError, StateManager, StateRoot,
+    StateUpdate, StateUpdateBatch, StateVerifier, verify_state_root_on_restart,
 };
 pub use storage::{BlockStorage, FileBlockStorage, InMemoryBlockStorage, StorageError};
 
