@@ -408,6 +408,68 @@ impl DealCommitment {
     pub fn commitment_hash(&self) -> [u8; 32] {
         crate::canonical_hash(&self.preimage())
     }
+
+    /// Verify that this commitment's scope matches an expected shuffle context.
+    ///
+    /// This is a critical verification step that prevents replay attacks where
+    /// a commitment from one table/hand is reused in a different context.
+    ///
+    /// # Verification
+    ///
+    /// The commitment's `scope` is converted to a `ShuffleContext` using the
+    /// commitment's protocol version, then compared field-by-field against the
+    /// expected context.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ShuffleContextMismatch`] if any field differs:
+    /// - `Version`: Protocol version mismatch
+    /// - `TableId`: Commitment is for a different table
+    /// - `HandId`: Commitment is for a different hand
+    /// - `SeatOrder`: Commitment is for different players or seating
+    /// - `DeckLength`: Commitment is for a different deck configuration
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use protocol_messages::{DealCommitment, ProtocolVersion, ScopeBinding, ShuffleContext};
+    ///
+    /// let scope = ScopeBinding::new([1u8; 32], 42, vec![0, 1], 52);
+    /// let commitment = DealCommitment {
+    ///     version: ProtocolVersion::current(),
+    ///     scope,
+    ///     shuffle_commitment: [2u8; 32],
+    ///     artifact_hashes: vec![],
+    ///     timestamp_ms: 1700000000000,
+    ///     dealer_signature: vec![],
+    /// };
+    ///
+    /// // Create expected context from current game state
+    /// let expected = ShuffleContext::new(
+    ///     ProtocolVersion::current(),
+    ///     [1u8; 32],
+    ///     42,
+    ///     vec![0, 1],
+    ///     52,
+    /// );
+    ///
+    /// // Verification succeeds for matching context
+    /// assert!(commitment.verify_context(&expected).is_ok());
+    ///
+    /// // Verification fails for mismatched context
+    /// let wrong_hand = ShuffleContext::new(
+    ///     ProtocolVersion::current(),
+    ///     [1u8; 32],
+    ///     999,  // different hand_id
+    ///     vec![0, 1],
+    ///     52,
+    /// );
+    /// assert!(commitment.verify_context(&wrong_hand).is_err());
+    /// ```
+    pub fn verify_context(&self, expected: &ShuffleContext) -> Result<(), ShuffleContextMismatch> {
+        let actual = ShuffleContext::from_scope(self.version, &self.scope);
+        expected.verify_matches(&actual)
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1056,5 +1118,125 @@ mod tests {
         assert_ne!(domain::SHUFFLE_CONTEXT, domain::DEAL_COMMITMENT_ACK);
         assert_ne!(domain::SHUFFLE_CONTEXT, domain::REVEAL_SHARE);
         assert_ne!(domain::SHUFFLE_CONTEXT, domain::TIMELOCK_REVEAL);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DealCommitment::verify_context Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fn test_deal_commitment() -> DealCommitment {
+        DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: test_scope(),
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![[3u8; 32]],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![0xDE, 0xAD],
+        }
+    }
+
+    #[test]
+    fn test_deal_commitment_verify_context_success() {
+        let commitment = test_deal_commitment();
+        let expected = test_shuffle_context();
+
+        assert!(
+            commitment.verify_context(&expected).is_ok(),
+            "verification must succeed for matching context"
+        );
+    }
+
+    #[test]
+    fn test_deal_commitment_verify_context_rejects_table_id_mismatch() {
+        let commitment = test_deal_commitment();
+        let mut expected = test_shuffle_context();
+        expected.table_id = [99u8; 32]; // different table
+
+        let result = commitment.verify_context(&expected);
+        assert!(
+            matches!(result, Err(ShuffleContextMismatch::TableId { .. })),
+            "verification must reject table_id mismatch"
+        );
+    }
+
+    #[test]
+    fn test_deal_commitment_verify_context_rejects_hand_id_mismatch() {
+        let commitment = test_deal_commitment();
+        let mut expected = test_shuffle_context();
+        expected.hand_id = 999; // different hand
+
+        let result = commitment.verify_context(&expected);
+        // expected is from the parameter (999), got is from the commitment (42)
+        assert!(
+            matches!(
+                result,
+                Err(ShuffleContextMismatch::HandId { expected: 999, got: 42 })
+            ),
+            "verification must reject hand_id mismatch"
+        );
+    }
+
+    #[test]
+    fn test_deal_commitment_verify_context_rejects_seat_order_mismatch() {
+        let commitment = test_deal_commitment();
+        let mut expected = test_shuffle_context();
+        expected.seat_order = vec![0, 1]; // different seats
+
+        let result = commitment.verify_context(&expected);
+        assert!(
+            matches!(result, Err(ShuffleContextMismatch::SeatOrder { .. })),
+            "verification must reject seat_order mismatch"
+        );
+    }
+
+    #[test]
+    fn test_deal_commitment_verify_context_rejects_deck_length_mismatch() {
+        let commitment = test_deal_commitment();
+        let mut expected = test_shuffle_context();
+        expected.deck_length = 36; // short deck
+
+        let result = commitment.verify_context(&expected);
+        // expected is from the parameter (36), got is from the commitment (52)
+        assert!(
+            matches!(
+                result,
+                Err(ShuffleContextMismatch::DeckLength { expected: 36, got: 52 })
+            ),
+            "verification must reject deck_length mismatch"
+        );
+    }
+
+    #[test]
+    fn test_deal_commitment_verify_context_rejects_version_mismatch() {
+        let commitment = test_deal_commitment();
+        let mut expected = test_shuffle_context();
+        expected.version = ProtocolVersion::new(99); // different version
+
+        let result = commitment.verify_context(&expected);
+        // expected is from the parameter (99), got is from the commitment (1)
+        assert!(
+            matches!(
+                result,
+                Err(ShuffleContextMismatch::Version { expected: 99, got: 1 })
+            ),
+            "verification must reject version mismatch"
+        );
+    }
+
+    #[test]
+    fn test_deal_commitment_verify_context_with_different_commitment_contents() {
+        // Verify that the context comparison is independent of other commitment fields
+        let mut commitment = test_deal_commitment();
+        commitment.shuffle_commitment = [0xFF; 32];
+        commitment.artifact_hashes = vec![[0xAA; 32], [0xBB; 32], [0xCC; 32]];
+        commitment.timestamp_ms = 9999999999999;
+        commitment.dealer_signature = vec![0x11, 0x22, 0x33, 0x44, 0x55];
+
+        let expected = test_shuffle_context();
+
+        assert!(
+            commitment.verify_context(&expected).is_ok(),
+            "context verification must succeed regardless of other commitment fields"
+        );
     }
 }
