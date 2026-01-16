@@ -224,6 +224,32 @@ pub enum PayloadError {
     /// malformed proof or an attempt to reveal incorrect values.
     #[error("timelock proof verification failed: {reason}")]
     TimelockProofInvalid { reason: String },
+
+    /// RevealShare has card indices out of bounds.
+    ///
+    /// All card indices in a `RevealShare` must be less than the deck
+    /// length specified in the deal commitment's scope. This prevents
+    /// attempts to reveal cards that don't exist.
+    #[error("reveal share has card index {index} out of bounds (deck length: {deck_length})")]
+    RevealCardIndexOutOfBounds { index: u8, deck_length: u8 },
+
+    /// RevealShare has mismatched card indices and reveal data.
+    ///
+    /// The number of `card_indices` must match the number of `reveal_data` entries.
+    /// Each card index corresponds to exactly one reveal data entry.
+    #[error("reveal share has {indices_count} card indices but {data_count} reveal data entries")]
+    RevealCardDataMismatch {
+        indices_count: usize,
+        data_count: usize,
+    },
+
+    /// RevealShare references an invalid from_seat.
+    ///
+    /// The `from_seat` in a `RevealShare` must be a seat that was
+    /// present in the original deal commitment's scope, or 0xFF for dealer.
+    /// This validates the reveal comes from a legitimate participant.
+    #[error("reveal share references invalid from_seat {seat}: not in seat order {seat_order:?}")]
+    InvalidRevealFromSeat { seat: u8, seat_order: Vec<u8> },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1060,6 +1086,63 @@ impl ActionLogValidator {
         Ok(())
     }
 
+    /// Validate the scope binding and structural integrity of a reveal share.
+    ///
+    /// This validates that:
+    /// 1. All `card_indices` are within the deck length bounds
+    /// 2. The number of `card_indices` matches the number of `reveal_data` entries
+    /// 3. The `from_seat` is a valid seat from the commitment's scope (or 0xFF for dealer)
+    ///
+    /// # Selective Reveal Enforcement
+    ///
+    /// By validating card indices against the deck length and ensuring data alignment,
+    /// this method enforces selective reveal semantics: only the specific cards needed
+    /// for the current phase can be revealed, not the entire deck.
+    ///
+    /// # Arguments
+    ///
+    /// * `rs` - The reveal share to validate
+    ///
+    /// # Errors
+    ///
+    /// - [`PayloadError::RevealCardIndexOutOfBounds`] if any card index >= deck_length
+    /// - [`PayloadError::RevealCardDataMismatch`] if card_indices.len() != reveal_data.len()
+    /// - [`PayloadError::InvalidRevealFromSeat`] if from_seat is not in scope and not 0xFF
+    pub fn validate_reveal_share_scope(
+        &self,
+        rs: &RevealShare,
+    ) -> Result<(), PayloadError> {
+        // Validate card indices are within deck bounds
+        if let Some(deck_len) = self.deck_length {
+            for &index in &rs.card_indices {
+                if index >= deck_len {
+                    return Err(PayloadError::RevealCardIndexOutOfBounds {
+                        index,
+                        deck_length: deck_len,
+                    });
+                }
+            }
+        }
+
+        // Validate card_indices and reveal_data have matching counts
+        if rs.card_indices.len() != rs.reveal_data.len() {
+            return Err(PayloadError::RevealCardDataMismatch {
+                indices_count: rs.card_indices.len(),
+                data_count: rs.reveal_data.len(),
+            });
+        }
+
+        // Validate from_seat is valid (0xFF is reserved for dealer)
+        if rs.from_seat != 0xFF && !self.required_seats.contains(&rs.from_seat) {
+            return Err(PayloadError::InvalidRevealFromSeat {
+                seat: rs.from_seat,
+                seat_order: self.required_seats.clone(),
+            });
+        }
+
+        Ok(())
+    }
+
     /// Enter a reveal-only phase, blocking game actions until the reveal is received.
     ///
     /// This is a convenience method that enters the phase without timeout tracking.
@@ -1355,6 +1438,9 @@ impl ActionLogValidator {
 
                 // Validate reveal phase ordering
                 self.validate_reveal_phase(rs.phase)?;
+
+                // Validate scope binding and structural integrity (selective reveal enforcement)
+                self.validate_reveal_share_scope(rs)?;
 
                 // Record this phase as completed
                 self.completed_phases.push(rs.phase);
@@ -4479,6 +4565,204 @@ mod tests {
         assert!(
             matches!(result, Err(PayloadError::InvalidTimelockTimeoutSeat { .. })),
             "structural validation should fail before proof verification"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // RevealShare Selective Reveal Tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_reveal_share_rejects_card_index_out_of_bounds() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a reveal with card_indices out of bounds (deck_length is 52)
+        let mut reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        reveal.card_indices = vec![60]; // Out of bounds for deck_length 52
+        reveal.reveal_data = vec![vec![42]]; // Must match card_indices count
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::RevealCardIndexOutOfBounds {
+                    index: 60,
+                    deck_length: 52
+                })
+            ),
+            "reveal with card index out of bounds should be rejected, got: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_reveal_share_accepts_valid_card_indices() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a reveal with valid card indices (0 and 51 are valid for deck_length 52)
+        let mut reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        reveal.card_indices = vec![0, 51];
+        reveal.reveal_data = vec![vec![42], vec![43]];
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(result.is_ok(), "reveal with valid card indices should be accepted");
+    }
+
+    #[test]
+    fn test_reveal_share_rejects_mismatched_card_indices_and_data() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a reveal with mismatched card_indices and reveal_data counts
+        let mut reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        reveal.card_indices = vec![0, 1, 2]; // 3 indices
+        reveal.reveal_data = vec![vec![42]]; // 1 data entry
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::RevealCardDataMismatch {
+                    indices_count: 3,
+                    data_count: 1
+                })
+            ),
+            "reveal with mismatched counts should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_reveal_share_rejects_invalid_from_seat() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a reveal with invalid from_seat (99 is not in seat order [0, 1])
+        let mut reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        reveal.from_seat = 99; // Invalid seat
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::InvalidRevealFromSeat { seat: 99, .. })
+            ),
+            "reveal with invalid from_seat should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_reveal_share_accepts_dealer_seat_0xff() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a reveal with from_seat = 0xFF (reserved for dealer)
+        let mut reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        reveal.from_seat = 0xFF; // Dealer
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(
+            result.is_ok(),
+            "reveal with from_seat 0xFF (dealer) should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_reveal_share_accepts_valid_from_seat() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a reveal with valid from_seat (seat 1 is in the seat order)
+        let mut reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        reveal.from_seat = 1; // Valid seat in [0, 1]
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(
+            result.is_ok(),
+            "reveal with valid from_seat should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_reveal_share_accepts_empty_indices_and_data() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a reveal with empty card_indices and reveal_data (valid edge case)
+        let mut reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        reveal.card_indices = vec![];
+        reveal.reveal_data = vec![];
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(
+            result.is_ok(),
+            "reveal with empty indices and data should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_reveal_share_error_display_card_out_of_bounds() {
+        let err = PayloadError::RevealCardIndexOutOfBounds {
+            index: 60,
+            deck_length: 52,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("out of bounds"), "should mention out of bounds");
+        assert!(msg.contains("60"), "should mention the index");
+        assert!(msg.contains("52"), "should mention the deck length");
+    }
+
+    #[test]
+    fn test_reveal_share_error_display_card_data_mismatch() {
+        let err = PayloadError::RevealCardDataMismatch {
+            indices_count: 3,
+            data_count: 1,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("3 card indices"), "should mention indices count");
+        assert!(msg.contains("1 reveal data"), "should mention data count");
+    }
+
+    #[test]
+    fn test_reveal_share_error_display_invalid_from_seat() {
+        let err = PayloadError::InvalidRevealFromSeat {
+            seat: 99,
+            seat_order: vec![0, 1, 2],
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("invalid from_seat"), "should mention invalid seat");
+        assert!(msg.contains("99"), "should mention the seat number");
+    }
+
+    #[test]
+    fn test_reveal_share_boundary_card_indices() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Test exact boundary: card index 51 is the last valid index for deck_length 52
+        let mut reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        reveal.card_indices = vec![51]; // Last valid index
+        reveal.reveal_data = vec![vec![42]];
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(
+            result.is_ok(),
+            "reveal with card index 51 (boundary) should be accepted for deck_length 52"
+        );
+    }
+
+    #[test]
+    fn test_reveal_share_boundary_card_indices_just_over() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Test just over boundary: card index 52 is invalid for deck_length 52
+        let mut reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        reveal.card_indices = vec![52]; // First invalid index
+        reveal.reveal_data = vec![vec![42]];
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::RevealCardIndexOutOfBounds {
+                    index: 52,
+                    deck_length: 52
+                })
+            ),
+            "reveal with card index 52 should be rejected for deck_length 52"
         );
     }
 }
