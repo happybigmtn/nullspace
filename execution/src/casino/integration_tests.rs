@@ -885,4 +885,205 @@ mod tests {
             panic!("Expected CasinoError event");
         }
     }
+
+    // ========================================================================
+    // Feature gate integration tests
+    // These tests verify that when features are disabled, instructions are
+    // rejected with the appropriate error codes (AC-1.1 for each spec).
+    // ========================================================================
+
+    // MockState for feature gate tests - minimal implementation to test error routing
+    #[cfg(any(not(feature = "staking"), not(feature = "liquidity"), not(feature = "bridge")))]
+    mod feature_gate_test_helpers {
+        use crate::state::State;
+        use anyhow::Result;
+        use nullspace_types::execution::{Key, Value};
+        use std::collections::HashMap;
+
+        pub struct MockState {
+            data: HashMap<Key, Value>,
+        }
+
+        impl MockState {
+            pub fn new() -> Self {
+                Self { data: HashMap::new() }
+            }
+        }
+
+        impl State for MockState {
+            async fn get(&self, key: Key) -> Result<Option<Value>> {
+                Ok(self.data.get(&key).cloned())
+            }
+            async fn insert(&mut self, key: Key, value: Value) -> Result<()> {
+                self.data.insert(key, value);
+                Ok(())
+            }
+            async fn delete(&mut self, key: Key) -> Result<()> {
+                self.data.remove(&key);
+                Ok(())
+            }
+        }
+    }
+
+    /// Test that staking instructions return ERROR_FEATURE_DISABLED when the
+    /// staking feature is disabled.
+    /// Per AC-1.1 (liquidity-staking-deferment.md): "Liquidity and staking
+    /// instructions are rejected with a clear error code (e.g., `feature_disabled`)."
+    #[cfg(not(feature = "staking"))]
+    #[test]
+    fn test_staking_disabled_returns_feature_disabled_error() {
+        use crate::layer::Layer;
+        use feature_gate_test_helpers::MockState;
+        use commonware_runtime::deterministic::Runner;
+        use commonware_runtime::Runner as _;
+        use nullspace_types::casino::ERROR_FEATURE_DISABLED;
+        use nullspace_types::execution::{Instruction, Output, Transaction};
+
+        let executor = Runner::default();
+        executor.start(|_| async move {
+            let state = MockState::new();
+            let (network_secret, master_public) = create_network_keypair();
+            let seed = create_seed(&network_secret, 1);
+            let mut layer = Layer::new(&state, master_public, b"test", seed);
+
+            let (signer, _) = create_account_keypair(1);
+
+            // Create a staking transaction
+            let tx = Transaction::sign(&signer, 0, Instruction::Stake { amount: 100, duration: 10 });
+
+            // Execute the transaction
+            let (outputs, _) = layer.execute(vec![tx]).await.expect("execute should not fail");
+
+            // Filter for CasinoError events
+            let error_events: Vec<_> = outputs
+                .iter()
+                .filter_map(|o| match o {
+                    Output::Event(e) => Some(e),
+                    _ => None,
+                })
+                .filter(|e| matches!(e, nullspace_types::execution::Event::CasinoError { .. }))
+                .collect();
+
+            assert_eq!(error_events.len(), 1, "Should have exactly one error event");
+            if let nullspace_types::execution::Event::CasinoError { error_code, message, .. } = error_events[0] {
+                assert_eq!(*error_code, ERROR_FEATURE_DISABLED, "Error code should be ERROR_FEATURE_DISABLED");
+                assert!(message.contains("Staking"), "Message should mention Staking, got: {}", message);
+            } else {
+                panic!("Expected CasinoError event");
+            }
+        });
+    }
+
+    /// Test that liquidity instructions return ERROR_FEATURE_DISABLED when the
+    /// liquidity feature is disabled.
+    /// Per AC-1.1 (liquidity-staking-deferment.md): "Liquidity and staking
+    /// instructions are rejected with a clear error code (e.g., `feature_disabled`)."
+    #[cfg(not(feature = "liquidity"))]
+    #[test]
+    fn test_liquidity_disabled_returns_feature_disabled_error() {
+        use crate::layer::Layer;
+        use feature_gate_test_helpers::MockState;
+        use commonware_runtime::deterministic::Runner;
+        use commonware_runtime::Runner as _;
+        use nullspace_types::casino::ERROR_FEATURE_DISABLED;
+        use nullspace_types::execution::{Instruction, Output, Transaction};
+
+        let executor = Runner::default();
+        executor.start(|_| async move {
+            let state = MockState::new();
+            let (network_secret, master_public) = create_network_keypair();
+            let seed = create_seed(&network_secret, 1);
+            let mut layer = Layer::new(&state, master_public, b"test", seed);
+
+            let (signer, _) = create_account_keypair(1);
+
+            // Create a swap transaction (liquidity instruction)
+            let tx = Transaction::sign(
+                &signer,
+                0,
+                Instruction::Swap {
+                    amount_in: 100,
+                    min_amount_out: 90,
+                    is_buying_rng: true,
+                },
+            );
+
+            // Execute the transaction
+            let (outputs, _) = layer.execute(vec![tx]).await.expect("execute should not fail");
+
+            // Filter for CasinoError events
+            let error_events: Vec<_> = outputs
+                .iter()
+                .filter_map(|o| match o {
+                    Output::Event(e) => Some(e),
+                    _ => None,
+                })
+                .filter(|e| matches!(e, nullspace_types::execution::Event::CasinoError { .. }))
+                .collect();
+
+            assert_eq!(error_events.len(), 1, "Should have exactly one error event");
+            if let nullspace_types::execution::Event::CasinoError { error_code, message, .. } = error_events[0] {
+                assert_eq!(*error_code, ERROR_FEATURE_DISABLED, "Error code should be ERROR_FEATURE_DISABLED");
+                assert!(message.contains("Liquidity") || message.contains("AMM"), "Message should mention Liquidity/AMM, got: {}", message);
+            } else {
+                panic!("Expected CasinoError event");
+            }
+        });
+    }
+
+    /// Test that bridge instructions return ERROR_BRIDGE_DISABLED when the
+    /// bridge feature is disabled.
+    /// Per AC-1.1 (evm-bridge-deferment.md): "Bridge-related instructions are
+    /// rejected with a clear error (e.g., `bridge_disabled`) and do not mutate state."
+    #[cfg(not(feature = "bridge"))]
+    #[test]
+    fn test_bridge_disabled_returns_bridge_disabled_error() {
+        use crate::layer::Layer;
+        use feature_gate_test_helpers::MockState;
+        use commonware_runtime::deterministic::Runner;
+        use commonware_runtime::Runner as _;
+        use nullspace_types::casino::ERROR_BRIDGE_DISABLED;
+        use nullspace_types::execution::{Instruction, Output, Transaction};
+
+        let executor = Runner::default();
+        executor.start(|_| async move {
+            let state = MockState::new();
+            let (network_secret, master_public) = create_network_keypair();
+            let seed = create_seed(&network_secret, 1);
+            let mut layer = Layer::new(&state, master_public, b"test", seed);
+
+            let (signer, _) = create_account_keypair(1);
+
+            // Create a bridge withdraw transaction
+            let tx = Transaction::sign(
+                &signer,
+                0,
+                Instruction::BridgeWithdraw {
+                    amount: 100,
+                    destination: vec![0u8; 20], // 20-byte EVM address
+                },
+            );
+
+            // Execute the transaction
+            let (outputs, _) = layer.execute(vec![tx]).await.expect("execute should not fail");
+
+            // Filter for CasinoError events
+            let error_events: Vec<_> = outputs
+                .iter()
+                .filter_map(|o| match o {
+                    Output::Event(e) => Some(e),
+                    _ => None,
+                })
+                .filter(|e| matches!(e, nullspace_types::execution::Event::CasinoError { .. }))
+                .collect();
+
+            assert_eq!(error_events.len(), 1, "Should have exactly one error event");
+            if let nullspace_types::execution::Event::CasinoError { error_code, message, .. } = error_events[0] {
+                assert_eq!(*error_code, ERROR_BRIDGE_DISABLED, "Error code should be ERROR_BRIDGE_DISABLED");
+                assert!(message.contains("Bridge") || message.contains("bridge"), "Message should mention Bridge, got: {}", message);
+            } else {
+                panic!("Expected CasinoError event");
+            }
+        });
+    }
 }

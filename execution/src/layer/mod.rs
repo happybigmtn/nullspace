@@ -309,6 +309,7 @@ impl<'a, S: State> Layer<'a, S> {
         }
     }
 
+    #[cfg(feature = "staking")]
     async fn apply_staking(
         &mut self,
         public: &PublicKey,
@@ -325,6 +326,16 @@ impl<'a, S: State> Layer<'a, S> {
         }
     }
 
+    #[cfg(not(feature = "staking"))]
+    async fn apply_staking(
+        &mut self,
+        public: &PublicKey,
+        _instruction: &Instruction,
+    ) -> Result<Vec<Event>> {
+        Ok(handlers::feature_disabled_error(public, "Staking"))
+    }
+
+    #[cfg(feature = "liquidity")]
     async fn apply_liquidity(
         &mut self,
         public: &PublicKey,
@@ -426,6 +437,16 @@ impl<'a, S: State> Layer<'a, S> {
         }
     }
 
+    #[cfg(not(feature = "liquidity"))]
+    async fn apply_liquidity(
+        &mut self,
+        public: &PublicKey,
+        _instruction: &Instruction,
+    ) -> Result<Vec<Event>> {
+        Ok(handlers::feature_disabled_error(public, "Liquidity/AMM"))
+    }
+
+    #[cfg(feature = "bridge")]
     async fn apply_bridge(
         &mut self,
         public: &PublicKey,
@@ -460,6 +481,15 @@ impl<'a, S: State> Layer<'a, S> {
             }
             _ => anyhow::bail!("internal error: apply_bridge called with non-bridge instruction"),
         }
+    }
+
+    #[cfg(not(feature = "bridge"))]
+    async fn apply_bridge(
+        &mut self,
+        public: &PublicKey,
+        _instruction: &Instruction,
+    ) -> Result<Vec<Event>> {
+        Ok(handlers::bridge_disabled_error(public))
     }
 
     async fn apply(&mut self, transaction: &Transaction) -> Result<Vec<Event>> {

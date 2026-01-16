@@ -29,6 +29,10 @@ anyhow = { workspace = true }
 [features]
 parallel = ["rayon"]
 mocks = []
+# Feature gates for deferrable subsystems (disabled by default)
+bridge = []
+staking = []
+liquidity = []
 
 [dev-dependencies]
 serde_json = { workspace = true }

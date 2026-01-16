@@ -33,6 +33,26 @@ fn casino_error_vec(
     vec![casino_error(player, session_id, error_code, message)]
 }
 
+/// Returns a feature-disabled error for liquidity/staking instructions.
+pub(super) fn feature_disabled_error(player: &PublicKey, feature_name: &str) -> Vec<Event> {
+    casino_error_vec(
+        player,
+        None,
+        nullspace_types::casino::ERROR_FEATURE_DISABLED,
+        format!("{} is disabled", feature_name),
+    )
+}
+
+/// Returns a bridge-disabled error.
+pub(super) fn bridge_disabled_error(player: &PublicKey) -> Vec<Event> {
+    casino_error_vec(
+        player,
+        None,
+        nullspace_types::casino::ERROR_BRIDGE_DISABLED,
+        "Bridge is disabled",
+    )
+}
+
 fn parse_admin_public_key(raw: &str) -> Option<PublicKey> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -64,6 +84,9 @@ pub(super) fn is_admin_public_key(public: &PublicKey) -> bool {
 }
 
 mod casino;
+#[cfg(feature = "bridge")]
 mod bridge;
+#[cfg(feature = "liquidity")]
 mod liquidity;
+#[cfg(feature = "staking")]
 mod staking;
