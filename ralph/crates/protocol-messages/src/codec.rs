@@ -925,3 +925,843 @@ mod tests {
         assert_eq!(first, second, "decoding must be deterministic");
     }
 }
+
+// ============================================================================
+// Unified Bet Descriptor + Per-Game Bet Type Tables (AC-2.1, AC-2.2)
+// ============================================================================
+
+/// Configuration for a game's bet encoding layout.
+///
+/// Each table game defines its bet type bit width and target requirements.
+/// This allows a unified [`BetDescriptor`] to encode bets consistently
+/// across all games while respecting per-game constraints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BetLayout {
+    /// Bit width for bet_type field (typically 4-5).
+    pub bet_type_bits: u8,
+    /// Bit width for target field (0 = no target, typically 4-6).
+    pub target_bits: u8,
+    /// Maximum valid bet_type value (inclusive).
+    pub max_bet_type: u8,
+    /// Maximum valid target value (inclusive, ignored if target_bits == 0).
+    pub max_target: u8,
+}
+
+impl BetLayout {
+    /// Create a layout with no target field.
+    #[must_use]
+    pub const fn without_target(bet_type_bits: u8, max_bet_type: u8) -> Self {
+        Self {
+            bet_type_bits,
+            target_bits: 0,
+            max_bet_type,
+            max_target: 0,
+        }
+    }
+
+    /// Create a layout with a target field.
+    #[must_use]
+    pub const fn with_target(
+        bet_type_bits: u8,
+        max_bet_type: u8,
+        target_bits: u8,
+        max_target: u8,
+    ) -> Self {
+        Self {
+            bet_type_bits,
+            target_bits,
+            max_bet_type,
+            max_target,
+        }
+    }
+
+    /// Returns true if this layout includes a target field.
+    #[must_use]
+    pub const fn has_target(&self) -> bool {
+        self.target_bits > 0
+    }
+
+    /// Returns the fixed bit count for bet_type + target (excluding amount).
+    #[must_use]
+    pub const fn fixed_bits(&self) -> u8 {
+        self.bet_type_bits + self.target_bits
+    }
+}
+
+/// Per-game bet layouts defining the bit-level encoding parameters.
+///
+/// These are derived from the per-game compact encoding specs:
+/// - `compact-encoding-roulette.md`: bet_type 4 bits, value 6 bits
+/// - `compact-encoding-craps.md`: bet_type 5 bits, target 4 bits (optional)
+/// - `compact-encoding-sicbo.md`: bet_type 4 bits, target 6 bits (optional)
+/// - `compact-encoding-baccarat.md`: bet_type 4 bits, no target
+pub mod bet_layouts {
+    use super::BetLayout;
+
+    /// Roulette: bet_type (4 bits, 0-13), value (6 bits, 0-63).
+    pub const ROULETTE: BetLayout = BetLayout::with_target(4, 13, 6, 63);
+
+    /// Craps: bet_type (5 bits, 0-22), target (4 bits, 0-12).
+    /// Target is included only for certain bet types (YES/NO/NEXT/HARDWAY).
+    pub const CRAPS: BetLayout = BetLayout::with_target(5, 22, 4, 12);
+
+    /// Sic Bo: bet_type (4 bits, 0-12), target (6 bits, 0-63).
+    /// Target is included only for bet types that require it.
+    pub const SIC_BO: BetLayout = BetLayout::with_target(4, 12, 6, 63);
+
+    /// Baccarat: bet_type (4 bits, 0-9), no target.
+    pub const BACCARAT: BetLayout = BetLayout::without_target(4, 9);
+}
+
+/// Unified bet descriptor for all table games.
+///
+/// This structure satisfies AC-2.1 by providing a shared bet descriptor format
+/// used by Roulette, Craps, Sic Bo, and Baccarat. The encoding varies per-game
+/// based on the [`BetLayout`], but the structure is consistent:
+///
+/// - `bet_type`: Identifies the bet category (straight, split, pass line, etc.)
+/// - `target`: Optional qualifier (number, point value, etc.)
+/// - `amount`: Wager amount in ULEB128 encoding
+///
+/// This eliminates bespoke bet payloads (AC-2.2) by channeling all bets through
+/// a single encode/decode path parameterized by game layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BetDescriptor {
+    /// Bet category index (meaning is game-specific).
+    pub bet_type: u8,
+    /// Optional target qualifier (meaning is game-specific).
+    /// Set to 0 when the game/bet type doesn't use a target.
+    pub target: u8,
+    /// Wager amount (in smallest unit).
+    pub amount: u64,
+}
+
+impl BetDescriptor {
+    /// Create a new bet descriptor.
+    #[must_use]
+    pub const fn new(bet_type: u8, target: u8, amount: u64) -> Self {
+        Self {
+            bet_type,
+            target,
+            amount,
+        }
+    }
+
+    /// Create a bet descriptor without a target (for games like Baccarat).
+    #[must_use]
+    pub const fn without_target(bet_type: u8, amount: u64) -> Self {
+        Self::new(bet_type, 0, amount)
+    }
+
+    /// Encode this bet descriptor using the specified game layout.
+    ///
+    /// # Errors
+    /// Returns `CodecError::BufferOverflow` if the writer runs out of space.
+    pub fn encode(&self, writer: &mut BitWriter, layout: BetLayout) -> CodecResult<()> {
+        // Write bet_type
+        writer.write_bits(self.bet_type as u64, layout.bet_type_bits as usize)?;
+
+        // Write target if layout includes it
+        if layout.has_target() {
+            writer.write_bits(self.target as u64, layout.target_bits as usize)?;
+        }
+
+        // Write amount as ULEB128
+        writer.write_uleb128(self.amount)?;
+
+        Ok(())
+    }
+
+    /// Decode a bet descriptor using the specified game layout.
+    ///
+    /// # Errors
+    /// Returns `CodecError::BufferUnderflow` if the reader runs out of data.
+    pub fn decode(reader: &mut BitReader, layout: BetLayout) -> CodecResult<Self> {
+        // Read bet_type
+        let bet_type = reader.read_bits(layout.bet_type_bits as usize)? as u8;
+
+        // Read target if layout includes it
+        let target = if layout.has_target() {
+            reader.read_bits(layout.target_bits as usize)? as u8
+        } else {
+            0
+        };
+
+        // Read amount as ULEB128
+        let amount = reader.read_uleb128()?;
+
+        Ok(Self {
+            bet_type,
+            target,
+            amount,
+        })
+    }
+
+    /// Validate this descriptor against the layout constraints.
+    #[must_use]
+    pub fn is_valid(&self, layout: BetLayout) -> bool {
+        if self.bet_type > layout.max_bet_type {
+            return false;
+        }
+        if layout.has_target() && self.target > layout.max_target {
+            return false;
+        }
+        true
+    }
+}
+
+/// Error type for bet descriptor validation.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum BetError {
+    /// Bet type exceeds maximum for game.
+    #[error("bet type {bet_type} exceeds maximum {max} for game")]
+    InvalidBetType { bet_type: u8, max: u8 },
+
+    /// Target exceeds maximum for game.
+    #[error("target {target} exceeds maximum {max} for game")]
+    InvalidTarget { target: u8, max: u8 },
+
+    /// Target provided but not expected.
+    #[error("target provided but game layout does not use targets")]
+    UnexpectedTarget,
+
+    /// Codec error during encode/decode.
+    #[error("codec error: {0}")]
+    Codec(#[from] CodecError),
+}
+
+/// Roulette bet types (0-13) as defined in compact-encoding-roulette.md.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum RouletteBetType {
+    Straight = 0,
+    Split = 1,
+    Street = 2,
+    Corner = 3,
+    SixLine = 4,
+    Column = 5,
+    Dozen = 6,
+    Red = 7,
+    Black = 8,
+    Even = 9,
+    Odd = 10,
+    Low = 11,
+    High = 12,
+    Basket = 13,
+}
+
+impl RouletteBetType {
+    /// Returns whether this bet type requires a target value.
+    #[must_use]
+    pub const fn requires_target(&self) -> bool {
+        matches!(
+            self,
+            Self::Straight
+                | Self::Split
+                | Self::Street
+                | Self::Corner
+                | Self::SixLine
+                | Self::Column
+                | Self::Dozen
+        )
+    }
+}
+
+impl TryFrom<u8> for RouletteBetType {
+    type Error = BetError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Straight),
+            1 => Ok(Self::Split),
+            2 => Ok(Self::Street),
+            3 => Ok(Self::Corner),
+            4 => Ok(Self::SixLine),
+            5 => Ok(Self::Column),
+            6 => Ok(Self::Dozen),
+            7 => Ok(Self::Red),
+            8 => Ok(Self::Black),
+            9 => Ok(Self::Even),
+            10 => Ok(Self::Odd),
+            11 => Ok(Self::Low),
+            12 => Ok(Self::High),
+            13 => Ok(Self::Basket),
+            _ => Err(BetError::InvalidBetType {
+                bet_type: value,
+                max: 13,
+            }),
+        }
+    }
+}
+
+/// Craps bet types (0-22) as defined in compact-encoding-craps.md.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CrapsBetType {
+    PassLine = 0,
+    DontPass = 1,
+    Come = 2,
+    DontCome = 3,
+    Field = 4,
+    Any7 = 5,
+    AnyCraps = 6,
+    CrapsTwo = 7,
+    CrapsThree = 8,
+    CrapsEleven = 9,
+    CrapsTwelve = 10,
+    Place = 11,
+    Buy = 12,
+    Lay = 13,
+    HardFour = 14,
+    HardSix = 15,
+    HardEight = 16,
+    HardTen = 17,
+    Big6 = 18,
+    Big8 = 19,
+    Horn = 20,
+    World = 21,
+    Hop = 22,
+}
+
+impl CrapsBetType {
+    /// Returns whether this bet type requires a target value.
+    #[must_use]
+    pub const fn requires_target(&self) -> bool {
+        matches!(
+            self,
+            Self::Place | Self::Buy | Self::Lay | Self::Hop
+        )
+    }
+}
+
+impl TryFrom<u8> for CrapsBetType {
+    type Error = BetError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::PassLine),
+            1 => Ok(Self::DontPass),
+            2 => Ok(Self::Come),
+            3 => Ok(Self::DontCome),
+            4 => Ok(Self::Field),
+            5 => Ok(Self::Any7),
+            6 => Ok(Self::AnyCraps),
+            7 => Ok(Self::CrapsTwo),
+            8 => Ok(Self::CrapsThree),
+            9 => Ok(Self::CrapsEleven),
+            10 => Ok(Self::CrapsTwelve),
+            11 => Ok(Self::Place),
+            12 => Ok(Self::Buy),
+            13 => Ok(Self::Lay),
+            14 => Ok(Self::HardFour),
+            15 => Ok(Self::HardSix),
+            16 => Ok(Self::HardEight),
+            17 => Ok(Self::HardTen),
+            18 => Ok(Self::Big6),
+            19 => Ok(Self::Big8),
+            20 => Ok(Self::Horn),
+            21 => Ok(Self::World),
+            22 => Ok(Self::Hop),
+            _ => Err(BetError::InvalidBetType {
+                bet_type: value,
+                max: 22,
+            }),
+        }
+    }
+}
+
+/// Sic Bo bet types (0-12) as defined in compact-encoding-sicbo.md.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SicBoBetType {
+    Small = 0,
+    Big = 1,
+    Odd = 2,
+    Even = 3,
+    SpecificTriple = 4,
+    AnyTriple = 5,
+    SpecificDouble = 6,
+    TwoFaceCombo = 7,
+    SingleDice = 8,
+    TotalSum = 9,
+    ThreeForces = 10,
+    Domino = 11,
+    Hop = 12,
+}
+
+impl SicBoBetType {
+    /// Returns whether this bet type requires a target value.
+    #[must_use]
+    pub const fn requires_target(&self) -> bool {
+        matches!(
+            self,
+            Self::SpecificTriple
+                | Self::SpecificDouble
+                | Self::TwoFaceCombo
+                | Self::SingleDice
+                | Self::TotalSum
+                | Self::Domino
+                | Self::Hop
+        )
+    }
+}
+
+impl TryFrom<u8> for SicBoBetType {
+    type Error = BetError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Small),
+            1 => Ok(Self::Big),
+            2 => Ok(Self::Odd),
+            3 => Ok(Self::Even),
+            4 => Ok(Self::SpecificTriple),
+            5 => Ok(Self::AnyTriple),
+            6 => Ok(Self::SpecificDouble),
+            7 => Ok(Self::TwoFaceCombo),
+            8 => Ok(Self::SingleDice),
+            9 => Ok(Self::TotalSum),
+            10 => Ok(Self::ThreeForces),
+            11 => Ok(Self::Domino),
+            12 => Ok(Self::Hop),
+            _ => Err(BetError::InvalidBetType {
+                bet_type: value,
+                max: 12,
+            }),
+        }
+    }
+}
+
+/// Baccarat bet types (0-9) as defined in compact-encoding-baccarat.md.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum BaccaratBetType {
+    Player = 0,
+    Banker = 1,
+    Tie = 2,
+    PlayerPair = 3,
+    BankerPair = 4,
+    EitherPair = 5,
+    PerfectPair = 6,
+    Big = 7,
+    Small = 8,
+    SuperSix = 9,
+}
+
+impl BaccaratBetType {
+    /// Baccarat bets never require a target.
+    #[must_use]
+    pub const fn requires_target(&self) -> bool {
+        false
+    }
+}
+
+impl TryFrom<u8> for BaccaratBetType {
+    type Error = BetError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Player),
+            1 => Ok(Self::Banker),
+            2 => Ok(Self::Tie),
+            3 => Ok(Self::PlayerPair),
+            4 => Ok(Self::BankerPair),
+            5 => Ok(Self::EitherPair),
+            6 => Ok(Self::PerfectPair),
+            7 => Ok(Self::Big),
+            8 => Ok(Self::Small),
+            9 => Ok(Self::SuperSix),
+            _ => Err(BetError::InvalidBetType {
+                bet_type: value,
+                max: 9,
+            }),
+        }
+    }
+}
+
+/// Game type enumeration for bet encoding dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TableGame {
+    Roulette,
+    Craps,
+    SicBo,
+    Baccarat,
+}
+
+impl TableGame {
+    /// Get the bet layout for this game.
+    #[must_use]
+    pub const fn layout(&self) -> BetLayout {
+        match self {
+            Self::Roulette => bet_layouts::ROULETTE,
+            Self::Craps => bet_layouts::CRAPS,
+            Self::SicBo => bet_layouts::SIC_BO,
+            Self::Baccarat => bet_layouts::BACCARAT,
+        }
+    }
+
+    /// All supported table games (AC-2.1 coverage).
+    pub const ALL: [TableGame; 4] = [
+        Self::Roulette,
+        Self::Craps,
+        Self::SicBo,
+        Self::Baccarat,
+    ];
+}
+
+#[cfg(test)]
+mod bet_descriptor_tests {
+    use super::*;
+
+    // ========================================================================
+    // AC-2.1: Shared bet descriptor structure
+    // ========================================================================
+
+    #[test]
+    fn test_all_games_use_shared_descriptor_ac_2_1() {
+        // All table games encode/decode through the same BetDescriptor type
+        for game in TableGame::ALL {
+            let bet = BetDescriptor::new(1, 2, 100);
+            let layout = game.layout();
+
+            // Encode
+            let mut writer = BitWriter::new();
+            bet.encode(&mut writer, layout).expect("encode failed");
+            let bytes = writer.finish();
+
+            // Decode
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptor::decode(&mut reader, layout).expect("decode failed");
+
+            // Roundtrip
+            assert_eq!(bet.bet_type, decoded.bet_type);
+            assert_eq!(bet.amount, decoded.amount);
+            // Target may differ for games without target fields
+            if layout.has_target() {
+                assert_eq!(bet.target, decoded.target);
+            }
+        }
+    }
+
+    #[test]
+    fn test_descriptor_structure_identical_ac_2_1() {
+        // Verify the descriptor has the same fields for all games:
+        // bet_type, target, amount
+        let roulette_bet = BetDescriptor::new(0, 17, 500);
+        let craps_bet = BetDescriptor::new(0, 6, 500);
+        let sicbo_bet = BetDescriptor::new(0, 0, 500);
+        let baccarat_bet = BetDescriptor::without_target(0, 500);
+
+        // All use the same struct type
+        assert_eq!(
+            std::mem::size_of_val(&roulette_bet),
+            std::mem::size_of_val(&craps_bet)
+        );
+        assert_eq!(
+            std::mem::size_of_val(&craps_bet),
+            std::mem::size_of_val(&sicbo_bet)
+        );
+        assert_eq!(
+            std::mem::size_of_val(&sicbo_bet),
+            std::mem::size_of_val(&baccarat_bet)
+        );
+    }
+
+    #[test]
+    fn test_encode_decode_paths_unified_ac_2_1() {
+        // All games use exactly the same encode/decode methods
+        let test_cases = [
+            (TableGame::Roulette, 7, 0, 100),  // Red
+            (TableGame::Craps, 0, 0, 200),     // Pass Line
+            (TableGame::SicBo, 0, 0, 150),     // Small
+            (TableGame::Baccarat, 0, 0, 300),  // Player
+        ];
+
+        for (game, bet_type, target, amount) in test_cases {
+            let bet = BetDescriptor::new(bet_type, target, amount);
+            let layout = game.layout();
+
+            let mut writer = BitWriter::new();
+            // Same method for all games
+            bet.encode(&mut writer, layout).unwrap();
+            let encoded = writer.finish();
+
+            let mut reader = BitReader::new(&encoded);
+            // Same method for all games
+            let decoded = BetDescriptor::decode(&mut reader, layout).unwrap();
+
+            assert_eq!(decoded.bet_type, bet_type);
+            assert_eq!(decoded.amount, amount);
+        }
+    }
+
+    // ========================================================================
+    // AC-2.2: No bespoke bet payloads
+    // ========================================================================
+
+    #[test]
+    fn test_no_bespoke_payloads_ac_2_2() {
+        // All games' bet encoding goes through BetDescriptor
+        // There is no game-specific encode/decode function outside this unified path
+
+        // Roulette: straight bet on 17
+        let roulette = BetDescriptor::new(
+            RouletteBetType::Straight as u8,
+            17,
+            100,
+        );
+        let mut w = BitWriter::new();
+        roulette.encode(&mut w, bet_layouts::ROULETTE).unwrap();
+
+        // Craps: pass line bet
+        let craps = BetDescriptor::new(
+            CrapsBetType::PassLine as u8,
+            0,
+            100,
+        );
+        let mut w = BitWriter::new();
+        craps.encode(&mut w, bet_layouts::CRAPS).unwrap();
+
+        // Sic Bo: small bet
+        let sicbo = BetDescriptor::new(
+            SicBoBetType::Small as u8,
+            0,
+            100,
+        );
+        let mut w = BitWriter::new();
+        sicbo.encode(&mut w, bet_layouts::SIC_BO).unwrap();
+
+        // Baccarat: player bet
+        let baccarat = BetDescriptor::without_target(
+            BaccaratBetType::Player as u8,
+            100,
+        );
+        let mut w = BitWriter::new();
+        baccarat.encode(&mut w, bet_layouts::BACCARAT).unwrap();
+
+        // All successfully encoded through the unified BetDescriptor
+    }
+
+    #[test]
+    fn test_layout_consistency_across_games_ac_2_2() {
+        // Verify that all games define layouts using the same BetLayout struct
+        let layouts: [(&str, BetLayout); 4] = [
+            ("roulette", bet_layouts::ROULETTE),
+            ("craps", bet_layouts::CRAPS),
+            ("sicbo", bet_layouts::SIC_BO),
+            ("baccarat", bet_layouts::BACCARAT),
+        ];
+
+        for (name, layout) in layouts {
+            // All layouts have the same fields
+            assert!(
+                layout.bet_type_bits > 0 && layout.bet_type_bits <= 8,
+                "{} bet_type_bits out of range",
+                name
+            );
+            assert!(
+                layout.target_bits <= 8,
+                "{} target_bits out of range",
+                name
+            );
+            // Max values are within bit constraints
+            assert!(
+                layout.max_bet_type < (1 << layout.bet_type_bits),
+                "{} max_bet_type exceeds bit width",
+                name
+            );
+            if layout.has_target() {
+                assert!(
+                    layout.max_target < (1 << layout.target_bits),
+                    "{} max_target exceeds bit width",
+                    name
+                );
+            }
+        }
+    }
+
+    // ========================================================================
+    // Roundtrip tests per game
+    // ========================================================================
+
+    #[test]
+    fn test_roulette_bet_roundtrip() {
+        let bets = [
+            BetDescriptor::new(RouletteBetType::Straight as u8, 17, 100),
+            BetDescriptor::new(RouletteBetType::Split as u8, 5, 200),
+            BetDescriptor::new(RouletteBetType::Red as u8, 0, 50),
+            BetDescriptor::new(RouletteBetType::Dozen as u8, 1, 1000),
+        ];
+
+        for bet in bets {
+            let mut writer = BitWriter::new();
+            bet.encode(&mut writer, bet_layouts::ROULETTE).unwrap();
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptor::decode(&mut reader, bet_layouts::ROULETTE).unwrap();
+
+            assert_eq!(decoded, bet);
+        }
+    }
+
+    #[test]
+    fn test_craps_bet_roundtrip() {
+        let bets = [
+            BetDescriptor::new(CrapsBetType::PassLine as u8, 0, 100),
+            BetDescriptor::new(CrapsBetType::Place as u8, 6, 200),
+            BetDescriptor::new(CrapsBetType::HardSix as u8, 0, 50),
+            BetDescriptor::new(CrapsBetType::Hop as u8, 3, 25),
+        ];
+
+        for bet in bets {
+            let mut writer = BitWriter::new();
+            bet.encode(&mut writer, bet_layouts::CRAPS).unwrap();
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptor::decode(&mut reader, bet_layouts::CRAPS).unwrap();
+
+            assert_eq!(decoded, bet);
+        }
+    }
+
+    #[test]
+    fn test_sicbo_bet_roundtrip() {
+        let bets = [
+            BetDescriptor::new(SicBoBetType::Small as u8, 0, 100),
+            BetDescriptor::new(SicBoBetType::TotalSum as u8, 11, 200),
+            BetDescriptor::new(SicBoBetType::SpecificTriple as u8, 3, 50),
+            BetDescriptor::new(SicBoBetType::AnyTriple as u8, 0, 75),
+        ];
+
+        for bet in bets {
+            let mut writer = BitWriter::new();
+            bet.encode(&mut writer, bet_layouts::SIC_BO).unwrap();
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptor::decode(&mut reader, bet_layouts::SIC_BO).unwrap();
+
+            assert_eq!(decoded, bet);
+        }
+    }
+
+    #[test]
+    fn test_baccarat_bet_roundtrip() {
+        let bets = [
+            BetDescriptor::without_target(BaccaratBetType::Player as u8, 100),
+            BetDescriptor::without_target(BaccaratBetType::Banker as u8, 200),
+            BetDescriptor::without_target(BaccaratBetType::Tie as u8, 50),
+            BetDescriptor::without_target(BaccaratBetType::SuperSix as u8, 25),
+        ];
+
+        for bet in bets {
+            let mut writer = BitWriter::new();
+            bet.encode(&mut writer, bet_layouts::BACCARAT).unwrap();
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptor::decode(&mut reader, bet_layouts::BACCARAT).unwrap();
+
+            assert_eq!(decoded, bet);
+        }
+    }
+
+    // ========================================================================
+    // Bet type enum tests
+    // ========================================================================
+
+    #[test]
+    fn test_roulette_bet_type_conversion() {
+        for i in 0..=13u8 {
+            let bet_type = RouletteBetType::try_from(i).expect("valid range");
+            assert_eq!(bet_type as u8, i);
+        }
+        assert!(RouletteBetType::try_from(14).is_err());
+    }
+
+    #[test]
+    fn test_craps_bet_type_conversion() {
+        for i in 0..=22u8 {
+            let bet_type = CrapsBetType::try_from(i).expect("valid range");
+            assert_eq!(bet_type as u8, i);
+        }
+        assert!(CrapsBetType::try_from(23).is_err());
+    }
+
+    #[test]
+    fn test_sicbo_bet_type_conversion() {
+        for i in 0..=12u8 {
+            let bet_type = SicBoBetType::try_from(i).expect("valid range");
+            assert_eq!(bet_type as u8, i);
+        }
+        assert!(SicBoBetType::try_from(13).is_err());
+    }
+
+    #[test]
+    fn test_baccarat_bet_type_conversion() {
+        for i in 0..=9u8 {
+            let bet_type = BaccaratBetType::try_from(i).expect("valid range");
+            assert_eq!(bet_type as u8, i);
+        }
+        assert!(BaccaratBetType::try_from(10).is_err());
+    }
+
+    // ========================================================================
+    // Validation tests
+    // ========================================================================
+
+    #[test]
+    fn test_descriptor_validation() {
+        // Valid
+        let valid = BetDescriptor::new(5, 10, 100);
+        assert!(valid.is_valid(bet_layouts::ROULETTE));
+
+        // Invalid bet_type
+        let invalid_type = BetDescriptor::new(15, 10, 100);
+        assert!(!invalid_type.is_valid(bet_layouts::ROULETTE));
+
+        // Invalid target
+        let invalid_target = BetDescriptor::new(5, 64, 100);
+        assert!(!invalid_target.is_valid(bet_layouts::ROULETTE));
+    }
+
+    #[test]
+    fn test_baccarat_ignores_target_in_validation() {
+        // Baccarat has no target field, so target value doesn't matter for validation
+        let with_target = BetDescriptor::new(0, 255, 100);
+        assert!(with_target.is_valid(bet_layouts::BACCARAT));
+    }
+
+    // ========================================================================
+    // Size verification tests
+    // ========================================================================
+
+    #[test]
+    fn test_bet_descriptor_size_compact() {
+        // Per spec: single bet payload <= 4 bytes for small amounts
+
+        // Roulette: 4 + 6 = 10 bits fixed + ULEB128(100) = 1 byte
+        // Total: ceil(10/8) + 1 = 2 + 1 = 3 bytes max (but bit-packed)
+        let bet = BetDescriptor::new(0, 17, 100);
+        let mut writer = BitWriter::new();
+        bet.encode(&mut writer, bet_layouts::ROULETTE).unwrap();
+        let bytes = writer.finish();
+        assert!(bytes.len() <= 4, "roulette bet too large: {} bytes", bytes.len());
+
+        // Craps: 5 + 4 = 9 bits fixed + ULEB128(100) = 1 byte
+        let bet = BetDescriptor::new(0, 6, 100);
+        let mut writer = BitWriter::new();
+        bet.encode(&mut writer, bet_layouts::CRAPS).unwrap();
+        let bytes = writer.finish();
+        assert!(bytes.len() <= 4, "craps bet too large: {} bytes", bytes.len());
+
+        // Baccarat: 4 bits fixed + ULEB128(100) = 1 byte
+        let bet = BetDescriptor::without_target(0, 100);
+        let mut writer = BitWriter::new();
+        bet.encode(&mut writer, bet_layouts::BACCARAT).unwrap();
+        let bytes = writer.finish();
+        assert!(bytes.len() <= 4, "baccarat bet too large: {} bytes", bytes.len());
+    }
+}

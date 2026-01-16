@@ -90,6 +90,11 @@ pub mod golden_vectors;
 pub use codec::{
     BitReader, BitWriter, CodecError, CodecResult, PayloadHeader,
     encode_uleb128, decode_uleb128, MAX_ENCODED_SIZE,
+    // Unified bet descriptor (AC-2.1, AC-2.2)
+    BetLayout, BetDescriptor, BetError, TableGame,
+    bet_layouts,
+    // Per-game bet type enums
+    RouletteBetType, CrapsBetType, SicBoBetType, BaccaratBetType,
 };
 
 pub use payload::{
