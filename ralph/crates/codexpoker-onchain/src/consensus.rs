@@ -737,11 +737,7 @@ impl PayloadExecutor for NoOpExecutor {
 
         for payload in &body.payloads {
             // Compute payload hash
-            let payload_hash = if let Some(hash) = payload.referenced_commitment_hash() {
-                hash
-            } else {
-                [0; 32]
-            };
+            let payload_hash = payload.referenced_commitment_hash().unwrap_or_default();
 
             // Update state root: hash(current || payload_hash)
             let mut preimage = Vec::with_capacity(64);
@@ -927,10 +923,8 @@ impl<E: PayloadExecutor> Automaton for SimplexAutomaton<E> {
                     actual: 0,
                 });
             }
-        } else {
-            if header.parent_hash != self.state.tip.0 {
-                return Err(AutomatonError::ParentHashMismatch);
-            }
+        } else if header.parent_hash != self.state.tip.0 {
+            return Err(AutomatonError::ParentHashMismatch);
         }
 
         // Verify execution
