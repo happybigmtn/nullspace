@@ -89,6 +89,7 @@ pub mod craps;
 pub mod exports;
 pub mod golden_vectors;
 pub mod roulette;
+pub mod sic_bo;
 
 // Re-export codec primitives for convenience
 pub use codec::{
