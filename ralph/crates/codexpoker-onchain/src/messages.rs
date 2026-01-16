@@ -113,6 +113,14 @@ pub enum PayloadError {
         got: RevealPhase,
         missing: RevealPhase,
     },
+
+    /// Game action received during a reveal-only phase.
+    ///
+    /// After a betting round completes, the validator enters a reveal-only phase
+    /// where only reveals for the expected phase are accepted. Game actions are
+    /// rejected until the reveal is received.
+    #[error("game action during reveal-only phase: awaiting reveal for {expected_phase:?}")]
+    ActionDuringRevealOnlyPhase { expected_phase: RevealPhase },
 }
 
 /// The consensus payload schema wrapping all onchain message types.
@@ -383,6 +391,12 @@ pub struct ActionLogValidator {
     /// Preflop → Flop → Turn → River → Showdown.
     /// Each phase can only be revealed once.
     completed_phases: Vec<RevealPhase>,
+    /// When set, the validator is in a reveal-only phase and will reject
+    /// game actions until the specified reveal phase is received.
+    ///
+    /// This is set by calling [`enter_reveal_only_phase`](Self::enter_reveal_only_phase)
+    /// when a betting round completes and community cards need to be revealed.
+    awaiting_reveal_phase: Option<RevealPhase>,
 }
 
 impl Default for ActionLogValidator {
@@ -405,6 +419,7 @@ impl ActionLogValidator {
             acked_seats: Vec::new(),
             expected_context: None,
             completed_phases: Vec::new(),
+            awaiting_reveal_phase: None,
         }
     }
 
@@ -440,6 +455,7 @@ impl ActionLogValidator {
             acked_seats: Vec::new(),
             expected_context: Some(expected),
             completed_phases: Vec::new(),
+            awaiting_reveal_phase: None,
         }
     }
 
@@ -529,6 +545,72 @@ impl ActionLogValidator {
         self.completed_phases.contains(&phase)
     }
 
+    /// Returns true if the validator is in a reveal-only phase.
+    ///
+    /// When in a reveal-only phase, game actions are rejected until
+    /// the expected reveal is received.
+    pub fn is_in_reveal_only_phase(&self) -> bool {
+        self.awaiting_reveal_phase.is_some()
+    }
+
+    /// Returns the phase the validator is awaiting, if in reveal-only mode.
+    pub fn awaiting_reveal_phase(&self) -> Option<RevealPhase> {
+        self.awaiting_reveal_phase
+    }
+
+    /// Enter a reveal-only phase, blocking game actions until the reveal is received.
+    ///
+    /// Call this after a betting round completes to signal that the next action
+    /// must be a reveal for the specified phase. Game actions will be rejected
+    /// until the reveal is received.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The phase has already been completed
+    /// - The phase is not the next expected phase (would skip phases)
+    /// - Already in a reveal-only phase for a different phase
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use codexpoker_onchain::ActionLogValidator;
+    /// use protocol_messages::RevealPhase;
+    ///
+    /// let mut validator = ActionLogValidator::new();
+    /// // ... setup with commitment and acks ...
+    ///
+    /// // After preflop betting completes, enter reveal-only for Flop
+    /// // validator.enter_reveal_only_phase(RevealPhase::Flop).unwrap();
+    /// // Now game actions will be rejected until Flop reveal is received
+    /// ```
+    pub fn enter_reveal_only_phase(&mut self, phase: RevealPhase) -> Result<(), PayloadError> {
+        // Validate this phase can be entered
+        self.validate_reveal_phase(phase)?;
+
+        // Check we're not already awaiting a different phase
+        if let Some(existing) = self.awaiting_reveal_phase {
+            if existing != phase {
+                return Err(PayloadError::RevealPhaseOutOfOrder {
+                    expected: existing,
+                    got: phase,
+                });
+            }
+        }
+
+        self.awaiting_reveal_phase = Some(phase);
+        Ok(())
+    }
+
+    /// Exit reveal-only mode without receiving a reveal.
+    ///
+    /// This is primarily for testing or recovery scenarios. In normal operation,
+    /// the reveal-only phase is exited automatically when the expected reveal
+    /// is received.
+    pub fn exit_reveal_only_phase(&mut self) {
+        self.awaiting_reveal_phase = None;
+    }
+
     /// Validate that a reveal phase is valid for the current state.
     ///
     /// This enforces the phase ordering: Preflop → Flop → Turn → River → Showdown.
@@ -576,6 +658,9 @@ impl ActionLogValidator {
     /// 6. **Reveal phase gating**: Reveals must occur in sequential phase order
     ///    (Preflop → Flop → Turn → River → Showdown). Each phase can only be
     ///    revealed once.
+    /// 7. **Reveal-only phase enforcement**: When in reveal-only mode (after calling
+    ///    [`enter_reveal_only_phase`](Self::enter_reveal_only_phase)), game actions
+    ///    are rejected until the expected reveal is received.
     ///
     /// # Errors
     ///
@@ -588,6 +673,7 @@ impl ActionLogValidator {
     /// - [`PayloadError::ShuffleContextMismatch`] if commitment scope doesn't match expected context
     /// - [`PayloadError::RevealPhaseAlreadyCompleted`] if reveal is for an already-completed phase
     /// - [`PayloadError::RevealPhaseTooEarly`] if reveal is for a later phase than expected
+    /// - [`PayloadError::ActionDuringRevealOnlyPhase`] if game action received during reveal-only phase
     pub fn validate(&mut self, payload: &ConsensusPayload) -> Result<(), PayloadError> {
         // First payload must be a DealCommitment
         if self.payload_count == 0 {
@@ -672,6 +758,11 @@ impl ActionLogValidator {
                         required: self.required_seats.len(),
                     });
                 }
+
+                // Actions are blocked during reveal-only phases
+                if let Some(expected_phase) = self.awaiting_reveal_phase {
+                    return Err(PayloadError::ActionDuringRevealOnlyPhase { expected_phase });
+                }
             }
             ConsensusPayload::RevealShare(rs) => {
                 // Reveals require all acks to be received first
@@ -687,6 +778,11 @@ impl ActionLogValidator {
 
                 // Record this phase as completed
                 self.completed_phases.push(rs.phase);
+
+                // Clear reveal-only mode if this was the awaited phase
+                if self.awaiting_reveal_phase == Some(rs.phase) {
+                    self.awaiting_reveal_phase = None;
+                }
             }
             ConsensusPayload::TimelockReveal(tr) => {
                 // Timelock reveals require all acks to be received first
@@ -702,6 +798,11 @@ impl ActionLogValidator {
 
                 // Record this phase as completed
                 self.completed_phases.push(tr.phase);
+
+                // Clear reveal-only mode if this was the awaited phase
+                if self.awaiting_reveal_phase == Some(tr.phase) {
+                    self.awaiting_reveal_phase = None;
+                }
             }
             ConsensusPayload::DealCommitment(_) => {
                 // Already handled above (DuplicateCommitment check)
@@ -2303,5 +2404,395 @@ mod tests {
         assert!(validator
             .validate(&ConsensusPayload::RevealShare(flop))
             .is_ok());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Reveal-Only Phase Enforcement Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_reveal_only_phase_blocks_game_actions() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal first
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Enter reveal-only phase for Flop
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .unwrap();
+
+        assert!(validator.is_in_reveal_only_phase());
+        assert_eq!(
+            validator.awaiting_reveal_phase(),
+            Some(protocol_messages::RevealPhase::Flop)
+        );
+
+        // Game action should be rejected
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::GameAction(action));
+        assert!(matches!(
+            result,
+            Err(PayloadError::ActionDuringRevealOnlyPhase {
+                expected_phase: protocol_messages::RevealPhase::Flop,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_reveal_only_phase_accepts_expected_reveal() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal first
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Enter reveal-only phase for Flop
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .unwrap();
+
+        // Flop reveal should be accepted
+        let flop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Flop);
+        assert!(validator
+            .validate(&ConsensusPayload::RevealShare(flop))
+            .is_ok());
+
+        // Reveal-only mode should be cleared
+        assert!(!validator.is_in_reveal_only_phase());
+        assert!(validator.awaiting_reveal_phase().is_none());
+    }
+
+    #[test]
+    fn test_reveal_only_phase_cleared_by_timelock_reveal() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal first
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Enter reveal-only phase for Flop
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .unwrap();
+
+        // Timelock reveal for Flop should be accepted and clear reveal-only mode
+        let timelock = make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Flop);
+        assert!(validator
+            .validate(&ConsensusPayload::TimelockReveal(timelock))
+            .is_ok());
+
+        // Reveal-only mode should be cleared
+        assert!(!validator.is_in_reveal_only_phase());
+    }
+
+    #[test]
+    fn test_reveal_only_phase_allows_action_after_reveal() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal first
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Enter reveal-only phase for Flop
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .unwrap();
+
+        // Complete Flop reveal
+        let flop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Flop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(flop))
+            .unwrap();
+
+        // Now game actions should be allowed again
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        assert!(validator
+            .validate(&ConsensusPayload::GameAction(action))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_reveal_only_phase_rejects_wrong_reveal() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal first
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Enter reveal-only phase for Flop
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .unwrap();
+
+        // Try to reveal Turn (skipping Flop) - should fail due to phase ordering
+        let turn = make_reveal(commitment_hash, protocol_messages::RevealPhase::Turn);
+        let result = validator.validate(&ConsensusPayload::RevealShare(turn));
+
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseTooEarly {
+                got: protocol_messages::RevealPhase::Turn,
+                missing: protocol_messages::RevealPhase::Flop,
+            })
+        ));
+
+        // Should still be in reveal-only mode
+        assert!(validator.is_in_reveal_only_phase());
+    }
+
+    #[test]
+    fn test_enter_reveal_only_phase_rejects_completed_phase() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Trying to enter reveal-only for Preflop (already completed) should fail
+        let result = validator.enter_reveal_only_phase(protocol_messages::RevealPhase::Preflop);
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseAlreadyCompleted {
+                phase: protocol_messages::RevealPhase::Preflop,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_enter_reveal_only_phase_rejects_skipped_phase() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Trying to enter reveal-only for Turn (skipping Flop) should fail
+        let result = validator.enter_reveal_only_phase(protocol_messages::RevealPhase::Turn);
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseTooEarly {
+                got: protocol_messages::RevealPhase::Turn,
+                missing: protocol_messages::RevealPhase::Flop,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_enter_reveal_only_phase_idempotent() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Enter reveal-only for Flop
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .unwrap();
+
+        // Entering again for the same phase should succeed (idempotent)
+        assert!(validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .is_ok());
+    }
+
+    #[test]
+    fn test_enter_reveal_only_phase_rejects_different_phase_when_already_awaiting() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Enter reveal-only for Flop
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .unwrap();
+
+        // Trying to enter reveal-only for Turn while already awaiting Flop should fail
+        // (Turn is not valid anyway since Flop hasn't been revealed, but this tests
+        // the specific "already awaiting different phase" logic)
+        let result = validator.enter_reveal_only_phase(protocol_messages::RevealPhase::Turn);
+        // This fails because Turn is not the next expected phase (Flop is)
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseTooEarly { .. })
+        ));
+    }
+
+    #[test]
+    fn test_exit_reveal_only_phase() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop reveal
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Enter reveal-only for Flop
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .unwrap();
+        assert!(validator.is_in_reveal_only_phase());
+
+        // Manually exit reveal-only mode
+        validator.exit_reveal_only_phase();
+        assert!(!validator.is_in_reveal_only_phase());
+
+        // Now game actions should work again
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        assert!(validator
+            .validate(&ConsensusPayload::GameAction(action))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_reveal_only_phase_full_hand_flow() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Preflop: reveal hole cards
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Preflop betting round
+        let action1 = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+        validator
+            .validate(&ConsensusPayload::GameAction(action1))
+            .unwrap();
+
+        // End preflop betting, enter reveal-only for Flop
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Flop)
+            .unwrap();
+
+        // Betting during reveal-only should fail
+        let action2 = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 1,
+            action_type: action_codes::CALL,
+            amount: 100,
+            sequence: 2,
+            signature: vec![],
+        };
+        let result = validator.validate(&ConsensusPayload::GameAction(action2.clone()));
+        assert!(matches!(
+            result,
+            Err(PayloadError::ActionDuringRevealOnlyPhase { .. })
+        ));
+
+        // Flop reveal
+        let flop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Flop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(flop))
+            .unwrap();
+
+        // Flop betting round (action2 should now work)
+        validator
+            .validate(&ConsensusPayload::GameAction(action2))
+            .unwrap();
+
+        // End flop betting, enter reveal-only for Turn
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Turn)
+            .unwrap();
+
+        // Turn reveal
+        let turn = make_reveal(commitment_hash, protocol_messages::RevealPhase::Turn);
+        validator
+            .validate(&ConsensusPayload::RevealShare(turn))
+            .unwrap();
+
+        // End turn betting, enter reveal-only for River
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::River)
+            .unwrap();
+
+        // River reveal
+        let river = make_reveal(commitment_hash, protocol_messages::RevealPhase::River);
+        validator
+            .validate(&ConsensusPayload::RevealShare(river))
+            .unwrap();
+
+        // Final betting, then showdown
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Showdown)
+            .unwrap();
+
+        let showdown = make_reveal(commitment_hash, protocol_messages::RevealPhase::Showdown);
+        validator
+            .validate(&ConsensusPayload::RevealShare(showdown))
+            .unwrap();
+
+        assert!(validator.all_phases_complete());
+        assert!(!validator.is_in_reveal_only_phase());
+    }
+
+    #[test]
+    fn test_reveal_only_phase_error_display() {
+        let err = PayloadError::ActionDuringRevealOnlyPhase {
+            expected_phase: protocol_messages::RevealPhase::Flop,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("game action during reveal-only phase"));
+        assert!(msg.contains("Flop"));
     }
 }
