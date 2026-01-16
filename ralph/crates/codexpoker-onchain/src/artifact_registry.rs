@@ -236,6 +236,566 @@ impl BackfillResult {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit Logging
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Classification of audit events for artifact operations.
+///
+/// These events provide operational visibility into registry operations,
+/// enabling debugging, security monitoring, and forensic analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum AuditEventType {
+    /// Artifact successfully stored.
+    Store,
+    /// Artifact store was a no-op (duplicate).
+    StoreDuplicate,
+    /// Artifact store failed (size limit, registry full).
+    StoreFailed,
+    /// Artifact successfully fetched.
+    Fetch,
+    /// Artifact fetch failed (not found).
+    FetchNotFound,
+    /// Artifact fetch failed (hash mismatch / corruption).
+    FetchCorrupted,
+    /// Artifact removed from registry.
+    Remove,
+    /// Backfill request received from peer.
+    BackfillRequestReceived,
+    /// Backfill response processed.
+    BackfillResponseProcessed,
+    /// Backfill artifact rejected (hash mismatch).
+    BackfillHashMismatch,
+}
+
+impl AuditEventType {
+    /// Human-readable name for this event type.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AuditEventType::Store => "store",
+            AuditEventType::StoreDuplicate => "store_duplicate",
+            AuditEventType::StoreFailed => "store_failed",
+            AuditEventType::Fetch => "fetch",
+            AuditEventType::FetchNotFound => "fetch_not_found",
+            AuditEventType::FetchCorrupted => "fetch_corrupted",
+            AuditEventType::Remove => "remove",
+            AuditEventType::BackfillRequestReceived => "backfill_request_received",
+            AuditEventType::BackfillResponseProcessed => "backfill_response_processed",
+            AuditEventType::BackfillHashMismatch => "backfill_hash_mismatch",
+        }
+    }
+}
+
+/// A structured audit log entry for artifact operations.
+///
+/// Each entry captures:
+/// - What happened (event type)
+/// - When it happened (timestamp)
+/// - Which artifact (hash)
+/// - Additional context (artifact type, size, creator, error details)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditEntry {
+    /// Unix timestamp (milliseconds) when the event occurred.
+    pub timestamp_ms: u64,
+    /// Classification of the event.
+    pub event_type: AuditEventType,
+    /// Hash of the artifact involved (if applicable).
+    pub artifact_hash: Option<[u8; 32]>,
+    /// Type of the artifact (if known).
+    pub artifact_type: Option<ArtifactType>,
+    /// Size of the artifact in bytes (if known).
+    pub size_bytes: Option<usize>,
+    /// Creator of the artifact (if known).
+    pub creator: Option<String>,
+    /// Commitment hash the artifact is associated with (if any).
+    pub commitment_hash: Option<[u8; 32]>,
+    /// Error message or additional details (if any).
+    pub details: Option<String>,
+    /// Number of artifacts involved (for batch operations).
+    pub count: Option<usize>,
+}
+
+impl AuditEntry {
+    /// Create a new audit entry with minimal fields.
+    pub fn new(timestamp_ms: u64, event_type: AuditEventType) -> Self {
+        Self {
+            timestamp_ms,
+            event_type,
+            artifact_hash: None,
+            artifact_type: None,
+            size_bytes: None,
+            creator: None,
+            commitment_hash: None,
+            details: None,
+            count: None,
+        }
+    }
+
+    /// Set the artifact hash.
+    pub fn with_hash(mut self, hash: [u8; 32]) -> Self {
+        self.artifact_hash = Some(hash);
+        self
+    }
+
+    /// Set the artifact type.
+    pub fn with_artifact_type(mut self, artifact_type: ArtifactType) -> Self {
+        self.artifact_type = Some(artifact_type);
+        self
+    }
+
+    /// Set the artifact size.
+    pub fn with_size(mut self, size: usize) -> Self {
+        self.size_bytes = Some(size);
+        self
+    }
+
+    /// Set the creator.
+    pub fn with_creator(mut self, creator: &str) -> Self {
+        self.creator = Some(creator.to_string());
+        self
+    }
+
+    /// Set the commitment hash.
+    pub fn with_commitment(mut self, commitment_hash: [u8; 32]) -> Self {
+        self.commitment_hash = Some(commitment_hash);
+        self
+    }
+
+    /// Set additional details.
+    pub fn with_details(mut self, details: &str) -> Self {
+        self.details = Some(details.to_string());
+        self
+    }
+
+    /// Set the count for batch operations.
+    pub fn with_count(mut self, count: usize) -> Self {
+        self.count = Some(count);
+        self
+    }
+}
+
+/// Trait for audit log storage.
+///
+/// Implementations may store logs in memory, write to disk, send to a
+/// logging service, etc.
+pub trait AuditLog: Send + Sync {
+    /// Record an audit entry.
+    fn record(&mut self, entry: AuditEntry);
+
+    /// Get the number of recorded entries.
+    fn len(&self) -> usize;
+
+    /// Check if the log is empty.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Get all entries (for testing/inspection).
+    fn entries(&self) -> &[AuditEntry];
+
+    /// Get entries filtered by event type.
+    fn entries_by_type(&self, event_type: AuditEventType) -> Vec<&AuditEntry>;
+
+    /// Get entries for a specific artifact hash.
+    fn entries_for_artifact(&self, hash: &[u8; 32]) -> Vec<&AuditEntry>;
+
+    /// Clear all entries (primarily for testing).
+    fn clear(&mut self);
+}
+
+/// In-memory audit log implementation.
+///
+/// Stores audit entries in a vector, suitable for testing and short-lived
+/// processes. For production, consider a persistent or streaming implementation.
+#[derive(Debug, Default)]
+pub struct InMemoryAuditLog {
+    entries: Vec<AuditEntry>,
+    /// Maximum entries to retain (0 = unlimited).
+    max_entries: usize,
+}
+
+impl InMemoryAuditLog {
+    /// Create a new in-memory audit log with no entry limit.
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            max_entries: 0,
+        }
+    }
+
+    /// Create a new in-memory audit log with a maximum entry limit.
+    ///
+    /// When the limit is reached, oldest entries are evicted (FIFO).
+    pub fn with_max_entries(max_entries: usize) -> Self {
+        Self {
+            entries: Vec::new(),
+            max_entries,
+        }
+    }
+}
+
+impl AuditLog for InMemoryAuditLog {
+    fn record(&mut self, entry: AuditEntry) {
+        if self.max_entries > 0 && self.entries.len() >= self.max_entries {
+            self.entries.remove(0);
+        }
+        self.entries.push(entry);
+    }
+
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn entries(&self) -> &[AuditEntry] {
+        &self.entries
+    }
+
+    fn entries_by_type(&self, event_type: AuditEventType) -> Vec<&AuditEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.event_type == event_type)
+            .collect()
+    }
+
+    fn entries_for_artifact(&self, hash: &[u8; 32]) -> Vec<&AuditEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.artifact_hash.as_ref() == Some(hash))
+            .collect()
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+}
+
+/// An artifact registry wrapper that adds audit logging to all operations.
+///
+/// This wrapper delegates all storage operations to an inner registry while
+/// recording audit entries for:
+/// - Store operations (success, duplicate, failure)
+/// - Fetch operations (success, not found, corruption)
+/// - Remove operations
+/// - Backfill operations (requests, responses, hash mismatches)
+///
+/// # Usage
+///
+/// ```
+/// use codexpoker_onchain::artifact_registry::{
+///     AuditedArtifactRegistry, ArtifactRegistry, ArtifactType, AuditLog,
+///     InMemoryArtifactRegistry, InMemoryAuditLog,
+/// };
+///
+/// let registry = InMemoryArtifactRegistry::new();
+/// let audit_log = InMemoryAuditLog::new();
+/// let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+///
+/// // Store an artifact
+/// let hash = audited.store(b"data", ArtifactType::EncryptionKey, "dealer", 1000)
+///     .expect("store should succeed");
+///
+/// // Audit log now contains a Store entry
+/// assert_eq!(audited.audit_log().len(), 1);
+/// ```
+#[derive(Debug)]
+pub struct AuditedArtifactRegistry<R: ArtifactRegistry, L: AuditLog> {
+    inner: R,
+    audit_log: L,
+}
+
+impl<R: ArtifactRegistry, L: AuditLog> AuditedArtifactRegistry<R, L> {
+    /// Create a new audited registry wrapping the given inner registry.
+    pub fn new(inner: R, audit_log: L) -> Self {
+        Self { inner, audit_log }
+    }
+
+    /// Get a reference to the inner registry.
+    pub fn inner(&self) -> &R {
+        &self.inner
+    }
+
+    /// Get a mutable reference to the inner registry.
+    pub fn inner_mut(&mut self) -> &mut R {
+        &mut self.inner
+    }
+
+    /// Get a reference to the audit log.
+    pub fn audit_log(&self) -> &L {
+        &self.audit_log
+    }
+
+    /// Get a mutable reference to the audit log.
+    pub fn audit_log_mut(&mut self) -> &mut L {
+        &mut self.audit_log
+    }
+
+    /// Decompose into inner registry and audit log.
+    pub fn into_parts(self) -> (R, L) {
+        (self.inner, self.audit_log)
+    }
+}
+
+impl<R: ArtifactRegistry, L: AuditLog> ArtifactRegistry for AuditedArtifactRegistry<R, L> {
+    fn store(
+        &mut self,
+        data: &[u8],
+        artifact_type: ArtifactType,
+        creator: &str,
+        timestamp_ms: u64,
+    ) -> Result<[u8; 32], ArtifactRegistryError> {
+        let pre_count = self.inner.count();
+        let result = self.inner.store(data, artifact_type, creator, timestamp_ms);
+
+        match &result {
+            Ok(hash) => {
+                let post_count = self.inner.count();
+                let event_type = if post_count > pre_count {
+                    AuditEventType::Store
+                } else {
+                    AuditEventType::StoreDuplicate
+                };
+
+                self.audit_log.record(
+                    AuditEntry::new(timestamp_ms, event_type)
+                        .with_hash(*hash)
+                        .with_artifact_type(artifact_type)
+                        .with_size(data.len())
+                        .with_creator(creator),
+                );
+            }
+            Err(e) => {
+                let hash: [u8; 32] = blake3::hash(data).into();
+                self.audit_log.record(
+                    AuditEntry::new(timestamp_ms, AuditEventType::StoreFailed)
+                        .with_hash(hash)
+                        .with_artifact_type(artifact_type)
+                        .with_size(data.len())
+                        .with_creator(creator)
+                        .with_details(&e.to_string()),
+                );
+            }
+        }
+
+        result
+    }
+
+    fn store_for_commitment(
+        &mut self,
+        data: &[u8],
+        artifact_type: ArtifactType,
+        creator: &str,
+        timestamp_ms: u64,
+        commitment_hash: [u8; 32],
+    ) -> Result<[u8; 32], ArtifactRegistryError> {
+        let pre_count = self.inner.count();
+        let result = self
+            .inner
+            .store_for_commitment(data, artifact_type, creator, timestamp_ms, commitment_hash);
+
+        match &result {
+            Ok(hash) => {
+                let post_count = self.inner.count();
+                let event_type = if post_count > pre_count {
+                    AuditEventType::Store
+                } else {
+                    AuditEventType::StoreDuplicate
+                };
+
+                self.audit_log.record(
+                    AuditEntry::new(timestamp_ms, event_type)
+                        .with_hash(*hash)
+                        .with_artifact_type(artifact_type)
+                        .with_size(data.len())
+                        .with_creator(creator)
+                        .with_commitment(commitment_hash),
+                );
+            }
+            Err(e) => {
+                let hash: [u8; 32] = blake3::hash(data).into();
+                self.audit_log.record(
+                    AuditEntry::new(timestamp_ms, AuditEventType::StoreFailed)
+                        .with_hash(hash)
+                        .with_artifact_type(artifact_type)
+                        .with_size(data.len())
+                        .with_creator(creator)
+                        .with_commitment(commitment_hash)
+                        .with_details(&e.to_string()),
+                );
+            }
+        }
+
+        result
+    }
+
+    fn get(&self, hash: &[u8; 32]) -> Result<(Vec<u8>, ArtifactMetadata), ArtifactRegistryError> {
+        // Note: We can't record audit entries here because &self is immutable.
+        // For full audit coverage of reads, use get_with_audit() instead.
+        self.inner.get(hash)
+    }
+
+    fn contains(&self, hash: &[u8; 32]) -> bool {
+        self.inner.contains(hash)
+    }
+
+    fn get_metadata(&self, hash: &[u8; 32]) -> Result<ArtifactMetadata, ArtifactRegistryError> {
+        self.inner.get_metadata(hash)
+    }
+
+    fn remove(
+        &mut self,
+        hash: &[u8; 32],
+    ) -> Result<(Vec<u8>, ArtifactMetadata), ArtifactRegistryError> {
+        let result = self.inner.remove(hash);
+
+        // Use current time placeholder; caller should provide timestamp if needed
+        let timestamp_ms = 0;
+
+        match &result {
+            Ok((data, metadata)) => {
+                self.audit_log.record(
+                    AuditEntry::new(timestamp_ms, AuditEventType::Remove)
+                        .with_hash(*hash)
+                        .with_artifact_type(metadata.artifact_type)
+                        .with_size(data.len())
+                        .with_creator(&metadata.creator),
+                );
+            }
+            Err(_) => {
+                self.audit_log.record(
+                    AuditEntry::new(timestamp_ms, AuditEventType::FetchNotFound).with_hash(*hash),
+                );
+            }
+        }
+
+        result
+    }
+
+    fn get_by_commitment(&self, commitment_hash: &[u8; 32]) -> Vec<[u8; 32]> {
+        self.inner.get_by_commitment(commitment_hash)
+    }
+
+    fn total_size(&self) -> usize {
+        self.inner.total_size()
+    }
+
+    fn count(&self) -> usize {
+        self.inner.count()
+    }
+
+    fn find_missing(&self, hashes: &[[u8; 32]]) -> Vec<[u8; 32]> {
+        self.inner.find_missing(hashes)
+    }
+
+    fn handle_artifact_request(&self, request: &ArtifactRequest) -> ArtifactResponse {
+        // Note: immutable method, can't log here. Use handle_artifact_request_with_audit().
+        self.inner.handle_artifact_request(request)
+    }
+
+    fn process_backfill_response(
+        &mut self,
+        response: &ArtifactResponse,
+        timestamp_ms: u64,
+    ) -> BackfillResult {
+        let result = self
+            .inner
+            .process_backfill_response(response, timestamp_ms);
+
+        // Log the overall backfill result
+        self.audit_log.record(
+            AuditEntry::new(timestamp_ms, AuditEventType::BackfillResponseProcessed)
+                .with_count(result.total_processed())
+                .with_details(&format!(
+                    "stored={}, duplicates={}, hash_mismatch={}, failed={}",
+                    result.stored.len(),
+                    result.already_present.len(),
+                    result.hash_mismatch.len(),
+                    result.storage_failed.len()
+                )),
+        );
+
+        // Log individual hash mismatches (security events)
+        for hash in &result.hash_mismatch {
+            self.audit_log.record(
+                AuditEntry::new(timestamp_ms, AuditEventType::BackfillHashMismatch).with_hash(*hash),
+            );
+        }
+
+        result
+    }
+}
+
+impl<R: ArtifactRegistry, L: AuditLog> AuditedArtifactRegistry<R, L> {
+    /// Get an artifact with full audit logging.
+    ///
+    /// Unlike the trait method `get()`, this method takes `&mut self` to
+    /// allow recording audit entries for both successful and failed fetches.
+    pub fn get_with_audit(
+        &mut self,
+        hash: &[u8; 32],
+        timestamp_ms: u64,
+    ) -> Result<(Vec<u8>, ArtifactMetadata), ArtifactRegistryError> {
+        let result = self.inner.get(hash);
+
+        match &result {
+            Ok((data, metadata)) => {
+                self.audit_log.record(
+                    AuditEntry::new(timestamp_ms, AuditEventType::Fetch)
+                        .with_hash(*hash)
+                        .with_artifact_type(metadata.artifact_type)
+                        .with_size(data.len()),
+                );
+            }
+            Err(ArtifactRegistryError::NotFound { .. }) => {
+                self.audit_log.record(
+                    AuditEntry::new(timestamp_ms, AuditEventType::FetchNotFound).with_hash(*hash),
+                );
+            }
+            Err(ArtifactRegistryError::HashMismatch { .. }) => {
+                self.audit_log.record(
+                    AuditEntry::new(timestamp_ms, AuditEventType::FetchCorrupted).with_hash(*hash),
+                );
+            }
+            Err(_) => {
+                // Other errors (shouldn't happen for get)
+            }
+        }
+
+        result
+    }
+
+    /// Handle an artifact request with full audit logging.
+    ///
+    /// Unlike the trait method, this records the request in the audit log.
+    pub fn handle_artifact_request_with_audit(
+        &mut self,
+        request: &ArtifactRequest,
+        timestamp_ms: u64,
+    ) -> ArtifactResponse {
+        let response = self.inner.handle_artifact_request(request);
+
+        self.audit_log.record(
+            AuditEntry::new(timestamp_ms, AuditEventType::BackfillRequestReceived)
+                .with_count(request.artifact_hashes.len())
+                .with_details(&format!(
+                    "requested={}, found={}, missing={}",
+                    request.artifact_hashes.len(),
+                    response.artifacts.len(),
+                    response.missing.len()
+                )),
+        );
+
+        // Log each miss
+        for hash in &response.missing {
+            self.audit_log.record(
+                AuditEntry::new(timestamp_ms, AuditEventType::FetchNotFound).with_hash(*hash),
+            );
+        }
+
+        response
+    }
+}
+
 /// Trait for artifact storage backends.
 ///
 /// This trait allows different storage implementations:
@@ -1181,5 +1741,381 @@ mod tests {
         let (retrieved2, _) = dest.get(&hash2).unwrap();
         assert_eq!(retrieved1, data1);
         assert_eq!(retrieved2, data2);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Audit Logging Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_audit_event_type_as_str() {
+        assert_eq!(AuditEventType::Store.as_str(), "store");
+        assert_eq!(AuditEventType::StoreDuplicate.as_str(), "store_duplicate");
+        assert_eq!(AuditEventType::StoreFailed.as_str(), "store_failed");
+        assert_eq!(AuditEventType::Fetch.as_str(), "fetch");
+        assert_eq!(AuditEventType::FetchNotFound.as_str(), "fetch_not_found");
+        assert_eq!(AuditEventType::FetchCorrupted.as_str(), "fetch_corrupted");
+        assert_eq!(AuditEventType::Remove.as_str(), "remove");
+        assert_eq!(
+            AuditEventType::BackfillRequestReceived.as_str(),
+            "backfill_request_received"
+        );
+        assert_eq!(
+            AuditEventType::BackfillResponseProcessed.as_str(),
+            "backfill_response_processed"
+        );
+        assert_eq!(
+            AuditEventType::BackfillHashMismatch.as_str(),
+            "backfill_hash_mismatch"
+        );
+    }
+
+    #[test]
+    fn test_audit_entry_builder() {
+        let entry = AuditEntry::new(1000, AuditEventType::Store)
+            .with_hash([1u8; 32])
+            .with_artifact_type(ArtifactType::EncryptionKey)
+            .with_size(256)
+            .with_creator("dealer")
+            .with_commitment([2u8; 32])
+            .with_details("test details")
+            .with_count(5);
+
+        assert_eq!(entry.timestamp_ms, 1000);
+        assert_eq!(entry.event_type, AuditEventType::Store);
+        assert_eq!(entry.artifact_hash, Some([1u8; 32]));
+        assert_eq!(entry.artifact_type, Some(ArtifactType::EncryptionKey));
+        assert_eq!(entry.size_bytes, Some(256));
+        assert_eq!(entry.creator, Some("dealer".to_string()));
+        assert_eq!(entry.commitment_hash, Some([2u8; 32]));
+        assert_eq!(entry.details, Some("test details".to_string()));
+        assert_eq!(entry.count, Some(5));
+    }
+
+    #[test]
+    fn test_in_memory_audit_log_record_and_retrieve() {
+        let mut log = InMemoryAuditLog::new();
+
+        assert!(log.is_empty());
+        assert_eq!(log.len(), 0);
+
+        log.record(AuditEntry::new(1, AuditEventType::Store).with_hash([1u8; 32]));
+        log.record(AuditEntry::new(2, AuditEventType::Fetch).with_hash([2u8; 32]));
+
+        assert!(!log.is_empty());
+        assert_eq!(log.len(), 2);
+        assert_eq!(log.entries().len(), 2);
+    }
+
+    #[test]
+    fn test_in_memory_audit_log_filter_by_type() {
+        let mut log = InMemoryAuditLog::new();
+
+        log.record(AuditEntry::new(1, AuditEventType::Store).with_hash([1u8; 32]));
+        log.record(AuditEntry::new(2, AuditEventType::Store).with_hash([2u8; 32]));
+        log.record(AuditEntry::new(3, AuditEventType::Fetch).with_hash([3u8; 32]));
+        log.record(AuditEntry::new(4, AuditEventType::FetchNotFound).with_hash([4u8; 32]));
+
+        let stores = log.entries_by_type(AuditEventType::Store);
+        assert_eq!(stores.len(), 2);
+
+        let fetches = log.entries_by_type(AuditEventType::Fetch);
+        assert_eq!(fetches.len(), 1);
+
+        let not_found = log.entries_by_type(AuditEventType::FetchNotFound);
+        assert_eq!(not_found.len(), 1);
+    }
+
+    #[test]
+    fn test_in_memory_audit_log_filter_by_artifact() {
+        let mut log = InMemoryAuditLog::new();
+        let hash = [42u8; 32];
+
+        log.record(AuditEntry::new(1, AuditEventType::Store).with_hash(hash));
+        log.record(AuditEntry::new(2, AuditEventType::Fetch).with_hash(hash));
+        log.record(AuditEntry::new(3, AuditEventType::Store).with_hash([99u8; 32]));
+
+        let artifact_entries = log.entries_for_artifact(&hash);
+        assert_eq!(artifact_entries.len(), 2);
+        assert!(artifact_entries.iter().all(|e| e.artifact_hash == Some(hash)));
+    }
+
+    #[test]
+    fn test_in_memory_audit_log_max_entries() {
+        let mut log = InMemoryAuditLog::with_max_entries(3);
+
+        log.record(AuditEntry::new(1, AuditEventType::Store));
+        log.record(AuditEntry::new(2, AuditEventType::Store));
+        log.record(AuditEntry::new(3, AuditEventType::Store));
+
+        assert_eq!(log.len(), 3);
+        assert_eq!(log.entries()[0].timestamp_ms, 1);
+
+        // Adding 4th should evict the oldest
+        log.record(AuditEntry::new(4, AuditEventType::Store));
+        assert_eq!(log.len(), 3);
+        assert_eq!(log.entries()[0].timestamp_ms, 2); // First entry evicted
+        assert_eq!(log.entries()[2].timestamp_ms, 4); // New entry added
+    }
+
+    #[test]
+    fn test_in_memory_audit_log_clear() {
+        let mut log = InMemoryAuditLog::new();
+
+        log.record(AuditEntry::new(1, AuditEventType::Store));
+        log.record(AuditEntry::new(2, AuditEventType::Fetch));
+
+        assert_eq!(log.len(), 2);
+
+        log.clear();
+
+        assert!(log.is_empty());
+        assert_eq!(log.len(), 0);
+    }
+
+    #[test]
+    fn test_audited_registry_logs_store() {
+        let registry = InMemoryArtifactRegistry::new();
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        let data = b"test data";
+        let hash = audited
+            .store(data, ArtifactType::EncryptionKey, "dealer", 1000)
+            .unwrap();
+
+        assert_eq!(audited.audit_log().len(), 1);
+        let entry = &audited.audit_log().entries()[0];
+        assert_eq!(entry.event_type, AuditEventType::Store);
+        assert_eq!(entry.artifact_hash, Some(hash));
+        assert_eq!(entry.artifact_type, Some(ArtifactType::EncryptionKey));
+        assert_eq!(entry.size_bytes, Some(data.len()));
+        assert_eq!(entry.creator, Some("dealer".to_string()));
+        assert_eq!(entry.timestamp_ms, 1000);
+    }
+
+    #[test]
+    fn test_audited_registry_logs_duplicate_store() {
+        let registry = InMemoryArtifactRegistry::new();
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        let data = b"duplicate data";
+
+        // First store
+        audited
+            .store(data, ArtifactType::ZkProof, "dealer", 1)
+            .unwrap();
+        assert_eq!(audited.audit_log().entries()[0].event_type, AuditEventType::Store);
+
+        // Second store (duplicate)
+        audited
+            .store(data, ArtifactType::ZkProof, "dealer", 2)
+            .unwrap();
+        assert_eq!(audited.audit_log().entries()[1].event_type, AuditEventType::StoreDuplicate);
+    }
+
+    #[test]
+    fn test_audited_registry_logs_store_failure() {
+        let config = RegistryConfig {
+            max_artifact_size: 10,
+            max_total_size: 1000,
+            allow_overwrite: false,
+        };
+        let registry = InMemoryArtifactRegistry::with_config(config);
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        let large_data = vec![0u8; 50]; // Too large
+        let result = audited.store(&large_data, ArtifactType::Other, "test", 1000);
+
+        assert!(result.is_err());
+        assert_eq!(audited.audit_log().len(), 1);
+        let entry = &audited.audit_log().entries()[0];
+        assert_eq!(entry.event_type, AuditEventType::StoreFailed);
+        assert!(entry.details.is_some());
+        assert!(entry.details.as_ref().unwrap().contains("exceeds maximum"));
+    }
+
+    #[test]
+    fn test_audited_registry_get_with_audit() {
+        let registry = InMemoryArtifactRegistry::new();
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        let data = b"fetch test";
+        let hash = audited
+            .store(data, ArtifactType::ShuffleProof, "dealer", 1)
+            .unwrap();
+
+        audited.audit_log_mut().clear();
+
+        // Successful fetch
+        let (retrieved, _) = audited.get_with_audit(&hash, 2000).unwrap();
+        assert_eq!(retrieved, data);
+        assert_eq!(audited.audit_log().len(), 1);
+        assert_eq!(audited.audit_log().entries()[0].event_type, AuditEventType::Fetch);
+
+        // Failed fetch (not found)
+        let missing_hash = [99u8; 32];
+        let result = audited.get_with_audit(&missing_hash, 3000);
+        assert!(result.is_err());
+        assert_eq!(audited.audit_log().len(), 2);
+        assert_eq!(
+            audited.audit_log().entries()[1].event_type,
+            AuditEventType::FetchNotFound
+        );
+    }
+
+    #[test]
+    fn test_audited_registry_logs_remove() {
+        let registry = InMemoryArtifactRegistry::new();
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        let data = b"remove test";
+        let hash = audited
+            .store(data, ArtifactType::EncryptedShare, "seat_0", 1)
+            .unwrap();
+
+        audited.audit_log_mut().clear();
+
+        // Remove
+        audited.remove(&hash).unwrap();
+        assert_eq!(audited.audit_log().len(), 1);
+        assert_eq!(audited.audit_log().entries()[0].event_type, AuditEventType::Remove);
+
+        // Try to remove again (not found)
+        let result = audited.remove(&hash);
+        assert!(result.is_err());
+        assert_eq!(audited.audit_log().len(), 2);
+        assert_eq!(
+            audited.audit_log().entries()[1].event_type,
+            AuditEventType::FetchNotFound
+        );
+    }
+
+    #[test]
+    fn test_audited_registry_logs_backfill_response() {
+        use protocol_messages::ProtocolVersion;
+
+        let registry = InMemoryArtifactRegistry::new();
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        let data1 = b"backfill artifact 1";
+        let hash1: [u8; 32] = blake3::hash(data1).into();
+
+        let response = ArtifactResponse {
+            version: ProtocolVersion::current(),
+            artifacts: vec![(hash1, data1.to_vec())],
+            missing: vec![],
+        };
+
+        let result = audited.process_backfill_response(&response, 5000);
+        assert_eq!(result.stored.len(), 1);
+
+        // Should log the backfill response processed event
+        let log = audited.audit_log();
+        assert!(log.entries_by_type(AuditEventType::BackfillResponseProcessed).len() >= 1);
+    }
+
+    #[test]
+    fn test_audited_registry_logs_backfill_hash_mismatch() {
+        use protocol_messages::ProtocolVersion;
+
+        let registry = InMemoryArtifactRegistry::new();
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        let data = b"actual data";
+        let claimed_hash = [42u8; 32]; // Wrong hash
+
+        let response = ArtifactResponse {
+            version: ProtocolVersion::current(),
+            artifacts: vec![(claimed_hash, data.to_vec())],
+            missing: vec![],
+        };
+
+        let result = audited.process_backfill_response(&response, 5000);
+        assert_eq!(result.hash_mismatch.len(), 1);
+
+        // Should log the hash mismatch
+        let mismatches = audited
+            .audit_log()
+            .entries_by_type(AuditEventType::BackfillHashMismatch);
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].artifact_hash, Some(claimed_hash));
+    }
+
+    #[test]
+    fn test_audited_registry_handle_request_with_audit() {
+        use protocol_messages::ProtocolVersion;
+
+        let registry = InMemoryArtifactRegistry::new();
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        // Store some artifacts
+        let data = b"available artifact";
+        let hash = audited
+            .store(data, ArtifactType::ZkProof, "dealer", 1)
+            .unwrap();
+
+        audited.audit_log_mut().clear();
+
+        let missing_hash = [99u8; 32];
+        let request = ArtifactRequest {
+            version: ProtocolVersion::current(),
+            artifact_hashes: vec![hash, missing_hash],
+            commitment_hash: None,
+        };
+
+        let response = audited.handle_artifact_request_with_audit(&request, 2000);
+        assert_eq!(response.artifacts.len(), 1);
+        assert_eq!(response.missing.len(), 1);
+
+        // Should log request received and the miss
+        let log = audited.audit_log();
+        assert_eq!(
+            log.entries_by_type(AuditEventType::BackfillRequestReceived)
+                .len(),
+            1
+        );
+        assert_eq!(log.entries_by_type(AuditEventType::FetchNotFound).len(), 1);
+    }
+
+    #[test]
+    fn test_audited_registry_store_for_commitment() {
+        let registry = InMemoryArtifactRegistry::new();
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        let data = b"commitment artifact";
+        let commitment_hash = [42u8; 32];
+
+        let hash = audited
+            .store_for_commitment(data, ArtifactType::ShuffleProof, "dealer", 1000, commitment_hash)
+            .unwrap();
+
+        let entry = &audited.audit_log().entries()[0];
+        assert_eq!(entry.event_type, AuditEventType::Store);
+        assert_eq!(entry.artifact_hash, Some(hash));
+        assert_eq!(entry.commitment_hash, Some(commitment_hash));
+    }
+
+    #[test]
+    fn test_audited_registry_into_parts() {
+        let registry = InMemoryArtifactRegistry::new();
+        let audit_log = InMemoryAuditLog::new();
+        let mut audited = AuditedArtifactRegistry::new(registry, audit_log);
+
+        audited
+            .store(b"test", ArtifactType::Other, "test", 0)
+            .unwrap();
+
+        let (inner, log) = audited.into_parts();
+        assert_eq!(inner.count(), 1);
+        assert_eq!(log.len(), 1);
     }
 }

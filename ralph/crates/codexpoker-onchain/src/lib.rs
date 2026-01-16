@@ -81,8 +81,9 @@ pub mod artifact_registry;
 pub mod messages;
 
 pub use artifact_registry::{
-    ArtifactMetadata, ArtifactRegistry, ArtifactRegistryError, ArtifactType, BackfillResult,
-    InMemoryArtifactRegistry, RegistryConfig, DEFAULT_MAX_ARTIFACT_SIZE, DEFAULT_MAX_TOTAL_SIZE,
+    ArtifactMetadata, ArtifactRegistry, ArtifactRegistryError, ArtifactType, AuditEntry,
+    AuditEventType, AuditLog, AuditedArtifactRegistry, BackfillResult, InMemoryArtifactRegistry,
+    InMemoryAuditLog, RegistryConfig, DEFAULT_MAX_ARTIFACT_SIZE, DEFAULT_MAX_TOTAL_SIZE,
 };
 pub use messages::{
     action_codes, ActionLogValidator, ConsensusPayload, GameActionMessage, NoOpTimelockVerifier,

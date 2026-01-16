@@ -65,11 +65,11 @@
 
 ### M4: Artifact Registry and Availability
 
-- [ ] Implement artifact registry (`artifact_hash -> bytes + metadata`).
-- [ ] Add `deal_commitment_hash -> [artifact_hash]` index.
-- [ ] Enforce size bounds on persistence and serving.
-- [ ] Add backfill path for missing artifacts.
-- [ ] Add audit logs for artifact fetches and misses.
+- [x] Implement artifact registry (`artifact_hash -> bytes + metadata`).
+- [x] Add `deal_commitment_hash -> [artifact_hash]` index.
+- [x] Enforce size bounds on persistence and serving.
+- [x] Add backfill path for missing artifacts.
+- [x] Add audit logs for artifact fetches and misses.
 
 **Exit criteria**
 - Validators can fetch artifacts by hash after restart.
