@@ -83,6 +83,7 @@
 
 mod payload;
 pub mod exports;
+pub mod golden_vectors;
 
 pub use payload::{
     ArtifactRequest, ArtifactResponse, DealCommitment, DealCommitmentAck, ProtocolVersion,

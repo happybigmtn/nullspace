@@ -7,6 +7,10 @@ description = "Canonical message formats for protocol hardening (commitment, rev
 
 [dependencies]
 blake3.workspace = true
+hex = "0.4"
 serde.workspace = true
 serde_json = "1"
 thiserror.workspace = true
+
+[dev-dependencies]
+hex = "0.4"

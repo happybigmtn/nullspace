@@ -289,3 +289,209 @@ fn test_export_size_bounds_match_crate_ac_1_1() {
         MAX_ARTIFACT_SIZE as u64
     );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Golden Vectors Tests (AC-3.2, AC-4.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// AC-3.2, AC-4.2: Export binary produces valid golden vectors JSON output.
+#[test]
+fn test_export_golden_vectors_valid_ac_3_2_ac_4_2() {
+    let (success, stdout, stderr) = run_export(&["--golden-vectors"]);
+
+    assert!(
+        success,
+        "export_protocol --golden-vectors should succeed. stderr: {}",
+        stderr
+    );
+
+    // Parse the output as JSON
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("Golden vectors output should be valid JSON");
+
+    // Required top-level fields
+    assert!(
+        parsed.get("schema_version").is_some(),
+        "schema_version missing in golden vectors"
+    );
+    assert!(
+        parsed.get("vectors").is_some(),
+        "vectors missing in golden vectors"
+    );
+
+    // Vectors should be a non-empty array
+    let vectors = parsed["vectors"].as_array().expect("vectors should be an array");
+    assert!(
+        !vectors.is_empty(),
+        "vectors array should not be empty"
+    );
+}
+
+/// AC-4.2: Golden vectors export is deterministic.
+#[test]
+fn test_export_golden_vectors_deterministic_ac_4_2() {
+    let (success1, stdout1, _) = run_export(&["--golden-vectors"]);
+    let (success2, stdout2, _) = run_export(&["--golden-vectors"]);
+
+    assert!(success1 && success2, "Both golden vector runs should succeed");
+    assert_eq!(
+        stdout1, stdout2,
+        "Golden vectors export should be deterministic across runs"
+    );
+}
+
+/// AC-3.2, AC-4.2: Golden vectors contain expected message types.
+#[test]
+fn test_export_golden_vectors_coverage_ac_3_2() {
+    let (success, stdout, _) = run_export(&["--golden-vectors"]);
+    assert!(success, "export should succeed");
+
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let vectors = parsed["vectors"].as_array().unwrap();
+
+    // Check for expected message types
+    let message_types: Vec<&str> = vectors
+        .iter()
+        .map(|v| v["message_type"].as_str().unwrap())
+        .collect();
+
+    assert!(
+        message_types.contains(&"ScopeBinding"),
+        "Should have ScopeBinding vectors"
+    );
+    assert!(
+        message_types.contains(&"ShuffleContext"),
+        "Should have ShuffleContext vectors"
+    );
+    assert!(
+        message_types.contains(&"DealCommitment"),
+        "Should have DealCommitment vectors"
+    );
+    assert!(
+        message_types.contains(&"DealCommitmentAck"),
+        "Should have DealCommitmentAck vectors"
+    );
+    assert!(
+        message_types.contains(&"RevealShare"),
+        "Should have RevealShare vectors"
+    );
+    assert!(
+        message_types.contains(&"TimelockReveal"),
+        "Should have TimelockReveal vectors"
+    );
+    assert!(
+        message_types.contains(&"ArtifactRequest"),
+        "Should have ArtifactRequest vectors"
+    );
+    assert!(
+        message_types.contains(&"ArtifactResponse"),
+        "Should have ArtifactResponse vectors"
+    );
+}
+
+/// AC-3.2: Golden vectors contain hex-encoded preimages.
+#[test]
+fn test_export_golden_vectors_hex_format_ac_3_2() {
+    let (success, stdout, _) = run_export(&["--golden-vectors"]);
+    assert!(success, "export should succeed");
+
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let vectors = parsed["vectors"].as_array().unwrap();
+
+    for vector in vectors {
+        let name = vector["name"].as_str().unwrap();
+
+        // preimage_hex should be present and valid hex
+        let preimage_hex = vector["preimage_hex"]
+            .as_str()
+            .expect(&format!("Vector '{}' missing preimage_hex", name));
+        assert!(
+            hex::decode(preimage_hex).is_ok(),
+            "Vector '{}' preimage_hex should be valid hex",
+            name
+        );
+
+        // hash_hex should be present and valid hex (32 bytes = 64 hex chars)
+        let hash_hex = vector["hash_hex"]
+            .as_str()
+            .expect(&format!("Vector '{}' missing hash_hex", name));
+        let hash_bytes = hex::decode(hash_hex)
+            .expect(&format!("Vector '{}' hash_hex should be valid hex", name));
+        assert_eq!(
+            hash_bytes.len(),
+            32,
+            "Vector '{}' hash should be 32 bytes",
+            name
+        );
+
+        // preimage_length should match actual preimage length
+        let preimage_length = vector["preimage_length"].as_u64().unwrap() as usize;
+        let actual_length = hex::decode(preimage_hex).unwrap().len();
+        assert_eq!(
+            preimage_length, actual_length,
+            "Vector '{}' preimage_length should match actual length",
+            name
+        );
+    }
+}
+
+/// AC-4.2: Golden vectors file output works.
+#[test]
+fn test_export_golden_vectors_to_file_ac_4_2() {
+    let temp_dir = std::env::temp_dir();
+    let output_path = temp_dir.join("golden_vectors_export_test.json");
+
+    // Clean up any previous test file
+    let _ = std::fs::remove_file(&output_path);
+
+    let (success, _stdout, stderr) =
+        run_export(&["--golden-vectors", "--output", output_path.to_str().unwrap()]);
+
+    assert!(
+        success,
+        "export_protocol --golden-vectors --output should succeed. stderr: {}",
+        stderr
+    );
+
+    // Verify file was created
+    assert!(output_path.exists(), "Output file should be created");
+
+    // Read and parse the file
+    let contents = std::fs::read_to_string(&output_path).expect("Should read output file");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&contents).expect("File contents should be valid JSON");
+
+    // Verify it has vectors
+    assert!(
+        parsed.get("vectors").is_some(),
+        "Golden vectors file should contain vectors"
+    );
+
+    // Clean up
+    let _ = std::fs::remove_file(&output_path);
+}
+
+/// AC-4.2: Golden vectors compact output works.
+#[test]
+fn test_export_golden_vectors_compact_ac_4_2() {
+    let (success, stdout, stderr) = run_export(&["--golden-vectors", "--compact"]);
+
+    assert!(
+        success,
+        "export_protocol --golden-vectors --compact should succeed. stderr: {}",
+        stderr
+    );
+
+    // Compact output should not contain pretty-print newlines
+    // (may have trailing newline, so we check for internal structure)
+    let trimmed = stdout.trim();
+    let internal_newlines = trimmed.matches('\n').count();
+    assert_eq!(
+        internal_newlines, 0,
+        "Compact golden vectors should not have internal newlines"
+    );
+
+    // Should still be valid JSON
+    let _parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("Compact output should be valid JSON");
+}

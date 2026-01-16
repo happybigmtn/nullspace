@@ -158,10 +158,11 @@
   - Tests: AC-2.1, AC-2.2
   - Perceptual: None
   - N/A: Gateway does not exist in this repository.
-- [ ] Add golden vector parity tests between Rust and JS/TS (encode/decode).
+- [x] Add golden vector parity tests between Rust and JS/TS (encode/decode).
   - Tests: AC-3.2, AC-4.2
   - Perceptual: None
   - Note: Rust-side golden vector generation is in scope; JS/TS validation is in separate repositories.
+  - Implemented: `golden_vectors.rs` module with `GoldenVectors::canonical()` generating 13 test vectors covering all message types; `export_protocol --golden-vectors` CLI option exports JSON for JS/TS consumption; 30 new tests in `golden_vectors.rs` (parity, frozen hex, determinism, coverage) + 6 CLI integration tests; frozen hash test ensures encoding stability across releases.
 
 **Exit criteria**
 - Protocol decoding/encoding has a single canonical source and parity tests pass.

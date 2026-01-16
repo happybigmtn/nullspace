@@ -42,6 +42,7 @@
 //! ```
 
 use protocol_messages::exports::{export_json, export_json_compact, ProtocolExports};
+use protocol_messages::golden_vectors::{export_golden_vectors_json, export_golden_vectors_json_compact};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -52,6 +53,7 @@ fn main() {
     let mut output_path: Option<String> = None;
     let mut compact = false;
     let mut typescript = false;
+    let mut golden_vectors = false;
 
     // Parse arguments
     let mut i = 1;
@@ -74,6 +76,10 @@ fn main() {
                 typescript = true;
                 i += 1;
             }
+            "--golden-vectors" | "-g" => {
+                golden_vectors = true;
+                i += 1;
+            }
             "--help" | "-h" => {
                 print_help();
                 return;
@@ -87,7 +93,13 @@ fn main() {
     }
 
     // Generate output
-    let output = if typescript {
+    let output = if golden_vectors {
+        if compact {
+            export_golden_vectors_json_compact()
+        } else {
+            export_golden_vectors_json()
+        }
+    } else if typescript {
         generate_typescript()
     } else if compact {
         export_json_compact()
@@ -123,6 +135,7 @@ Options:
   -o, --output <PATH>  Write output to file instead of stdout
   -c, --compact        Output compact JSON (no whitespace)
   -t, --typescript     Output TypeScript type definitions
+  -g, --golden-vectors Output golden vectors for encode/decode parity testing (AC-3.2, AC-4.2)
   -h, --help           Show this help message
 
 Examples:
@@ -130,6 +143,8 @@ Examples:
   export_protocol --compact                 # Print compact JSON
   export_protocol -o protocol.json          # Write to file
   export_protocol --typescript -o types.ts  # Generate TypeScript
+  export_protocol --golden-vectors          # Print golden vectors JSON
+  export_protocol -g -o vectors.json        # Save golden vectors to file
 "#
     );
 }
