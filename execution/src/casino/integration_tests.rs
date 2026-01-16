@@ -811,4 +811,78 @@ mod tests {
             "ERROR_BRIDGE_DISABLED should be code 20"
         );
     }
+
+    /// Test that ERROR_FEATURE_DISABLED surfaces cleanly via CasinoError event.
+    /// Per AC-1.1 (liquidity-staking-deferment.md): "Liquidity and staking instructions
+    /// are rejected with a clear error code (e.g., `feature_disabled`)."
+    #[test]
+    fn test_feature_disabled_surfaces_via_casino_error() {
+        use commonware_codec::{Encode, ReadExt};
+        use nullspace_types::casino::ERROR_FEATURE_DISABLED;
+        use nullspace_types::execution::Event;
+
+        let (_, player) = create_account_keypair(1);
+
+        // Create a CasinoError event with ERROR_FEATURE_DISABLED
+        let event = Event::CasinoError {
+            player: player.clone(),
+            session_id: None,
+            error_code: ERROR_FEATURE_DISABLED,
+            message: "AMM/staking/liquidity disabled".to_string(),
+        };
+
+        // Verify round-trip encoding/decoding preserves the error code
+        let encoded = event.encode();
+        let mut slice = encoded.as_ref();
+        let decoded = Event::read(&mut slice).expect("decode should succeed");
+
+        if let Event::CasinoError {
+            error_code,
+            message,
+            ..
+        } = decoded
+        {
+            assert_eq!(error_code, ERROR_FEATURE_DISABLED);
+            assert_eq!(message, "AMM/staking/liquidity disabled");
+        } else {
+            panic!("Expected CasinoError event");
+        }
+    }
+
+    /// Test that ERROR_BRIDGE_DISABLED surfaces cleanly via CasinoError event.
+    /// Per AC-1.1 (evm-bridge-deferment.md): "Bridge-related instructions are rejected
+    /// with a clear error (e.g., `bridge_disabled`) and do not mutate state."
+    #[test]
+    fn test_bridge_disabled_surfaces_via_casino_error() {
+        use commonware_codec::{Encode, ReadExt};
+        use nullspace_types::casino::ERROR_BRIDGE_DISABLED;
+        use nullspace_types::execution::Event;
+
+        let (_, player) = create_account_keypair(1);
+
+        // Create a CasinoError event with ERROR_BRIDGE_DISABLED
+        let event = Event::CasinoError {
+            player: player.clone(),
+            session_id: None,
+            error_code: ERROR_BRIDGE_DISABLED,
+            message: "Bridge functionality disabled".to_string(),
+        };
+
+        // Verify round-trip encoding/decoding preserves the error code
+        let encoded = event.encode();
+        let mut slice = encoded.as_ref();
+        let decoded = Event::read(&mut slice).expect("decode should succeed");
+
+        if let Event::CasinoError {
+            error_code,
+            message,
+            ..
+        } = decoded
+        {
+            assert_eq!(error_code, ERROR_BRIDGE_DISABLED);
+            assert_eq!(message, "Bridge functionality disabled");
+        } else {
+            panic!("Expected CasinoError event");
+        }
+    }
 }
