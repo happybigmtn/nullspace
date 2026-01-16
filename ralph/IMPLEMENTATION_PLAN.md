@@ -56,7 +56,7 @@
 - [x] Implement per-street reveal gating in onchain state machine.
 - [x] Enforce reveal-only phases (flop/turn/river/showdown).
 - [x] Add reveal timeout (`REVEAL_TTL`) and fallback to timelock.
-- [ ] Enforce timelock scope and proof validation in consensus path.
+- [x] Enforce timelock scope and proof validation in consensus path.
 - [ ] Replace full-deck reveal with selective reveal in all flows.
 
 **Exit criteria**
