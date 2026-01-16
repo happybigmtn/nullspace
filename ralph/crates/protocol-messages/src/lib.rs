@@ -82,6 +82,7 @@
 //! verification must succeed or fail identically across all validators.
 
 mod payload;
+pub mod blackjack;
 pub mod codec;
 pub mod exports;
 pub mod golden_vectors;
