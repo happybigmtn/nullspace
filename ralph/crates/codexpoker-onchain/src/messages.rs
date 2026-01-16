@@ -1040,6 +1040,69 @@ impl ActionLogValidator {
         Ok(())
     }
 
+    /// Validate a payload with timestamp-aware timeout enforcement.
+    ///
+    /// This method performs all validation from [`validate`](Self::validate) plus:
+    /// - Enforces `REVEAL_TTL` timeout for `TimelockReveal` payloads
+    ///
+    /// Use this method in production when consensus provides a timestamp. The
+    /// timestamp should be consistent across all validators (e.g., block timestamp).
+    ///
+    /// # Timeout Enforcement
+    ///
+    /// For `TimelockReveal` payloads:
+    /// - If the validator is in a reveal-only phase with timeout tracking enabled,
+    ///   the timelock is only accepted if `current_time_ms > reveal_phase_entered_at + REVEAL_TTL`
+    /// - If timeout tracking is not enabled (no timestamp was set when entering the phase),
+    ///   the timelock is accepted (backward compatible behavior)
+    ///
+    /// # Arguments
+    ///
+    /// * `payload` - The consensus payload to validate
+    /// * `current_time_ms` - Current unix timestamp in milliseconds (should be consistent across nodes)
+    ///
+    /// # Errors
+    ///
+    /// All errors from [`validate`](Self::validate), plus:
+    /// - [`PayloadError::TimelockRevealBeforeTimeout`] if a `TimelockReveal` is submitted
+    ///   before the reveal timeout has expired
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use codexpoker_onchain::{ActionLogValidator, ConsensusPayload};
+    /// use protocol_messages::{RevealPhase, TimelockReveal, ProtocolVersion};
+    ///
+    /// let mut validator = ActionLogValidator::new();
+    /// // ... setup with commitment and acks ...
+    ///
+    /// // Enter reveal phase with timeout tracking
+    /// let phase_start = 1700000000000u64;
+    /// // validator.enter_reveal_only_phase_with_timeout(RevealPhase::Preflop, phase_start, 0).unwrap();
+    ///
+    /// // Timelock reveal will be rejected if submitted before timeout expires
+    /// // let current_time = phase_start + 10_000; // 10 seconds in
+    /// // let timelock = ConsensusPayload::TimelockReveal(...);
+    /// // assert!(validator.validate_at_time(&timelock, current_time).is_err());
+    ///
+    /// // Timelock reveal will be accepted after timeout expires
+    /// // let current_time = phase_start + 31_000; // 31 seconds in (> REVEAL_TTL)
+    /// // assert!(validator.validate_at_time(&timelock, current_time).is_ok());
+    /// ```
+    pub fn validate_at_time(
+        &mut self,
+        payload: &ConsensusPayload,
+        current_time_ms: u64,
+    ) -> Result<(), PayloadError> {
+        // For TimelockReveal payloads, validate that timeout has expired
+        if let ConsensusPayload::TimelockReveal(_) = payload {
+            self.validate_timelock_allowed(current_time_ms)?;
+        }
+
+        // Delegate to the standard validate method for all other checks
+        self.validate(payload)
+    }
+
     /// Validate an entire action log at once.
     ///
     /// This is a convenience method that processes all payloads in order
@@ -3329,5 +3392,192 @@ mod tests {
         let timeout_result = validator.check_reveal_timeout(t2 + REVEAL_TTL + 5000);
         assert!(timeout_result.is_some());
         assert_eq!(timeout_result.unwrap().0, REVEAL_TTL + 5000);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // validate_at_time integration tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_validate_at_time_rejects_early_timelock() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                0,
+            )
+            .unwrap();
+
+        // Create timelock reveal
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        let payload = ConsensusPayload::TimelockReveal(timelock);
+
+        // Should be rejected before timeout
+        let early_time = start_time + 1000; // 1 second in
+        let result = validator.validate_at_time(&payload, early_time);
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::TimelockRevealBeforeTimeout { .. })
+            ),
+            "timelock should be rejected before TTL expires"
+        );
+
+        if let Err(PayloadError::TimelockRevealBeforeTimeout { phase, remaining_ms }) = result {
+            assert_eq!(phase, protocol_messages::RevealPhase::Preflop);
+            assert_eq!(remaining_ms, REVEAL_TTL - 1000);
+        }
+    }
+
+    #[test]
+    fn test_validate_at_time_accepts_timelock_after_timeout() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                0,
+            )
+            .unwrap();
+
+        // Create timelock reveal
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        let payload = ConsensusPayload::TimelockReveal(timelock);
+
+        // Should be accepted after timeout
+        let late_time = start_time + REVEAL_TTL + 1;
+        assert!(
+            validator.validate_at_time(&payload, late_time).is_ok(),
+            "timelock should be accepted after TTL expires"
+        );
+
+        // Phase should now be complete
+        assert!(validator.is_phase_complete(protocol_messages::RevealPhase::Preflop));
+        assert!(!validator.is_in_reveal_only_phase());
+    }
+
+    #[test]
+    fn test_validate_at_time_allows_regular_reveal_anytime() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                0,
+            )
+            .unwrap();
+
+        // Create regular reveal (not timelock)
+        let reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        let payload = ConsensusPayload::RevealShare(reveal);
+
+        // Regular reveals should be accepted at any time (before timeout)
+        let early_time = start_time + 1000;
+        assert!(
+            validator.validate_at_time(&payload, early_time).is_ok(),
+            "regular reveal should be accepted before timeout"
+        );
+    }
+
+    #[test]
+    fn test_validate_at_time_accepts_game_action() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Not in reveal-only phase, game actions should be allowed
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+        let payload = ConsensusPayload::GameAction(action);
+
+        let current_time = 1700000000000u64;
+        assert!(
+            validator.validate_at_time(&payload, current_time).is_ok(),
+            "game action should be accepted when not in reveal-only phase"
+        );
+    }
+
+    #[test]
+    fn test_validate_at_time_timelock_without_timeout_tracking() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Enter reveal phase WITHOUT timeout tracking (using old method)
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Preflop)
+            .unwrap();
+
+        // Create timelock reveal
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        let payload = ConsensusPayload::TimelockReveal(timelock);
+
+        // Should be accepted immediately (backward compatible behavior)
+        let current_time = 1700000000000u64;
+        assert!(
+            validator.validate_at_time(&payload, current_time).is_ok(),
+            "timelock should be accepted when no timeout tracking"
+        );
+    }
+
+    #[test]
+    fn test_validate_at_time_multiple_phases() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        let t1 = 1700000000000u64;
+
+        // Phase 1: Preflop - complete with regular reveal
+        validator
+            .enter_reveal_only_phase_with_timeout(protocol_messages::RevealPhase::Preflop, t1, 0)
+            .unwrap();
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate_at_time(&ConsensusPayload::RevealShare(preflop), t1 + 5000)
+            .unwrap();
+
+        // Phase 2: Flop - try early timelock, should fail
+        let t2 = t1 + 60_000; // 60 seconds later
+        validator
+            .enter_reveal_only_phase_with_timeout(protocol_messages::RevealPhase::Flop, t2, 1)
+            .unwrap();
+
+        let flop_timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Flop);
+        let early_time = t2 + 10_000; // 10 seconds in (before timeout)
+        let result = validator.validate_at_time(
+            &ConsensusPayload::TimelockReveal(flop_timelock.clone()),
+            early_time,
+        );
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::TimelockRevealBeforeTimeout { .. })
+            ),
+            "flop timelock should be rejected before timeout"
+        );
+
+        // Now wait for timeout and try again
+        let late_time = t2 + REVEAL_TTL + 1;
+        assert!(
+            validator
+                .validate_at_time(&ConsensusPayload::TimelockReveal(flop_timelock), late_time)
+                .is_ok(),
+            "flop timelock should be accepted after timeout"
+        );
+
+        assert!(validator.is_phase_complete(protocol_messages::RevealPhase::Flop));
     }
 }
