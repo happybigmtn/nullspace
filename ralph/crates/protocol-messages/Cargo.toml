@@ -1,0 +1,11 @@
+[package]
+name = "protocol-messages"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Canonical message formats for protocol hardening (commitment, reveal, timelock)"
+
+[dependencies]
+blake3.workspace = true
+serde.workspace = true
+thiserror.workspace = true

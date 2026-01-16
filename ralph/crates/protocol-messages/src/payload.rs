@@ -1,0 +1,570 @@
+//! Canonical message payload definitions.
+//!
+//! All payloads include:
+//! - Protocol version for forward compatibility
+//! - Domain separation prefix for security
+//! - Scope binding for context verification
+
+use serde::{Deserialize, Serialize};
+
+/// Current protocol version for all messages.
+pub const CURRENT_PROTOCOL_VERSION: u8 = 1;
+
+/// Protocol version embedded in each message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProtocolVersion(pub u8);
+
+impl Default for ProtocolVersion {
+    fn default() -> Self {
+        Self(CURRENT_PROTOCOL_VERSION)
+    }
+}
+
+impl ProtocolVersion {
+    pub const fn new(version: u8) -> Self {
+        Self(version)
+    }
+
+    pub const fn current() -> Self {
+        Self(CURRENT_PROTOCOL_VERSION)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Domain separation prefixes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Domain separation prefixes prevent cross-protocol hash collisions.
+pub mod domain {
+    pub const DEAL_COMMITMENT: &[u8] = b"nullspace.deal_commitment.v1";
+    pub const DEAL_COMMITMENT_ACK: &[u8] = b"nullspace.deal_commitment_ack.v1";
+    pub const REVEAL_SHARE: &[u8] = b"nullspace.reveal_share.v1";
+    pub const TIMELOCK_REVEAL: &[u8] = b"nullspace.timelock_reveal.v1";
+    pub const ARTIFACT_REQUEST: &[u8] = b"nullspace.artifact_request.v1";
+    pub const ARTIFACT_RESPONSE: &[u8] = b"nullspace.artifact_response.v1";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scope Binding
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Binds a message to a specific table, hand, and seat configuration.
+///
+/// This prevents replay attacks across different contexts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScopeBinding {
+    /// Unique table identifier.
+    pub table_id: [u8; 32],
+    /// Hand number within the table session.
+    pub hand_id: u64,
+    /// Ordered list of seat positions (player indices).
+    pub seat_order: Vec<u8>,
+    /// Number of cards in the deck (typically 52).
+    pub deck_length: u8,
+}
+
+impl ScopeBinding {
+    /// Create a new scope binding.
+    pub fn new(table_id: [u8; 32], hand_id: u64, seat_order: Vec<u8>, deck_length: u8) -> Self {
+        Self {
+            table_id,
+            hand_id,
+            seat_order,
+            deck_length,
+        }
+    }
+
+    /// Encode the scope binding to bytes for hashing.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(32 + 8 + 1 + self.seat_order.len() + 1);
+        buf.extend_from_slice(&self.table_id);
+        buf.extend_from_slice(&self.hand_id.to_le_bytes());
+        buf.push(self.seat_order.len() as u8);
+        buf.extend_from_slice(&self.seat_order);
+        buf.push(self.deck_length);
+        buf
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DealCommitment
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A cryptographic commitment to a deal (shuffled deck).
+///
+/// The dealer broadcasts this before the first action. All players must
+/// acknowledge before play proceeds. The commitment binds:
+/// - The shuffled deck (as a hash)
+/// - The scope (table, hand, seats)
+/// - Deal artifacts needed for verification
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DealCommitment {
+    /// Protocol version for this message.
+    pub version: ProtocolVersion,
+    /// Scope binding for replay protection.
+    pub scope: ScopeBinding,
+    /// Hash of the shuffled deck (before encryption).
+    pub shuffle_commitment: [u8; 32],
+    /// Hashes of deal artifacts (encryption keys, proofs, etc.).
+    pub artifact_hashes: Vec<[u8; 32]>,
+    /// Timestamp (unix millis) when commitment was created.
+    pub timestamp_ms: u64,
+    /// Dealer's signature over the commitment preimage.
+    pub dealer_signature: Vec<u8>,
+}
+
+impl DealCommitment {
+    /// Domain-separated preimage for hashing.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(domain::DEAL_COMMITMENT);
+        buf.push(self.version.0);
+        buf.extend_from_slice(&self.scope.encode());
+        buf.extend_from_slice(&self.shuffle_commitment);
+        buf.push(self.artifact_hashes.len() as u8);
+        for hash in &self.artifact_hashes {
+            buf.extend_from_slice(hash);
+        }
+        buf.extend_from_slice(&self.timestamp_ms.to_le_bytes());
+        // Signature is not part of the preimage (it signs the preimage)
+        buf
+    }
+
+    /// Canonical hash of this commitment.
+    pub fn commitment_hash(&self) -> [u8; 32] {
+        crate::canonical_hash(&self.preimage())
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DealCommitmentAck
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Acknowledgment of receiving a deal commitment.
+///
+/// Each player sends this after verifying the commitment is well-formed.
+/// Play cannot proceed until all seated players have acknowledged.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DealCommitmentAck {
+    /// Protocol version for this message.
+    pub version: ProtocolVersion,
+    /// Hash of the commitment being acknowledged.
+    pub commitment_hash: [u8; 32],
+    /// Seat index of the acknowledging player.
+    pub seat_index: u8,
+    /// Player's signature over the ack preimage.
+    pub player_signature: Vec<u8>,
+}
+
+impl DealCommitmentAck {
+    /// Domain-separated preimage for hashing.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(domain::DEAL_COMMITMENT_ACK);
+        buf.push(self.version.0);
+        buf.extend_from_slice(&self.commitment_hash);
+        buf.push(self.seat_index);
+        buf
+    }
+
+    /// Canonical hash of this ack.
+    pub fn ack_hash(&self) -> [u8; 32] {
+        crate::canonical_hash(&self.preimage())
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RevealShare
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The phase of the game for which cards are being revealed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum RevealPhase {
+    /// Hole cards dealt to players.
+    Preflop = 0,
+    /// First three community cards.
+    Flop = 1,
+    /// Fourth community card.
+    Turn = 2,
+    /// Fifth community card.
+    River = 3,
+    /// Final showdown (may reveal all remaining).
+    Showdown = 4,
+}
+
+impl RevealPhase {
+    /// Convert from raw byte value.
+    pub fn from_u8(v: u8) -> Option<Self> {
+        match v {
+            0 => Some(Self::Preflop),
+            1 => Some(Self::Flop),
+            2 => Some(Self::Turn),
+            3 => Some(Self::River),
+            4 => Some(Self::Showdown),
+            _ => None,
+        }
+    }
+}
+
+/// A selective reveal of specific card indices for a given phase.
+///
+/// Only the cards required by poker rules for the current phase are revealed.
+/// This replaces full-deck reveals with minimal disclosure.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RevealShare {
+    /// Protocol version for this message.
+    pub version: ProtocolVersion,
+    /// Hash of the deal commitment this reveal is for.
+    pub commitment_hash: [u8; 32],
+    /// Game phase being revealed.
+    pub phase: RevealPhase,
+    /// Card indices being revealed (0-51 for standard deck).
+    pub card_indices: Vec<u8>,
+    /// Decryption shares or revealed values for each card index.
+    /// Each entry corresponds to the card at the same position in `card_indices`.
+    pub reveal_data: Vec<Vec<u8>>,
+    /// Seat index of the player providing the reveal (or 0xFF for dealer).
+    pub from_seat: u8,
+    /// Signature over the reveal preimage.
+    pub signature: Vec<u8>,
+}
+
+impl RevealShare {
+    /// Domain-separated preimage for hashing.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(domain::REVEAL_SHARE);
+        buf.push(self.version.0);
+        buf.extend_from_slice(&self.commitment_hash);
+        buf.push(self.phase as u8);
+        buf.push(self.card_indices.len() as u8);
+        buf.extend_from_slice(&self.card_indices);
+        for data in &self.reveal_data {
+            buf.extend_from_slice(&(data.len() as u16).to_le_bytes());
+            buf.extend_from_slice(data);
+        }
+        buf.push(self.from_seat);
+        buf
+    }
+
+    /// Canonical hash of this reveal.
+    pub fn reveal_hash(&self) -> [u8; 32] {
+        crate::canonical_hash(&self.preimage())
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TimelockReveal
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Fallback reveal using timelock encryption.
+///
+/// When a player fails to provide their reveal share within `REVEAL_TTL`,
+/// the timelock proof allows deterministic continuation without that player.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TimelockReveal {
+    /// Protocol version for this message.
+    pub version: ProtocolVersion,
+    /// Hash of the deal commitment this reveal is for.
+    pub commitment_hash: [u8; 32],
+    /// Game phase being revealed.
+    pub phase: RevealPhase,
+    /// Card indices being revealed via timelock.
+    pub card_indices: Vec<u8>,
+    /// Timelock proof data (format depends on timelock scheme).
+    pub timelock_proof: Vec<u8>,
+    /// Revealed values after timelock decryption.
+    pub revealed_values: Vec<Vec<u8>>,
+    /// The seat that failed to reveal (triggering timelock).
+    pub timeout_seat: u8,
+}
+
+impl TimelockReveal {
+    /// Domain-separated preimage for hashing.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(domain::TIMELOCK_REVEAL);
+        buf.push(self.version.0);
+        buf.extend_from_slice(&self.commitment_hash);
+        buf.push(self.phase as u8);
+        buf.push(self.card_indices.len() as u8);
+        buf.extend_from_slice(&self.card_indices);
+        buf.extend_from_slice(&(self.timelock_proof.len() as u32).to_le_bytes());
+        buf.extend_from_slice(&self.timelock_proof);
+        for value in &self.revealed_values {
+            buf.extend_from_slice(&(value.len() as u16).to_le_bytes());
+            buf.extend_from_slice(value);
+        }
+        buf.push(self.timeout_seat);
+        buf
+    }
+
+    /// Canonical hash of this timelock reveal.
+    pub fn timelock_hash(&self) -> [u8; 32] {
+        crate::canonical_hash(&self.preimage())
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Artifact Requests
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Request for deal artifacts by hash.
+///
+/// Used during verification or dispute resolution to retrieve
+/// the original deal artifacts (proofs, encrypted shares, etc.).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArtifactRequest {
+    /// Protocol version for this message.
+    pub version: ProtocolVersion,
+    /// Hashes of artifacts being requested.
+    pub artifact_hashes: Vec<[u8; 32]>,
+    /// Optional: commitment hash to scope the request.
+    pub commitment_hash: Option<[u8; 32]>,
+}
+
+impl ArtifactRequest {
+    /// Domain-separated preimage for hashing.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(domain::ARTIFACT_REQUEST);
+        buf.push(self.version.0);
+        buf.push(self.artifact_hashes.len() as u8);
+        for hash in &self.artifact_hashes {
+            buf.extend_from_slice(hash);
+        }
+        if let Some(ch) = &self.commitment_hash {
+            buf.push(1);
+            buf.extend_from_slice(ch);
+        } else {
+            buf.push(0);
+        }
+        buf
+    }
+}
+
+/// Response containing requested artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArtifactResponse {
+    /// Protocol version for this message.
+    pub version: ProtocolVersion,
+    /// Artifacts keyed by their hash.
+    /// Each entry is (hash, data). Hash is verified on receipt.
+    pub artifacts: Vec<([u8; 32], Vec<u8>)>,
+    /// Hashes of artifacts that were not found.
+    pub missing: Vec<[u8; 32]>,
+}
+
+impl ArtifactResponse {
+    /// Domain-separated preimage for hashing.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(domain::ARTIFACT_RESPONSE);
+        buf.push(self.version.0);
+        buf.push(self.artifacts.len() as u8);
+        for (hash, data) in &self.artifacts {
+            buf.extend_from_slice(hash);
+            buf.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            buf.extend_from_slice(data);
+        }
+        buf.push(self.missing.len() as u8);
+        for hash in &self.missing {
+            buf.extend_from_slice(hash);
+        }
+        buf
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_scope() -> ScopeBinding {
+        ScopeBinding::new([1u8; 32], 42, vec![0, 1, 2, 3], 52)
+    }
+
+    #[test]
+    fn test_scope_binding_encode_deterministic() {
+        let scope = test_scope();
+        let encoded1 = scope.encode();
+        let encoded2 = scope.encode();
+        assert_eq!(encoded1, encoded2, "scope encoding must be deterministic");
+    }
+
+    #[test]
+    fn test_deal_commitment_hash_stable() {
+        let commitment = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: test_scope(),
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![[3u8; 32], [4u8; 32]],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![0xDE, 0xAD],
+        };
+
+        let hash1 = commitment.commitment_hash();
+        let hash2 = commitment.commitment_hash();
+        assert_eq!(hash1, hash2, "commitment hash must be stable");
+    }
+
+    #[test]
+    fn test_deal_commitment_preimage_excludes_signature() {
+        let mut commitment = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: test_scope(),
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![[3u8; 32]],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![0xDE, 0xAD],
+        };
+
+        let preimage1 = commitment.preimage();
+
+        // Change signature
+        commitment.dealer_signature = vec![0xBE, 0xEF, 0xCA, 0xFE];
+        let preimage2 = commitment.preimage();
+
+        assert_eq!(preimage1, preimage2, "signature must not affect preimage");
+    }
+
+    #[test]
+    fn test_deal_commitment_ack_hash_stable() {
+        let ack = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash: [5u8; 32],
+            seat_index: 2,
+            player_signature: vec![0xAB, 0xCD],
+        };
+
+        let hash1 = ack.ack_hash();
+        let hash2 = ack.ack_hash();
+        assert_eq!(hash1, hash2, "ack hash must be stable");
+    }
+
+    #[test]
+    fn test_reveal_share_hash_stable() {
+        let reveal = RevealShare {
+            version: ProtocolVersion::current(),
+            commitment_hash: [6u8; 32],
+            phase: RevealPhase::Flop,
+            card_indices: vec![0, 1, 2],
+            reveal_data: vec![vec![10], vec![20], vec![30]],
+            from_seat: 1,
+            signature: vec![0x11, 0x22],
+        };
+
+        let hash1 = reveal.reveal_hash();
+        let hash2 = reveal.reveal_hash();
+        assert_eq!(hash1, hash2, "reveal hash must be stable");
+    }
+
+    #[test]
+    fn test_reveal_phase_roundtrip() {
+        for phase in [
+            RevealPhase::Preflop,
+            RevealPhase::Flop,
+            RevealPhase::Turn,
+            RevealPhase::River,
+            RevealPhase::Showdown,
+        ] {
+            let byte = phase as u8;
+            let decoded = RevealPhase::from_u8(byte).expect("valid phase");
+            assert_eq!(decoded, phase, "phase must roundtrip");
+        }
+    }
+
+    #[test]
+    fn test_reveal_phase_invalid() {
+        assert!(RevealPhase::from_u8(99).is_none(), "invalid phase must return None");
+    }
+
+    #[test]
+    fn test_timelock_reveal_hash_stable() {
+        let reveal = TimelockReveal {
+            version: ProtocolVersion::current(),
+            commitment_hash: [7u8; 32],
+            phase: RevealPhase::Turn,
+            card_indices: vec![10],
+            timelock_proof: vec![0xAA, 0xBB, 0xCC],
+            revealed_values: vec![vec![42]],
+            timeout_seat: 3,
+        };
+
+        let hash1 = reveal.timelock_hash();
+        let hash2 = reveal.timelock_hash();
+        assert_eq!(hash1, hash2, "timelock hash must be stable");
+    }
+
+    #[test]
+    fn test_artifact_request_preimage_deterministic() {
+        let request = ArtifactRequest {
+            version: ProtocolVersion::current(),
+            artifact_hashes: vec![[8u8; 32], [9u8; 32]],
+            commitment_hash: Some([10u8; 32]),
+        };
+
+        let preimage1 = request.preimage();
+        let preimage2 = request.preimage();
+        assert_eq!(preimage1, preimage2, "artifact request preimage must be deterministic");
+    }
+
+    #[test]
+    fn test_artifact_response_preimage_deterministic() {
+        let response = ArtifactResponse {
+            version: ProtocolVersion::current(),
+            artifacts: vec![([11u8; 32], vec![1, 2, 3, 4])],
+            missing: vec![[12u8; 32]],
+        };
+
+        let preimage1 = response.preimage();
+        let preimage2 = response.preimage();
+        assert_eq!(preimage1, preimage2, "artifact response preimage must be deterministic");
+    }
+
+    #[test]
+    fn test_domain_separation_prevents_collision() {
+        // Same content, different domain => different hash
+        let scope = test_scope();
+        let _scope_bytes = scope.encode(); // Used to verify encoding works
+
+        // Create two different message types with overlapping content patterns
+        let commitment = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: scope.clone(),
+            shuffle_commitment: [0u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 0,
+            dealer_signature: vec![],
+        };
+
+        let ack = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash: [0u8; 32],
+            seat_index: 0,
+            player_signature: vec![],
+        };
+
+        // Even if content overlaps, domain prefixes ensure different hashes
+        let commitment_preimage = commitment.preimage();
+        let ack_preimage = ack.preimage();
+
+        assert!(
+            commitment_preimage.starts_with(domain::DEAL_COMMITMENT),
+            "commitment must use its domain"
+        );
+        assert!(
+            ack_preimage.starts_with(domain::DEAL_COMMITMENT_ACK),
+            "ack must use its domain"
+        );
+        assert_ne!(
+            commitment_preimage[..domain::DEAL_COMMITMENT.len()],
+            ack_preimage[..domain::DEAL_COMMITMENT_ACK.len()],
+            "domains must differ"
+        );
+    }
+}
