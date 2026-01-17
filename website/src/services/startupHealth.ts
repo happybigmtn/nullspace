@@ -50,6 +50,21 @@ if (typeof window !== 'undefined') {
   (window as any).__NULLSPACE_HEALTH__ = health;
 }
 
+// Subscriber pattern for reactive UI updates
+type HealthSubscriber = (health: StartupHealth) => void;
+const subscribers: Set<HealthSubscriber> = new Set();
+
+function notifySubscribers(): void {
+  const snapshot = getStartupHealth();
+  subscribers.forEach((subscriber) => {
+    try {
+      subscriber(snapshot);
+    } catch (e) {
+      console.error('[HEALTH] Subscriber error:', e);
+    }
+  });
+}
+
 export function setHealthStage(stage: HealthStage, detail?: string): void {
   const timestamp = Date.now();
   health.stage = stage;
@@ -79,6 +94,9 @@ export function setHealthStage(stage: HealthStage, detail?: string): void {
 
   // Log stage transition for debugging
   console.log(`[HEALTH] ${stage}${detail ? ': ' + detail : ''}`);
+
+  // Notify subscribers
+  notifySubscribers();
 }
 
 export function setHealthError(error: string): void {
@@ -87,6 +105,9 @@ export function setHealthError(error: string): void {
   health.timestamp = Date.now();
   health.history.push({ stage: 'error', timestamp: health.timestamp, detail: error });
   console.error(`[HEALTH] Error: ${error}`);
+
+  // Notify subscribers
+  notifySubscribers();
 }
 
 export function getStartupHealth(): StartupHealth {
@@ -97,5 +118,15 @@ export function isHealthy(): boolean {
   return health.wasmLoaded && health.websocketConnected && health.seedReceived && health.error === null;
 }
 
-// Initialize as main_jsx_loaded if this module is imported from main.jsx
-// (will be called explicitly after this module loads)
+/**
+ * Subscribe to health state changes.
+ * @returns Unsubscribe function
+ */
+export function subscribeHealth(subscriber: HealthSubscriber): () => void {
+  subscribers.add(subscriber);
+  // Immediately notify with current state
+  subscriber(getStartupHealth());
+  return () => {
+    subscribers.delete(subscriber);
+  };
+}

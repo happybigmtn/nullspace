@@ -7,6 +7,7 @@ import { captureReferralFromSearch, claimReferralIfReady } from './services/refe
 import { CasinoConnectionProvider } from './chain/CasinoConnectionContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { setHealthStage } from './services/startupHealth';
+import LoadingScreen from './components/LoadingScreen';
 // Import vaultRuntime in main bundle to ensure it's not duplicated across lazy chunks
 // This ensures the in-memory vault state is shared between CasinoApp and SecurityApp
 import './security/vaultRuntime';
@@ -63,15 +64,7 @@ function App() {
         <InstallBanner />
         <ReferralListener />
         <ErrorBoundary name="Routes">
-          <Suspense
-            fallback={
-              <div className="min-h-screen liquid-shell flex items-center justify-center text-ns font-sans">
-                <div className="liquid-card px-6 py-4 text-[11px] uppercase tracking-[0.3em] text-ns-muted">
-                  Loading…
-                </div>
-              </div>
-            }
-          >
+          <Suspense fallback={<LoadingScreen />}>
             <Routes>
             <Route path="/" element={<CasinoApp />} />
             <Route element={<AppLayout />}>

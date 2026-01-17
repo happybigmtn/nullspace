@@ -38,7 +38,7 @@ All other specs archived to `ralph/specs/archive/`.
    - [x] Add visible error boundaries with error messages
    - [x] Add WASM initialization logging
    - [x] Add startup health check endpoint
-   - [ ] Add visual loading states
+   - [x] Add visual loading states
 
 2. **Phase 2: Transaction Pipeline Observability** (Critical)
    - [ ] Add transaction submission logging
