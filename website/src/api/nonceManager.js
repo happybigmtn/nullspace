@@ -493,6 +493,25 @@ export class NonceManager {
   async submitTransaction(createTxFn, txType) {
     // Queue transactions to ensure nonces are allocated sequentially
     return this.transactionQueue = this.transactionQueue.then(async () => {
+      // AC-4.2: Sync nonce from chain before every transaction
+      // This prevents nonce drift after chain resets or when server state diverges
+      if (this.publicKeyBytes) {
+        try {
+          const account = await this.client.getAccount(this.publicKeyBytes);
+          if (account && typeof account.nonce === 'number') {
+            const serverNonce = account.nonce;
+            const localNonce = this.getCurrentNonce();
+            if (localNonce !== serverNonce) {
+              logDebug(`[NonceManager] Pre-submit sync: local=${localNonce}, server=${serverNonce}`);
+              this.setNonce(serverNonce);
+            }
+          }
+        } catch (error) {
+          // Log but don't fail - proceed with local nonce if sync fails
+          logDebug('[NonceManager] Pre-submit nonce sync failed:', error.message);
+        }
+      }
+
       const nonce = this.getNextNonce();
 
       try {

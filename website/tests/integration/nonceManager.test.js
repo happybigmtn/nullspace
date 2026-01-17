@@ -12,22 +12,32 @@ class MockClient {
   constructor() {
     this.transactions = [];
     this.accountNonce = 0;
+    this.autoIncrementNonce = true; // Simulate real chain behavior by default
   }
-  
+
   async submitTransaction(txData) {
     this.transactions.push(txData);
+    // Simulate chain behavior: nonce increments after successful submission
+    if (this.autoIncrementNonce) {
+      this.accountNonce++;
+    }
     return { status: 'accepted' };
   }
-  
+
   async getAccount(publicKeyBytes) {
     return {
       nonce: this.accountNonce,
       balance: 0
     };
   }
-  
+
   setAccountNonce(nonce) {
     this.accountNonce = nonce;
+  }
+
+  // Disable auto-increment for tests that need manual nonce control
+  disableAutoIncrement() {
+    this.autoIncrementNonce = false;
   }
 }
 
@@ -165,60 +175,60 @@ describe('NonceManager Tests', () => {
   
   test('Server/client nonce misalignment - server ahead', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
-    
+
     await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, null);
-    
-    // Submit several transactions
+
+    // Submit several transactions (mock auto-increments nonce to simulate chain)
     await nonceManager.submitCasinoDeposit(1);
     await nonceManager.submitCreateVault();
     await nonceManager.submitCasinoDeposit(1);
-    
-    // Local nonce should be 3
+
+    // Local nonce should be 3 (with pre-submit sync, nonces stay aligned with server)
     assert.equal(nonceManager.getCurrentNonce(), 3);
-    
-    // Simulate server being ahead (some transactions confirmed quickly)
+
+    // Simulate server being ahead (e.g., background tx processing confirmed more)
     mockClient.setAccountNonce(5);
-    
+
     // Sync with account state - pass account data directly
     const account = await mockClient.getAccount(keypair.publicKey);
     nonceManager.syncWithAccountState(account);
-    
+
     // Local nonce should be updated to server nonce
     assert.equal(nonceManager.getCurrentNonce(), 5);
-    
-    // Pending transactions with nonces <= 5 should be cleaned up
+
+    // Pending transactions with nonces < 5 should be cleaned up (server nonce is "next expected")
     const pending = nonceManager.getPendingTransactions();
     assert.equal(pending.length, 0);
-    
+
     // Cleanup
     nonceManager.destroy();
   });
   
   test('Server/client nonce misalignment - client ahead', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
-    
+
     await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, null);
-    
-    // Submit several transactions
+
+    // Submit several transactions (mock auto-increments to simulate chain)
     await nonceManager.submitCasinoDeposit(1);
     await nonceManager.submitCreateVault();
     await nonceManager.submitCasinoDeposit(1);
-    
-    // Local nonce should be 3
+
+    // Local nonce should be 3 (pre-submit sync keeps aligned with server)
     assert.equal(nonceManager.getCurrentNonce(), 3);
-    
-    // Simulate server being behind (server nonce 1 means tx with nonce 0 is confirmed)
+
+    // Simulate chain reset: server nonce goes back to 1
     mockClient.setAccountNonce(1);
-    
+
     // Sync with account state - pass account data directly
     const account = await mockClient.getAccount(keypair.publicKey);
     nonceManager.syncWithAccountState(account);
-    
+
     // Client is ahead of server => reset to server nonce and clear stale pending
     assert.equal(nonceManager.getCurrentNonce(), 1);
     const pending = nonceManager.getPendingTransactions();
     assert.equal(pending.length, 0);
-    
+
     // Cleanup
     nonceManager.destroy();
   });
@@ -330,36 +340,36 @@ describe('NonceManager Tests', () => {
   
   test('Sequential transaction submission', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
-    
+
     const account = await mockClient.getAccount(keypair.publicKey);
     await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
-    
-    // Submit multiple transactions sequentially
+
+    // Submit multiple transactions sequentially (mock auto-increments to simulate chain)
     await nonceManager.submitCasinoDeposit(1);
     await nonceManager.submitCreateVault();
     await nonceManager.submitCasinoDeposit(1);
-    
+
     // Nonce should be incremented correctly
     assert.equal(nonceManager.getCurrentNonce(), 3);
-    
+
     // Should have 3 pending transactions with sequential nonces
     const pending = nonceManager.getPendingTransactions();
     assert.equal(pending.length, 3);
     assert.equal(pending[0].nonce, 0);
     assert.equal(pending[1].nonce, 1);
     assert.equal(pending[2].nonce, 2);
-    
+
     // Cleanup
     nonceManager.destroy();
   });
   
   test('Concurrent transaction submission', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
-    
+
     const account = await mockClient.getAccount(keypair.publicKey);
     await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
-    
-    // Submit multiple transactions concurrently
+
+    // Submit multiple transactions concurrently (mock auto-increments to simulate chain)
     const promises = [
       nonceManager.submitCasinoDeposit(1),
       nonceManager.submitCreateVault(),
@@ -367,24 +377,24 @@ describe('NonceManager Tests', () => {
       nonceManager.submitCreateVault(),
       nonceManager.submitCasinoDeposit(1)
     ];
-    
+
     const results = await Promise.all(promises);
-    
+
     // All should succeed
     results.forEach(result => {
       assert.equal(result.status, 'accepted');
     });
-    
+
     // Nonce should be incremented correctly
     assert.equal(nonceManager.getCurrentNonce(), 5);
-    
+
     // Should have 5 pending transactions with sequential nonces
     const pending = nonceManager.getPendingTransactions();
     assert.equal(pending.length, 5);
     for (let i = 0; i < 5; i++) {
       assert.equal(pending[i].nonce, i, `Transaction ${i} should have nonce ${i}`);
     }
-    
+
     // Cleanup
     nonceManager.destroy();
   });
@@ -514,33 +524,32 @@ describe('NonceManager Tests', () => {
         balance: 0
       };
     };
-    
+
     nonceManager = new NonceManager(deletableClient, wasmWrapper);
-    
+
     // Initialize with an account that exists
     const initialAccount = await deletableClient.getAccount(keypair.publicKey);
     await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, initialAccount);
-    
-    // Submit some transactions
+
+    // Submit some transactions (mock auto-increments to simulate chain)
     await nonceManager.submitCasinoDeposit(1);
     await nonceManager.submitCreateVault();
-    
-    // Local nonce should be 2
+
+    // Local nonce should be 2 (pre-submit sync keeps it aligned)
     assert.equal(nonceManager.getCurrentNonce(), 2);
-    const pendingBefore = nonceManager.getPendingTransactions().length;
-    
+
     // Simulate account deletion (404)
     accountExists = false;
-    
+
     // Sync with null account (deleted)
     const deletedAccount = await deletableClient.getAccount(keypair.publicKey);
     nonceManager.syncWithAccountState(deletedAccount);
-    
+
     // If account is missing, we reset local state to avoid nonce drift.
     assert.equal(nonceManager.getCurrentNonce(), 0);
     const pendingAfter = nonceManager.getPendingTransactions();
     assert.equal(pendingAfter.length, 0, 'Pending transactions should be cleared');
-    
+
     // Cleanup
     nonceManager.destroy();
   });
@@ -601,6 +610,113 @@ describe('NonceManager Tests', () => {
   });
   
   
+  test('AC-4.2: Pre-submit nonce sync corrects drift', async () => {
+    nonceManager = new NonceManager(mockClient, wasmWrapper);
+
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
+
+    // Manually set local nonce to 5 (simulating drift)
+    nonceManager.setNonce(5);
+    assert.equal(nonceManager.getCurrentNonce(), 5);
+
+    // Server has nonce 2 (e.g., after chain reset)
+    mockClient.setAccountNonce(2);
+
+    // Submit a transaction - should sync nonce before submitting
+    const result = await nonceManager.submitCasinoDeposit(1);
+    assert.equal(result.status, 'accepted');
+
+    // The transaction should have been submitted with nonce 2 (server nonce)
+    // and then incremented to 3
+    assert.equal(nonceManager.getCurrentNonce(), 3);
+
+    // Verify the stored transaction has the correct nonce
+    const pending = nonceManager.getPendingTransactions();
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].nonce, 2, 'Transaction should have server nonce 2');
+
+    // Cleanup
+    nonceManager.destroy();
+  });
+
+  test('AC-4.2: Pre-submit nonce sync handles fetch failure gracefully', async () => {
+    // Create a mock client that fails on getAccount
+    const flakeyClient = new MockClient();
+    let fetchCount = 0;
+    flakeyClient.getAccount = async (publicKeyBytes) => {
+      fetchCount++;
+      if (fetchCount === 1) {
+        // First call during init succeeds
+        return { nonce: 0, balance: 0 };
+      }
+      // Subsequent calls fail (simulating network issues)
+      throw new Error('Network error');
+    };
+
+    nonceManager = new NonceManager(flakeyClient, wasmWrapper);
+
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, { nonce: 0, balance: 0 });
+    assert.equal(nonceManager.getCurrentNonce(), 0);
+
+    // Submit a transaction - sync will fail but transaction should still proceed
+    const result = await nonceManager.submitCasinoDeposit(1);
+    assert.equal(result.status, 'accepted');
+
+    // Nonce should still be incremented (using local nonce fallback)
+    assert.equal(nonceManager.getCurrentNonce(), 1);
+
+    // Cleanup
+    nonceManager.destroy();
+  });
+
+  test('AC-4.2: Pre-submit nonce sync on concurrent transactions', async () => {
+    nonceManager = new NonceManager(mockClient, wasmWrapper);
+
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
+
+    // Server starts at nonce 0 (mock auto-increments after each submit)
+    mockClient.setAccountNonce(0);
+
+    // Track how many times getAccount is called
+    let getAccountCalls = 0;
+    const originalGetAccount = mockClient.getAccount.bind(mockClient);
+    mockClient.getAccount = async (publicKeyBytes) => {
+      getAccountCalls++;
+      return originalGetAccount(publicKeyBytes);
+    };
+
+    // Submit multiple transactions concurrently
+    // Due to transaction queue, they're processed sequentially
+    const promises = [
+      nonceManager.submitCasinoDeposit(1),
+      nonceManager.submitCasinoDeposit(2),
+      nonceManager.submitCasinoDeposit(3)
+    ];
+
+    const results = await Promise.all(promises);
+
+    // All should succeed
+    results.forEach(result => assert.equal(result.status, 'accepted'));
+
+    // Each transaction should trigger a pre-submit sync
+    assert.equal(getAccountCalls, 3, 'Each transaction should sync nonce from server');
+
+    // Final nonce should be 3 (0, 1, 2 used, then incremented to 3)
+    assert.equal(nonceManager.getCurrentNonce(), 3);
+
+    // Should have 3 pending transactions with sequential nonces
+    const pending = nonceManager.getPendingTransactions();
+    assert.equal(pending.length, 3);
+    assert.equal(pending[0].nonce, 0);
+    assert.equal(pending[1].nonce, 1);
+    assert.equal(pending[2].nonce, 2);
+
+    // Cleanup
+    nonceManager.destroy();
+  });
+
   afterEach(() => {
     // Cleanup after each test
     if (nonceManager) {
