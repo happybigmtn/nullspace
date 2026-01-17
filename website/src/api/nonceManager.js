@@ -100,35 +100,6 @@ export class NonceManager {
       throw new Error('Public key is required for initialization');
     }
 
-    // Staging nonce floors to bridge stale indexer (safe to keep in client; keys are public).
-    // Disabled in QA/test harness to avoid forcing stale nonces after a reset.
-    const qaMode = (() => {
-      if (typeof window === 'undefined') return false;
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const qaParam = params.get('qa');
-        const qaFlag = qaParam === '1' || qaParam?.toLowerCase() === 'true';
-        const storedFlag = localStorage.getItem('qa_bets_enabled') === 'true';
-        return qaFlag || storedFlag;
-      } catch {
-        return false;
-      }
-    })();
-    const floorsDisabled =
-      qaMode ||
-      (typeof import.meta !== 'undefined' &&
-        (!!import.meta.env?.VITE_DISABLE_NONCE_FLOOR ||
-          !!import.meta.env?.VITE_QA_BETS));
-
-    const FLOOR_MAP = floorsDisabled
-      ? {}
-      : {
-          // Admin key (prod/staging) - keep only when floors enabled intentionally
-          '6aba3e7532fc030a7cd3be155b5a73d04efea737ad9a95f4226bc3781bae5b9f': 1720,
-          // QA bot player key
-          'f4e4eb95ed3c2ec516faf73d61160e8f600389e1d983f18973a561f788177d24': 8
-        };
-
     this.publicKeyHex = publicKeyHex;
     this.publicKeyBytes = publicKeyBytes;
 
@@ -158,18 +129,6 @@ export class NonceManager {
 
     // Do initial sync with provided account
     this.syncWithAccountState(account);
-
-    // Apply nonce floor when indexer lags chain - but ONLY if:
-    // 1. Account exists on chain
-    // 2. Floor is greater than current local nonce
-    // 3. Floor is <= server nonce (prevents floor from overriding after chain reset)
-    if (account) {
-      const floor = FLOOR_MAP[publicKeyHex];
-      const serverNonce = account.nonce;
-      if (typeof floor === 'number' && floor > this.getCurrentNonce() && floor <= serverNonce) {
-        this.setNonce(floor);
-      }
-    }
 
     // Start periodic resubmission only (no more polling for nonce)
     this.startPeriodicResubmission();
