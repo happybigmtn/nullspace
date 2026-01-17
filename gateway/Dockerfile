@@ -23,15 +23,13 @@ COPY execution/Cargo.toml ./execution/
 COPY simulator/Cargo.toml ./simulator/
 COPY types/ ./types/
 COPY website/wasm/Cargo.toml ./website/wasm/
-COPY terminal-cli/Cargo.toml ./terminal-cli/
 # Create dummy source files for cargo
-RUN mkdir -p node/src client/src execution/src simulator/src website/wasm/src terminal-cli/src && \
+RUN mkdir -p node/src client/src execution/src simulator/src website/wasm/src && \
     echo "fn main() {}" > node/src/main.rs && \
     echo "fn main() {}" > client/src/main.rs && \
     echo "pub fn placeholder() {}" > execution/src/lib.rs && \
     echo "fn main() {}" > simulator/src/main.rs && \
-    echo "pub fn placeholder() {}" > website/wasm/src/lib.rs && \
-    echo "fn main() {}" > terminal-cli/src/main.rs
+    echo "pub fn placeholder() {}" > website/wasm/src/lib.rs
 COPY packages/ ./packages/
 COPY gateway/ ./gateway/
 

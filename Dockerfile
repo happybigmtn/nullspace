@@ -40,7 +40,6 @@ COPY execution/ ./execution/
 COPY simulator/ ./simulator/
 COPY types/ ./types/
 COPY website/wasm/ ./website/wasm/
-COPY terminal-cli/ ./terminal-cli/
 
 # Build the actual binary
 RUN cargo build --release --package nullspace-simulator
