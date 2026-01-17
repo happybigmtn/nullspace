@@ -33,7 +33,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, status, leading, 
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-display tracking-tight text-ns">{title}</h1>
+            <h1 className="text-xl sm:text-2xl font-display tracking-tight text-ns text-balance">{title}</h1>
             {statusNode}
           </div>
           <div className="flex items-center gap-3 flex-wrap">

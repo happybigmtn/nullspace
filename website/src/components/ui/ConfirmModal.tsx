@@ -12,6 +12,8 @@ type ConfirmModalProps = {
   loading?: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  /** Use alertdialog role for destructive/irreversible actions */
+  destructive?: boolean;
 };
 
 const INSTANT_CONFIG = { duration: 0 };
@@ -31,6 +33,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   loading = false,
   onClose,
   onConfirm,
+  destructive = false,
 }) => {
   const prefersReducedMotion = useReducedMotion();
 
@@ -65,7 +68,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   return transitions((style, show) =>
     show ? (
       <div
-        role="dialog"
+        role={destructive ? 'alertdialog' : 'dialog'}
         aria-modal="true"
         aria-labelledby="confirm-modal-title"
         className="fixed inset-0 z-[90] flex items-center justify-center p-4"

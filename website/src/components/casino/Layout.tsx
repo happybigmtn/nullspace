@@ -392,7 +392,7 @@ export const Footer: React.FC<{ currentBet?: number; className?: string }> = ({ 
         <GlassSurface
             as="footer"
             depth="flat"
-            className={`hidden lg:flex fixed bottom-0 left-0 right-0 h-10 items-center justify-center gap-8 px-6 z-20 text-ns ${className ?? ''}`}
+            className={`hidden lg:flex fixed bottom-0 left-0 right-0 h-10 items-center justify-center gap-8 px-6 pb-[env(safe-area-inset-bottom)] z-20 text-ns ${className ?? ''}`}
         >
             <Label size="micro">Quick Bet Keys</Label>
             <div className="flex gap-6">

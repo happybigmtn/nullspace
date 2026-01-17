@@ -18,7 +18,7 @@ export function InstallBanner() {
   // Show iOS-specific instructions
   if (isIOSSafari) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 animate-in slide-in-from-bottom duration-300">
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-in slide-in-from-bottom duration-300">
         <div className="max-w-md mx-auto liquid-card liquid-sheen px-4 py-3">
           <div className="flex items-start gap-3">
             <div className="flex-1">
@@ -50,7 +50,7 @@ export function InstallBanner() {
   // Show install prompt for Chrome/Edge
   if (canInstall) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 animate-in slide-in-from-bottom duration-300">
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-in slide-in-from-bottom duration-300">
         <div className="max-w-md mx-auto liquid-card liquid-sheen px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex-1">

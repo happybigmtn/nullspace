@@ -69,7 +69,7 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
 
   return (
     <div
-      className="mode-select flex flex-col min-h-screen w-screen font-sans items-center justify-center p-6 md:p-12 overflow-auto"
+      className="mode-select flex flex-col min-h-dvh w-screen font-sans items-center justify-center p-6 md:p-12 overflow-auto"
       style={{ backgroundColor: palette.surface, color: palette.text }}
     >
       {/* Full-width animated banner */}
@@ -95,7 +95,7 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
           <div className="text-[10px] font-bold tracking-[0.4em] mb-4 uppercase mode-muted" style={{ color: palette.muted }}>
             Experience Nullspace
           </div>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-medium tracking-tight">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-medium tracking-tight text-balance">
             Select your mode.
           </h1>
         </div>

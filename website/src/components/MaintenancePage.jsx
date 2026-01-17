@@ -6,7 +6,7 @@ const MaintenancePage = () => {
   };
 
   return (
-    <div className="fixed inset-0 h-screen w-screen overflow-hidden liquid-shell font-sans flex items-center justify-center p-6">
+    <div className="fixed inset-0 h-dvh w-screen overflow-hidden liquid-shell font-sans flex items-center justify-center p-6">
       <div
         className="max-w-md w-full liquid-card liquid-sheen p-10 flex flex-col items-center text-center gap-8 animate-scale-in group cursor-pointer"
         onClick={handleLogoClick}
@@ -21,7 +21,7 @@ const MaintenancePage = () => {
 
         <div className="flex flex-col gap-3">
           <span className="text-[10px] font-semibold text-ns-muted tracking-[0.4em] uppercase">System Status</span>
-          <h1 className="text-2xl font-semibold text-ns tracking-tight font-display leading-tight">
+          <h1 className="text-2xl font-semibold text-ns tracking-tight font-display leading-tight text-balance">
             Undergoing Maintenance.
           </h1>
           <p className="text-[11px] text-ns-muted leading-relaxed px-4">
