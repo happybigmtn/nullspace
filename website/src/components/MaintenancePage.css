@@ -2,6 +2,12 @@
   animation: dvd-glow 3s infinite ease-in-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-dvd-glow {
+    animation: none;
+  }
+}
+
 @keyframes dvd-glow {
   0% {
     box-shadow: 0 0 5px var(--dvd-color, currentColor);

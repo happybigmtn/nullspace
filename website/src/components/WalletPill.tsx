@@ -91,6 +91,8 @@ export const WalletPill: React.FC<WalletPillProps> = ({
                   ? 'bg-action-success'
                   : 'bg-black/20 dark:bg-white/20'
             }`}
+            role="status"
+            aria-label={isOffline ? 'Offline' : isConnected ? 'Connected' : 'Not connected'}
           />
           {!isConnected && vaultStatus.supported && (
             <Link
@@ -131,7 +133,7 @@ export const WalletPill: React.FC<WalletPillProps> = ({
         {/* Expanded Details */}
         {showDetails && isConnected && (
           <div
-            role="menu"
+            role="region"
             aria-label="Wallet details"
             className="absolute top-full right-0 mt-2 w-64 p-4 liquid-card z-50"
           >

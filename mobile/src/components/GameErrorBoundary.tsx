@@ -36,10 +36,20 @@ class GameErrorBoundaryClass extends Component<Props & { onGoBack: () => void },
         <View style={styles.container}>
           <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.message}>The game encountered an error.</Text>
-          <TouchableOpacity style={styles.button} onPress={this.handleRetry}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={this.handleRetry}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+          >
             <Text style={styles.buttonText}>Try Again</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={this.props.onGoBack}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={this.props.onGoBack}
+            accessibilityRole="button"
+            accessibilityLabel="Go back to lobby"
+          >
             <Text style={styles.buttonText}>Back to Lobby</Text>
           </TouchableOpacity>
         </View>

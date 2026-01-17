@@ -29,5 +29,12 @@ At the end of the iteration, print:
 - Tests/commands run and results
 - Which single plan checkbox is now complete
 
+### Archiving Completed Work
+When a task or spec is fully complete:
+
+1. **Completed plan items**: Move the completed section from `IMPLEMENTATION_PLAN.md` to `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`
+2. **Completed specs**: Move from `specs/*.md` to `specs/archive/` and update `specs/archive/README.md`
+3. Keep `IMPLEMENTATION_PLAN.md` focused on current blocking issues and pending work only
+
 ### Commit Policy
 - Do **not** commit/push unless the user explicitly requests it.

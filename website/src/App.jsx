@@ -5,9 +5,12 @@ import { ToastHost } from './components/ui/ToastHost';
 import { InstallBanner } from './components/ui/InstallBanner';
 import { captureReferralFromSearch, claimReferralIfReady } from './services/referrals';
 import { CasinoConnectionProvider } from './chain/CasinoConnectionContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 // Import vaultRuntime in main bundle to ensure it's not duplicated across lazy chunks
 // This ensures the in-memory vault state is shared between CasinoApp and SecurityApp
 import './security/vaultRuntime';
+
+console.log('[APP] App.jsx loading');
 
 // Route-based code splitting (US-145)
 // CasinoApp is the largest route - lazy-load to reduce initial bundle
@@ -50,22 +53,24 @@ const ReferralListener = () => {
 };
 
 function App() {
+  console.log('[APP] App component rendering');
   return (
     <BrowserRouter>
       <CasinoConnectionProvider baseUrl={BASE_URL}>
         <ToastHost />
         <InstallBanner />
         <ReferralListener />
-        <Suspense
-          fallback={
-            <div className="min-h-screen liquid-shell flex items-center justify-center text-ns font-sans">
-              <div className="liquid-card px-6 py-4 text-[11px] uppercase tracking-[0.3em] text-ns-muted">
-                Loading…
+        <ErrorBoundary name="Routes">
+          <Suspense
+            fallback={
+              <div className="min-h-screen liquid-shell flex items-center justify-center text-ns font-sans">
+                <div className="liquid-card px-6 py-4 text-[11px] uppercase tracking-[0.3em] text-ns-muted">
+                  Loading…
+                </div>
               </div>
-            </div>
-          }
-        >
-          <Routes>
+            }
+          >
+            <Routes>
             <Route path="/" element={<CasinoApp />} />
             <Route element={<AppLayout />}>
               <Route path="economy" element={<EconomyDashboard />} />
@@ -87,8 +92,9 @@ function App() {
               </Route>
               <Route path="terminal" element={<TerminalPage />} />
             </Route>
-          </Routes>
-        </Suspense>
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </CasinoConnectionProvider>
     </BrowserRouter>
   );

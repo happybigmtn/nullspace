@@ -113,10 +113,11 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     <button
       type="button"
       onClick={onToggle}
+      aria-pressed={value}
       className="w-full flex items-center justify-between py-3 px-4 text-body text-ns-muted hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
     >
       <span className="font-medium">{label}</span>
-      <span className={`text-caption font-semibold ${value ? 'text-ns font-bold' : 'text-ns-muted'}`}>
+      <span aria-hidden="true" className={`text-caption font-semibold ${value ? 'text-ns font-bold' : 'text-ns-muted'}`}>
         {value ? 'On' : 'Off'}
       </span>
     </button>
@@ -126,12 +127,14 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     <div className="relative">
       {/* Hamburger Button */}
       <button
+        id="hamburger-menu-trigger"
         onClick={toggle}
         aria-label="Menu"
         aria-expanded={isOpen}
+        aria-controls="hamburger-menu-panel"
         className="w-10 h-10 flex items-center justify-center rounded-full liquid-chip shadow-soft hover:shadow-md transition-all active:scale-95"
       >
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1" aria-hidden="true">
           <span
             className={`w-4 h-0.5 bg-black/80 dark:bg-white/80 rounded-full transition-transform ${
               isOpen ? 'rotate-45 translate-y-1.5' : ''
@@ -164,6 +167,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
 
             {/* Menu Panel */}
             <animated.div
+              id="hamburger-menu-panel"
               style={{
                 opacity: style.opacity,
                 transform: prefersReducedMotion
@@ -172,6 +176,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
               }}
               className="absolute top-12 right-0 w-64 liquid-card shadow-float z-[100] overflow-hidden"
               role="menu"
+              aria-labelledby="hamburger-menu-trigger"
             >
               {/* Primary Navigation - Essential items only */}
               <div className="py-2">
@@ -203,8 +208,10 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 <div className="text-micro text-ns-muted uppercase tracking-[0.3em] mb-2">
                   Play Mode
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2" role="radiogroup" aria-label="Play mode">
                   <button
+                    role="radio"
+                    aria-checked={playMode === 'CASH'}
                     onClick={() => {
                       onSetPlayMode('CASH');
                       close();
@@ -218,6 +225,8 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                     Cash
                   </button>
                   <button
+                    role="radio"
+                    aria-checked={playMode === 'FREEROLL'}
                     onClick={() => {
                       onSetPlayMode('FREEROLL');
                       close();

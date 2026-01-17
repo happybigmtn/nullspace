@@ -214,7 +214,12 @@ export function ConnectionStatusBanner({
         )}
       </View>
       {isFailed && onRetry && (
-        <Pressable onPress={onRetry} style={styles.retryButton}>
+        <Pressable
+          onPress={onRetry}
+          style={styles.retryButton}
+          accessibilityRole="button"
+          accessibilityLabel="Reconnect to server"
+        >
           <Text style={styles.retryText}>Reconnect</Text>
         </Pressable>
       )}

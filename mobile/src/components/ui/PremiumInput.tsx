@@ -196,6 +196,8 @@ export const PremiumInput = forwardRef<PremiumInputHandle, PremiumInputProps>(
           <Animated.Text
             style={[styles.label, labelAnimatedStyle]}
             pointerEvents="none"
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
           >
             {label}
           </Animated.Text>
@@ -210,6 +212,7 @@ export const PremiumInput = forwardRef<PremiumInputHandle, PremiumInputProps>(
             onChangeText={handleChangeText}
             style={styles.input}
             placeholderTextColor="transparent"
+            accessibilityLabel={label}
             {...textInputProps}
           />
 
