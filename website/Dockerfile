@@ -71,7 +71,6 @@ RUN pnpm -C packages/design-tokens build || true
 RUN pnpm -C packages/game-state build || true
 
 COPY website/ /app/website/
-COPY economy_log.json /app/economy_log.json
 COPY --from=wasm-builder /app/website/wasm/pkg /app/website/wasm/pkg
 
 ARG VITE_IDENTITY
