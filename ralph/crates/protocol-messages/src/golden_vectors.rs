@@ -37,10 +37,27 @@ use crate::{
     RevealPhase, RevealShare, ScopeBinding, ShuffleContext, TimelockReveal,
 };
 
+// Game module imports for v2 compact encoding vectors (AC-3.2, AC-4.2)
+use crate::baccarat::{BaccaratMove, BetType as BaccaratBetType, BetDescriptor as BaccaratBetDescriptor};
+use crate::blackjack::{BlackjackMove, SideBets as BlackjackSideBets};
+use crate::casino_war::CasinoWarMove;
+use crate::craps::{CrapsMove, CrapsBet};
+use crate::hilo::HiLoMove;
+use crate::roulette::{RouletteMove, RouletteBet};
+use crate::sic_bo::{SicBoMove, SicBoBet};
+use crate::three_card::{ThreeCardMove, SideBets as ThreeCardSideBets};
+use crate::ultimate_holdem::{UltimateHoldemMove, SideBets as UltimateHoldemSideBets, BetMultiplier};
+use crate::video_poker::VideoPokerMove;
+use crate::{RouletteBetType, CrapsBetType, SicBoBetType};
+
 /// Schema version for golden vectors export.
 ///
 /// Bump when the export structure changes in a breaking way.
-pub const GOLDEN_VECTORS_SCHEMA_VERSION: u32 = 1;
+///
+/// Version history:
+/// - v1: Core protocol message vectors (ScopeBinding, DealCommitment, etc.)
+/// - v2: Added game v2 compact encoding vectors (AC-3.2, AC-4.2)
+pub const GOLDEN_VECTORS_SCHEMA_VERSION: u32 = 2;
 
 /// A single golden vector: input message + expected encoded bytes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -350,6 +367,312 @@ impl GoldenVectors {
             "ArtifactResponse: 1 artifact found (4 bytes), 1 missing",
             "ArtifactResponse",
             &artifact_resp.preimage(),
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Game v2 Compact Encoding Vectors (AC-3.2, AC-4.2)
+        // ─────────────────────────────────────────────────────────────────────
+        // These vectors verify that JS/TS can decode Rust-encoded v2 payloads.
+        // Each game has at least one header-only and one payload-carrying vector.
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Blackjack v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let blackjack_hit = BlackjackMove::Hit.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "blackjack_v2_hit",
+            "Blackjack Hit: v2 header-only (1 byte)",
+            "BlackjackMove",
+            &blackjack_hit,
+        ));
+
+        let blackjack_stand = BlackjackMove::Stand.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "blackjack_v2_stand",
+            "Blackjack Stand: v2 header-only (1 byte)",
+            "BlackjackMove",
+            &blackjack_stand,
+        ));
+
+        let blackjack_deal = BlackjackMove::Deal { side_bets: BlackjackSideBets::none() }
+            .encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "blackjack_v2_deal_no_side_bets",
+            "Blackjack Deal: v2 with no side bets (2 bytes)",
+            "BlackjackMove",
+            &blackjack_deal,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Baccarat v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let baccarat_deal = BaccaratMove::Deal.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "baccarat_v2_deal",
+            "Baccarat Deal: v2 header-only (1 byte)",
+            "BaccaratMove",
+            &baccarat_deal,
+        ));
+
+        let baccarat_clear = BaccaratMove::ClearBets.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "baccarat_v2_clear_bets",
+            "Baccarat ClearBets: v2 header-only (1 byte)",
+            "BaccaratMove",
+            &baccarat_clear,
+        ));
+
+        let baccarat_bet = BaccaratMove::PlaceBet(BaccaratBetDescriptor {
+            bet_type: BaccaratBetType::Player,
+            amount: 100,
+        }).encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "baccarat_v2_place_bet_player_100",
+            "Baccarat PlaceBet: Player bet of 100 units",
+            "BaccaratMove",
+            &baccarat_bet,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Roulette v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let roulette_spin = RouletteMove::Spin.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "roulette_v2_spin",
+            "Roulette Spin: v2 header-only (1 byte)",
+            "RouletteMove",
+            &roulette_spin,
+        ));
+
+        let roulette_clear = RouletteMove::ClearBets.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "roulette_v2_clear_bets",
+            "Roulette ClearBets: v2 header-only (1 byte)",
+            "RouletteMove",
+            &roulette_clear,
+        ));
+
+        let roulette_bet = RouletteMove::PlaceBet(RouletteBet::new(RouletteBetType::Straight, 17, 50))
+            .encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "roulette_v2_straight_bet_17_50",
+            "Roulette PlaceBet: Straight bet on 17 for 50 units",
+            "RouletteMove",
+            &roulette_bet,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Craps v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let craps_roll = CrapsMove::Roll.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "craps_v2_roll",
+            "Craps Roll: v2 header-only (1 byte)",
+            "CrapsMove",
+            &craps_roll,
+        ));
+
+        let craps_clear = CrapsMove::ClearBets.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "craps_v2_clear_bets",
+            "Craps ClearBets: v2 header-only (1 byte)",
+            "CrapsMove",
+            &craps_clear,
+        ));
+
+        let craps_bet = CrapsMove::PlaceBet(CrapsBet::simple(CrapsBetType::PassLine, 100))
+            .encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "craps_v2_pass_line_100",
+            "Craps PlaceBet: Pass Line bet for 100 units",
+            "CrapsMove",
+            &craps_bet,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Sic Bo v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let sic_bo_roll = SicBoMove::Roll.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "sic_bo_v2_roll",
+            "Sic Bo Roll: v2 header-only (1 byte)",
+            "SicBoMove",
+            &sic_bo_roll,
+        ));
+
+        let sic_bo_clear = SicBoMove::ClearBets.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "sic_bo_v2_clear_bets",
+            "Sic Bo ClearBets: v2 header-only (1 byte)",
+            "SicBoMove",
+            &sic_bo_clear,
+        ));
+
+        let sic_bo_bet = SicBoMove::PlaceBet(SicBoBet::simple(SicBoBetType::Small, 50))
+            .encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "sic_bo_v2_small_bet_50",
+            "Sic Bo PlaceBet: Small bet for 50 units",
+            "SicBoMove",
+            &sic_bo_bet,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Three Card Poker v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let three_card_play = ThreeCardMove::Play.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "three_card_v2_play",
+            "Three Card Play: v2 header-only (1 byte)",
+            "ThreeCardMove",
+            &three_card_play,
+        ));
+
+        let three_card_fold = ThreeCardMove::Fold.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "three_card_v2_fold",
+            "Three Card Fold: v2 header-only (1 byte)",
+            "ThreeCardMove",
+            &three_card_fold,
+        ));
+
+        let three_card_deal = ThreeCardMove::Deal { side_bets: ThreeCardSideBets::none() }
+            .encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "three_card_v2_deal_no_side_bets",
+            "Three Card Deal: v2 with no side bets",
+            "ThreeCardMove",
+            &three_card_deal,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Ultimate Texas Hold'em v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let uth_check = UltimateHoldemMove::Check.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "ultimate_holdem_v2_check",
+            "Ultimate Hold'em Check: v2 header-only (1 byte)",
+            "UltimateHoldemMove",
+            &uth_check,
+        ));
+
+        let uth_fold = UltimateHoldemMove::Fold.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "ultimate_holdem_v2_fold",
+            "Ultimate Hold'em Fold: v2 header-only (1 byte)",
+            "UltimateHoldemMove",
+            &uth_fold,
+        ));
+
+        let uth_bet = UltimateHoldemMove::Bet { multiplier: BetMultiplier::Four }
+            .encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "ultimate_holdem_v2_bet_4x",
+            "Ultimate Hold'em Bet: 4x multiplier (2 bytes)",
+            "UltimateHoldemMove",
+            &uth_bet,
+        ));
+
+        let uth_deal = UltimateHoldemMove::Deal { side_bets: UltimateHoldemSideBets::none() }
+            .encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "ultimate_holdem_v2_deal_no_side_bets",
+            "Ultimate Hold'em Deal: v2 with no side bets",
+            "UltimateHoldemMove",
+            &uth_deal,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Casino War v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let war_play = CasinoWarMove::Play.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "casino_war_v2_play",
+            "Casino War Play: v2 header-only (1 byte)",
+            "CasinoWarMove",
+            &war_play,
+        ));
+
+        let war_war = CasinoWarMove::War.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "casino_war_v2_war",
+            "Casino War War: v2 header-only (1 byte)",
+            "CasinoWarMove",
+            &war_war,
+        ));
+
+        let war_surrender = CasinoWarMove::Surrender.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "casino_war_v2_surrender",
+            "Casino War Surrender: v2 header-only (1 byte)",
+            "CasinoWarMove",
+            &war_surrender,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Video Poker v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let video_poker_hold_none = VideoPokerMove::HoldMask { mask: 0b00000 }
+            .encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "video_poker_v2_hold_none",
+            "Video Poker HoldMask: hold no cards (2 bytes)",
+            "VideoPokerMove",
+            &video_poker_hold_none,
+        ));
+
+        let video_poker_hold_all = VideoPokerMove::HoldMask { mask: 0b11111 }
+            .encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "video_poker_v2_hold_all",
+            "Video Poker HoldMask: hold all cards (2 bytes)",
+            "VideoPokerMove",
+            &video_poker_hold_all,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Hi-Lo v2
+        // ─────────────────────────────────────────────────────────────────────
+
+        let hilo_higher = HiLoMove::Higher.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "hilo_v2_higher",
+            "Hi-Lo Higher: v2 header-only (1 byte)",
+            "HiLoMove",
+            &hilo_higher,
+        ));
+
+        let hilo_lower = HiLoMove::Lower.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "hilo_v2_lower",
+            "Hi-Lo Lower: v2 header-only (1 byte)",
+            "HiLoMove",
+            &hilo_lower,
+        ));
+
+        let hilo_same = HiLoMove::Same.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "hilo_v2_same",
+            "Hi-Lo Same: v2 header-only (1 byte)",
+            "HiLoMove",
+            &hilo_same,
+        ));
+
+        let hilo_cashout = HiLoMove::Cashout.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "hilo_v2_cashout",
+            "Hi-Lo Cashout: v2 header-only (1 byte)",
+            "HiLoMove",
+            &hilo_cashout,
         ));
 
         Self {
@@ -742,8 +1065,8 @@ mod tests {
     fn test_golden_vectors_coverage() {
         let vectors = GoldenVectors::canonical();
 
-        // List of expected vectors
-        let expected_names = [
+        // Core protocol message vectors
+        let core_vectors = [
             "scope_binding_minimal",
             "scope_binding_typical",
             "scope_binding_max_seats",
@@ -759,7 +1082,52 @@ mod tests {
             "artifact_response_partial",
         ];
 
-        for name in expected_names {
+        // Game v2 compact encoding vectors (AC-3.2, AC-4.2)
+        let game_vectors = [
+            // Blackjack
+            "blackjack_v2_hit",
+            "blackjack_v2_stand",
+            "blackjack_v2_deal_no_side_bets",
+            // Baccarat
+            "baccarat_v2_deal",
+            "baccarat_v2_clear_bets",
+            "baccarat_v2_place_bet_player_100",
+            // Roulette
+            "roulette_v2_spin",
+            "roulette_v2_clear_bets",
+            "roulette_v2_straight_bet_17_50",
+            // Craps
+            "craps_v2_roll",
+            "craps_v2_clear_bets",
+            "craps_v2_pass_line_100",
+            // Sic Bo
+            "sic_bo_v2_roll",
+            "sic_bo_v2_clear_bets",
+            "sic_bo_v2_small_bet_50",
+            // Three Card Poker
+            "three_card_v2_play",
+            "three_card_v2_fold",
+            "three_card_v2_deal_no_side_bets",
+            // Ultimate Texas Hold'em
+            "ultimate_holdem_v2_check",
+            "ultimate_holdem_v2_fold",
+            "ultimate_holdem_v2_bet_4x",
+            "ultimate_holdem_v2_deal_no_side_bets",
+            // Casino War
+            "casino_war_v2_play",
+            "casino_war_v2_war",
+            "casino_war_v2_surrender",
+            // Video Poker
+            "video_poker_v2_hold_none",
+            "video_poker_v2_hold_all",
+            // Hi-Lo
+            "hilo_v2_higher",
+            "hilo_v2_lower",
+            "hilo_v2_same",
+            "hilo_v2_cashout",
+        ];
+
+        for name in core_vectors.iter().chain(game_vectors.iter()) {
             assert!(
                 vectors.get(name).is_some(),
                 "Golden vector '{}' must exist",
@@ -767,11 +1135,82 @@ mod tests {
             );
         }
 
-        // Also verify count
+        // Verify count matches
+        let expected_count = core_vectors.len() + game_vectors.len();
         assert_eq!(
             vectors.vectors.len(),
-            expected_names.len(),
+            expected_count,
             "Golden vector count must match expected"
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AC-3.2, AC-4.2: Game v2 encoding parity tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// AC-3.2: Blackjack Hit encoding matches golden vector.
+    #[test]
+    fn test_blackjack_hit_parity_ac_3_2() {
+        let vectors = GoldenVectors::canonical();
+        let vector = vectors.get("blackjack_v2_hit").unwrap();
+
+        let actual = crate::blackjack::BlackjackMove::Hit
+            .encode_v2()
+            .expect("encoding cannot fail");
+
+        vector.verify(&actual).expect("Blackjack Hit must match golden vector");
+        // Verify it's a 1-byte header-only payload
+        assert_eq!(actual.len(), 1, "Hit should be 1 byte");
+    }
+
+    /// AC-3.2: Roulette Straight bet encoding matches golden vector.
+    #[test]
+    fn test_roulette_straight_bet_parity_ac_3_2() {
+        let vectors = GoldenVectors::canonical();
+        let vector = vectors.get("roulette_v2_straight_bet_17_50").unwrap();
+
+        let bet = crate::roulette::RouletteBet::new(
+            crate::RouletteBetType::Straight,
+            17,
+            50,
+        );
+        let actual = crate::roulette::RouletteMove::PlaceBet(bet)
+            .encode_v2()
+            .expect("encoding cannot fail");
+
+        vector.verify(&actual).expect("Roulette bet must match golden vector");
+    }
+
+    /// AC-3.2: Craps Pass Line bet encoding matches golden vector.
+    #[test]
+    fn test_craps_pass_line_parity_ac_3_2() {
+        let vectors = GoldenVectors::canonical();
+        let vector = vectors.get("craps_v2_pass_line_100").unwrap();
+
+        let bet = crate::craps::CrapsBet::simple(crate::CrapsBetType::PassLine, 100);
+        let actual = crate::craps::CrapsMove::PlaceBet(bet)
+            .encode_v2()
+            .expect("encoding cannot fail");
+
+        vector.verify(&actual).expect("Craps bet must match golden vector");
+    }
+
+    /// AC-4.2: Game v2 golden vectors are stable across runs.
+    #[test]
+    fn test_game_golden_vectors_stable_ac_4_2() {
+        let v1 = GoldenVectors::canonical();
+        let v2 = GoldenVectors::canonical();
+
+        // Verify all game vectors are identical
+        for name in [
+            "blackjack_v2_hit",
+            "roulette_v2_straight_bet_17_50",
+            "craps_v2_pass_line_100",
+            "hilo_v2_higher",
+        ] {
+            let vec1 = v1.get(name).unwrap();
+            let vec2 = v2.get(name).unwrap();
+            assert_eq!(vec1, vec2, "Golden vector '{}' must be stable", name);
+        }
     }
 }
