@@ -1,52 +1,34 @@
 # Implementation Plan
 
-**Phase**: Active
+**Phase**: ✅ Complete
 **Date**: 2026-01-17
 **Scope**: Fix testnet transaction pipeline - website rendering and transaction flow.
 
-## Source of Truth
+## Status
 
-- `ralph/specs/testnet-transaction-pipeline-fix.md` - End-to-end transaction flow debugging
+All implementation tasks complete. Spec archived to `ralph/specs/archive/testnet-transaction-pipeline-fix.md`.
 
-Completed work archived to `ralph/specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`.
-All other specs archived to `ralph/specs/archive/`.
+## Completed Work
 
-## Current Blocking Issues
+All phases (1-5) archived to `ralph/specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`.
 
-### Website Not Rendering (Critical)
+### Summary of Fixes
 
-**Symptoms**:
-- Blank page with gray background
-- React `#root` element exists but empty (0 children)
-- No console errors visible
-- All resources load successfully (WASM, JS, CSS)
+1. **BufferedMempool** - Replay buffer for late subscribers (30s window)
+2. **Nonce Floor Bug** - Removed FLOOR_MAP override causing nonce drift
+3. **Website Rendering** - Error boundaries, WASM logging, loading states
+4. **Transaction Observability** - Logging, metrics, e2e test scripts
+5. **WebSocket Origin Validation** - Fixed validators being silently rejected
 
-**Solution**: See spec Phase 1 (AC-1.1 through AC-1.4)
+### Root Cause (Zero Transactions)
 
-### Zero Transaction Blocks
+The `validate_origin()` function in `ws.rs` required `ALLOW_WS_NO_ORIGIN=1` for non-browser clients. Without this, validators were silently rejected from the mempool WebSocket.
 
-**Symptoms**:
-- Chain producing blocks (height 15532+)
-- tx_count=0 in every block
-- Cannot test until website rendering is fixed
+**Fix**: Changed default to allow non-browser clients. Restrictive behavior now opt-in via `ALLOW_WS_NO_ORIGIN=0`.
 
-**Solution**: See spec Phase 2 (AC-2.1 through AC-2.4)
+## Post-Deployment Validation
 
-## Implementation Order
-
-Phases 1-4 completed - see `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`
-
-### Phase 5: WebSocket Origin Validation Fix (Critical)
-
-- [x] Fix WebSocket origin validation blocking validators
-  - Tests: Validators can connect to `/mempool` WebSocket, transactions included in blocks
-  - Files Changed: `simulator/src/api/ws.rs`
-
-**Root Cause**: The `validate_origin()` function in `ws.rs` required `ALLOW_WS_NO_ORIGIN=1` to be set for non-browser clients (validators) to connect. Without this env var, validators were silently rejected from the mempool WebSocket, causing tx_count=0 in all blocks.
-
-**Fix**: Changed default behavior to allow non-browser clients (no Origin header) by default. The restrictive behavior is now opt-in via `ALLOW_WS_NO_ORIGIN=0`.
-
-**Validation Required**: After deployment, verify:
+After deployment, verify:
 1. Mempool subscriber count > 0 (validators connected)
 2. tx_count > 0 in blocks after user interaction
 
