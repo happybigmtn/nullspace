@@ -206,9 +206,10 @@
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
   - Implemented: `sic_bo.rs` module with `SicBoMove` (payload encoding) and `SicBoState` (state blob encoding); opcodes PlaceBet/Roll/ClearBets/AtomicBatch/SetRules; single bet <=4 bytes for small amounts (AC-1.1); Roll/ClearBets are 1 byte; batch reduction >=40% (AC-1.2); typical state compaction >=30% with dice history via 9-bit entries (AC-2.1); `decode_dual()` accepts v1/v2 (AC-3.1); 38 tests covering all ACs with golden vectors for Roll/ClearBets and roundtrip tests for all bet types
-- [ ] Three Card v2 payload/state (spec: `compact-encoding-three-card.md`).
+- [x] Three Card v2 payload/state (spec: `compact-encoding-three-card.md`).
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
+  - Implemented: `three_card.rs` module with `ThreeCardMove` (payload encoding) and `ThreeCardState` (state blob encoding); opcodes Play/Fold/Deal/Reveal/SetRules; Play/Fold/Reveal are 1 byte (AC-1.1); Deal with one side bet <=3 bytes (AC-1.2); typical state compaction >=35% with 6-bit card IDs and 3-bit side bet mask (AC-2.1); `decode_dual()` accepts v1/v2 (AC-3.1); 39 tests covering all ACs with golden vectors for Play/Fold/Reveal/Deal
 - [ ] Ultimate Hold’em v2 payload/state (spec: `compact-encoding-ultimate-holdem.md`).
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
