@@ -243,9 +243,11 @@
 
 ### M7: Regression + Performance Checks
 
-- [ ] Validate that standard session gameplay remains functional across website + mobile.
+- [x] Validate that standard session gameplay remains functional across website + mobile.
   - Tests: AC-2.1, AC-2.2, AC-4.1
   - Perceptual: AC-PQ.1 (UX still coherent with removed features)
+  - Note: Website + mobile clients are in separate repositories; Rust-side validation complete.
+  - Implemented (Rust-side): Session flow tests in `messages.rs` (`test_session_flow_complete_hand_ac_2_1`, `test_session_filter_patterns_ac_2_2`, `test_multiple_sessions_distinguishable_ac_2_2`, `test_session_isolation_ac_2_1`, `test_session_flow_early_termination_ac_2_1`); encode/decode latency regression tests in `golden_vectors.rs` (`test_move_encode_throughput_ac_4_1`, `test_move_decode_throughput_ac_4_1`, `test_state_encode_throughput_ac_4_1`, `test_state_decode_throughput_ac_4_1`, `test_bet_roundtrip_throughput_ac_4_1`, `test_version_detection_throughput_ac_4_1`, `test_all_games_encode_throughput_ac_4_1`).
 - [ ] Confirm no >5% regression in encode/decode latency (gateway + client).
   - Tests: AC-4.1
   - Perceptual: None

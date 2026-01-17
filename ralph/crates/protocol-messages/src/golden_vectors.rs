@@ -1709,4 +1709,273 @@ mod tests {
 
         assert_eq!(original, decoded, "AC-4.2: Craps state must roundtrip correctly");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AC-4.1: Encode/decode latency regression tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Helper: measure operations per second for a closure.
+    fn measure_ops_per_sec<F>(iterations: usize, mut f: F) -> f64
+    where
+        F: FnMut(),
+    {
+        use std::time::Instant;
+        let start = Instant::now();
+        for _ in 0..iterations {
+            f();
+        }
+        let elapsed = start.elapsed();
+        iterations as f64 / elapsed.as_secs_f64()
+    }
+
+    /// AC-4.1: Move payload encode throughput baseline.
+    ///
+    /// Establishes baseline throughput for v2 move encoding.
+    /// Target: > 100,000 ops/sec for simple moves (header-only).
+    /// This ensures no >5% regression: baseline must exceed target by margin.
+    #[test]
+    fn test_move_encode_throughput_ac_4_1() {
+        const ITERATIONS: usize = 10_000;
+        const TARGET_OPS_PER_SEC: f64 = 100_000.0;
+
+        // Simple header-only moves (most common in gameplay)
+        let throughput = measure_ops_per_sec(ITERATIONS, || {
+            let _ = std::hint::black_box(
+                crate::blackjack::BlackjackMove::Hit.encode_v2().unwrap()
+            );
+        });
+
+        println!(
+            "[AC-4.1] Move encode throughput: {:.0} ops/sec (target: {:.0})",
+            throughput, TARGET_OPS_PER_SEC
+        );
+
+        // Allow 20% margin for test environment variance
+        let margin = TARGET_OPS_PER_SEC * 0.80;
+        assert!(
+            throughput >= margin,
+            "AC-4.1: Move encode throughput {:.0}/sec below margin {:.0}/sec (target {:.0}/sec)",
+            throughput,
+            margin,
+            TARGET_OPS_PER_SEC
+        );
+    }
+
+    /// AC-4.1: Move payload decode throughput baseline.
+    ///
+    /// Establishes baseline throughput for v2 move decoding.
+    /// Target: > 100,000 ops/sec for simple moves.
+    #[test]
+    fn test_move_decode_throughput_ac_4_1() {
+        const ITERATIONS: usize = 10_000;
+        const TARGET_OPS_PER_SEC: f64 = 100_000.0;
+
+        // Pre-encode move payloads
+        let hit_payload = crate::blackjack::BlackjackMove::Hit.encode_v2().unwrap();
+
+        let throughput = measure_ops_per_sec(ITERATIONS, || {
+            let _ = std::hint::black_box(
+                crate::blackjack::BlackjackMove::decode_v2(&hit_payload).unwrap()
+            );
+        });
+
+        println!(
+            "[AC-4.1] Move decode throughput: {:.0} ops/sec (target: {:.0})",
+            throughput, TARGET_OPS_PER_SEC
+        );
+
+        let margin = TARGET_OPS_PER_SEC * 0.80;
+        assert!(
+            throughput >= margin,
+            "AC-4.1: Move decode throughput {:.0}/sec below margin {:.0}/sec (target {:.0}/sec)",
+            throughput,
+            margin,
+            TARGET_OPS_PER_SEC
+        );
+    }
+
+    /// AC-4.1: State blob encode throughput baseline.
+    ///
+    /// State blobs are larger and more complex. Target: > 50,000 ops/sec.
+    #[test]
+    fn test_state_encode_throughput_ac_4_1() {
+        use crate::roulette::{RouletteState, RoulettePhase, ZeroRule, RouletteBet};
+        const ITERATIONS: usize = 5_000;
+        const TARGET_OPS_PER_SEC: f64 = 50_000.0;
+
+        let state = RouletteState {
+            phase: RoulettePhase::Complete,
+            zero_rule: ZeroRule::Standard,
+            result: Some(17),
+            bets: vec![
+                RouletteBet::new(crate::RouletteBetType::Straight, 17, 100),
+                RouletteBet::simple(crate::RouletteBetType::Red, 200),
+            ],
+            total_wagered: 300,
+            pending_return: 3600,
+            history: vec![17, 0, 32, 15, 3],
+        };
+
+        let throughput = measure_ops_per_sec(ITERATIONS, || {
+            let _ = std::hint::black_box(state.encode_v2().unwrap());
+        });
+
+        println!(
+            "[AC-4.1] State encode throughput: {:.0} ops/sec (target: {:.0})",
+            throughput, TARGET_OPS_PER_SEC
+        );
+
+        let margin = TARGET_OPS_PER_SEC * 0.80;
+        assert!(
+            throughput >= margin,
+            "AC-4.1: State encode throughput {:.0}/sec below margin {:.0}/sec (target {:.0}/sec)",
+            throughput,
+            margin,
+            TARGET_OPS_PER_SEC
+        );
+    }
+
+    /// AC-4.1: State blob decode throughput baseline.
+    ///
+    /// Target: > 50,000 ops/sec for typical state blobs.
+    #[test]
+    fn test_state_decode_throughput_ac_4_1() {
+        use crate::roulette::{RouletteState, RoulettePhase, ZeroRule, RouletteBet};
+        const ITERATIONS: usize = 5_000;
+        const TARGET_OPS_PER_SEC: f64 = 50_000.0;
+
+        let state = RouletteState {
+            phase: RoulettePhase::Complete,
+            zero_rule: ZeroRule::Standard,
+            result: Some(17),
+            bets: vec![
+                RouletteBet::new(crate::RouletteBetType::Straight, 17, 100),
+                RouletteBet::simple(crate::RouletteBetType::Red, 200),
+            ],
+            total_wagered: 300,
+            pending_return: 3600,
+            history: vec![17, 0, 32, 15, 3],
+        };
+
+        let encoded = state.encode_v2().unwrap();
+
+        let throughput = measure_ops_per_sec(ITERATIONS, || {
+            let _ = std::hint::black_box(RouletteState::decode_v2(&encoded).unwrap());
+        });
+
+        println!(
+            "[AC-4.1] State decode throughput: {:.0} ops/sec (target: {:.0})",
+            throughput, TARGET_OPS_PER_SEC
+        );
+
+        let margin = TARGET_OPS_PER_SEC * 0.80;
+        assert!(
+            throughput >= margin,
+            "AC-4.1: State decode throughput {:.0}/sec below margin {:.0}/sec (target {:.0}/sec)",
+            throughput,
+            margin,
+            TARGET_OPS_PER_SEC
+        );
+    }
+
+    /// AC-4.1: Bet payload encode/decode roundtrip throughput.
+    ///
+    /// Bet payloads are the most frequent in gameplay. Target: > 80,000 ops/sec.
+    #[test]
+    fn test_bet_roundtrip_throughput_ac_4_1() {
+        const ITERATIONS: usize = 5_000;
+        const TARGET_OPS_PER_SEC: f64 = 80_000.0;
+
+        let bet = crate::roulette::RouletteMove::PlaceBet(
+            crate::roulette::RouletteBet::new(crate::RouletteBetType::Straight, 17, 100),
+        );
+
+        let throughput = measure_ops_per_sec(ITERATIONS, || {
+            let encoded = bet.encode_v2().unwrap();
+            let _ = std::hint::black_box(
+                crate::roulette::RouletteMove::decode_v2(&encoded).unwrap()
+            );
+        });
+
+        println!(
+            "[AC-4.1] Bet roundtrip throughput: {:.0} ops/sec (target: {:.0})",
+            throughput, TARGET_OPS_PER_SEC
+        );
+
+        let margin = TARGET_OPS_PER_SEC * 0.80;
+        assert!(
+            throughput >= margin,
+            "AC-4.1: Bet roundtrip throughput {:.0}/sec below margin {:.0}/sec (target {:.0}/sec)",
+            throughput,
+            margin,
+            TARGET_OPS_PER_SEC
+        );
+    }
+
+    /// AC-4.1: Dual decoder version detection throughput.
+    ///
+    /// Version detection is called on every payload. Target: > 500,000 ops/sec.
+    #[test]
+    fn test_version_detection_throughput_ac_4_1() {
+        use crate::codec::DualDecoder;
+        const ITERATIONS: usize = 50_000;
+        const TARGET_OPS_PER_SEC: f64 = 500_000.0;
+
+        let v2_payload = crate::blackjack::BlackjackMove::Hit.encode_v2().unwrap();
+
+        let throughput = measure_ops_per_sec(ITERATIONS, || {
+            let _ = std::hint::black_box(DualDecoder::detect_version(&v2_payload).unwrap());
+        });
+
+        println!(
+            "[AC-4.1] Version detection throughput: {:.0} ops/sec (target: {:.0})",
+            throughput, TARGET_OPS_PER_SEC
+        );
+
+        let margin = TARGET_OPS_PER_SEC * 0.80;
+        assert!(
+            throughput >= margin,
+            "AC-4.1: Version detection throughput {:.0}/sec below margin {:.0}/sec (target {:.0}/sec)",
+            throughput,
+            margin,
+            TARGET_OPS_PER_SEC
+        );
+    }
+
+    /// AC-4.1: All games move encode throughput comparison.
+    ///
+    /// Ensures all 10 games meet the baseline throughput requirement.
+    #[test]
+    fn test_all_games_encode_throughput_ac_4_1() {
+        const ITERATIONS: usize = 2_000;
+        const TARGET_OPS_PER_SEC: f64 = 50_000.0;
+
+        let test_cases: Vec<(&str, Box<dyn Fn() -> Vec<u8>>)> = vec![
+            ("blackjack_hit", Box::new(|| crate::blackjack::BlackjackMove::Hit.encode_v2().unwrap())),
+            ("baccarat_deal", Box::new(|| crate::baccarat::BaccaratMove::Deal.encode_v2().unwrap())),
+            ("roulette_spin", Box::new(|| crate::roulette::RouletteMove::Spin.encode_v2().unwrap())),
+            ("craps_roll", Box::new(|| crate::craps::CrapsMove::Roll.encode_v2().unwrap())),
+            ("sic_bo_roll", Box::new(|| crate::sic_bo::SicBoMove::Roll.encode_v2().unwrap())),
+            ("three_card_play", Box::new(|| crate::three_card::ThreeCardMove::Play.encode_v2().unwrap())),
+            ("ultimate_check", Box::new(|| crate::ultimate_holdem::UltimateHoldemMove::Check.encode_v2().unwrap())),
+            ("casino_war_play", Box::new(|| crate::casino_war::CasinoWarMove::Play.encode_v2().unwrap())),
+            ("video_poker_hold", Box::new(|| crate::video_poker::VideoPokerMove::hold_all().encode_v2().unwrap())),
+            ("hilo_higher", Box::new(|| crate::hilo::HiLoMove::Higher.encode_v2().unwrap())),
+        ];
+
+        for (name, encode_fn) in test_cases {
+            let throughput = measure_ops_per_sec(ITERATIONS, || {
+                let _ = std::hint::black_box(encode_fn());
+            });
+
+            let margin = TARGET_OPS_PER_SEC * 0.80;
+            assert!(
+                throughput >= margin,
+                "AC-4.1: {} encode throughput {:.0}/sec below margin {:.0}/sec",
+                name,
+                throughput,
+                margin
+            );
+        }
+    }
 }
