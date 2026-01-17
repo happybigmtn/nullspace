@@ -93,6 +93,7 @@ pub mod roulette;
 pub mod sic_bo;
 pub mod three_card;
 pub mod ultimate_holdem;
+pub mod video_poker;
 
 // Re-export codec primitives for convenience
 pub use codec::{

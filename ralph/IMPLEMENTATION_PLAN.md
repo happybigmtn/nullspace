@@ -218,9 +218,10 @@
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
   - Implemented: `casino_war.rs` module with `CasinoWarMove` (payload encoding) and `CasinoWarState` (state blob encoding); opcodes Play/War/Surrender/SetTieBet/SetRules; Play/War/Surrender are 1 byte (AC-1.1); SetTieBet <=3 bytes for small amounts (AC-1.2); typical state compaction >=30% with 6-bit card IDs and optional war cards (AC-2.1); `decode_dual()` accepts v1/v2 (AC-3.1); 34 tests covering all ACs with golden vectors for Play/War/Surrender/SetTieBet
-- [ ] Video Poker v2 payload/state (spec: `compact-encoding-video-poker.md`).
+- [x] Video Poker v2 payload/state (spec: `compact-encoding-video-poker.md`).
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
+  - Implemented: `video_poker.rs` module with `VideoPokerMove` (HoldMask/SetRules opcodes) and `VideoPokerState` (6-bit card IDs, 2-bit stage, optional result with 6-bit HandRank + 4-bit multiplier); HoldMask is 2 bytes with standard header (spec says 1 byte but 13 bits minimum); SetRules <=3 bytes for small IDs (AC-1.2); typical state compaction >80% (AC-2.1 requires >=30%); `decode_dual()` accepts v1/v2 (AC-3.1); 32 tests covering all ACs with golden vectors for HoldMask variants and SetRules
 - [ ] HiLo v2 payload/state (spec: `compact-encoding-hilo.md`).
   - Tests: AC-1.1, AC-2.1, AC-3.1
   - Perceptual: None
