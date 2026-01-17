@@ -45,7 +45,7 @@ use crate::craps::{CrapsMove, CrapsBet};
 use crate::hilo::HiLoMove;
 use crate::roulette::{RouletteMove, RouletteBet};
 use crate::sic_bo::{SicBoMove, SicBoBet};
-use crate::three_card::{ThreeCardMove, SideBets as ThreeCardSideBets};
+use crate::three_card::ThreeCardMove;
 use crate::ultimate_holdem::{UltimateHoldemMove, SideBets as UltimateHoldemSideBets, BetMultiplier};
 use crate::video_poker::VideoPokerMove;
 use crate::{RouletteBetType, CrapsBetType, SicBoBetType};
@@ -57,7 +57,8 @@ use crate::{RouletteBetType, CrapsBetType, SicBoBetType};
 /// Version history:
 /// - v1: Core protocol message vectors (ScopeBinding, DealCommitment, etc.)
 /// - v2: Added game v2 compact encoding vectors (AC-3.2, AC-4.2)
-pub const GOLDEN_VECTORS_SCHEMA_VERSION: u32 = 2;
+/// - v3: Added state blob golden vectors for all 10 games (AC-1.2, AC-4.2)
+pub const GOLDEN_VECTORS_SCHEMA_VERSION: u32 = 3;
 
 /// A single golden vector: input message + expected encoded bytes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -675,6 +676,239 @@ impl GoldenVectors {
             &hilo_cashout,
         ));
 
+        // ─────────────────────────────────────────────────────────────────────
+        // State Blob Golden Vectors (AC-1.2, AC-4.2)
+        // ─────────────────────────────────────────────────────────────────────
+        // These vectors verify state blob encoding for all 10 games.
+        // Each game has a typical mid-game state for size regression testing.
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Blackjack State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::blackjack::{BlackjackState, BlackjackStage, BlackjackHand, HandStatus};
+        let blackjack_state = BlackjackState {
+            stage: BlackjackStage::PlayerTurn,
+            hands: vec![BlackjackHand {
+                cards: vec![10, 25, 40], // 3 cards
+                bet_mult: 1,
+                status: HandStatus::Active,
+                was_split: false,
+            }],
+            active_hand_index: 0,
+            dealer_cards: vec![5, 51], // 2 cards
+            side_bets: BlackjackSideBets::none(),
+        };
+        let blackjack_state_encoded = blackjack_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "blackjack_state_v2_typical",
+            "Blackjack State: mid-game with 1 hand (3 cards), dealer (2 cards)",
+            "BlackjackState",
+            &blackjack_state_encoded,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Baccarat State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::baccarat::{BaccaratState, BaccaratStage, BaccaratResult};
+        let baccarat_state = BaccaratState {
+            stage: BaccaratStage::Complete,
+            player_total: 5, // Natural 5
+            banker_total: 8, // Natural 8
+            result: BaccaratResult::BankerWin,
+            player_cards: vec![10, 25], // 2 cards
+            banker_cards: vec![5, 40, 12], // 3 cards (drew third)
+            bets: vec![
+                BaccaratBetDescriptor::new(BaccaratBetType::Banker, 100),
+            ],
+        };
+        let baccarat_state_encoded = baccarat_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "baccarat_state_v2_typical",
+            "Baccarat State: complete round with player (2 cards), banker (3 cards)",
+            "BaccaratState",
+            &baccarat_state_encoded,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Roulette State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::roulette::{RouletteState, RoulettePhase, ZeroRule};
+        let roulette_state = RouletteState {
+            phase: RoulettePhase::Complete,
+            zero_rule: ZeroRule::Standard,
+            result: Some(17),
+            bets: vec![
+                RouletteBet::new(RouletteBetType::Straight, 17, 100),
+                RouletteBet::simple(RouletteBetType::Red, 200),
+            ],
+            total_wagered: 300,
+            pending_return: 3600, // 35:1 on straight
+            history: vec![17, 0, 32, 15, 3],
+        };
+        let roulette_state_encoded = roulette_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "roulette_state_v2_typical",
+            "Roulette State: complete with 2 bets, 5-entry history",
+            "RouletteState",
+            &roulette_state_encoded,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Craps State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::craps::{CrapsState, CrapsPhase, FieldPaytable};
+        let craps_state = CrapsState {
+            phase: CrapsPhase::Point,
+            point: 6,
+            die1: 3,
+            die2: 3,
+            point_established_epoch: true,
+            made_points_mask: 0b0010, // Made 6 once (for Fire bet tracking)
+            field_paytable: FieldPaytable::Standard,
+            bets: vec![
+                CrapsBet::simple(CrapsBetType::PassLine, 100),
+            ],
+            total_wagered: 100,
+        };
+        let craps_state_encoded = craps_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "craps_state_v2_typical",
+            "Craps State: point phase with pass line bet",
+            "CrapsState",
+            &craps_state_encoded,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Sic Bo State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::sic_bo::{SicBoState, SicBoPhase, DiceRoll};
+        let sic_bo_state = SicBoState {
+            phase: SicBoPhase::Resolved,
+            current_roll: DiceRoll { die1: 2, die2: 4, die3: 5 }, // Total: 11
+            bets: vec![
+                SicBoBet::simple(SicBoBetType::Big, 100),
+            ],
+            history: vec![
+                DiceRoll { die1: 2, die2: 4, die3: 5 },
+                DiceRoll { die1: 1, die2: 1, die3: 3 },
+            ],
+        };
+        let sic_bo_state_encoded = sic_bo_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "sic_bo_state_v2_typical",
+            "Sic Bo State: resolved with 1 bet, 2-entry dice history",
+            "SicBoState",
+            &sic_bo_state_encoded,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Three Card Poker State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::three_card::{ThreeCardState, ThreeCardStage, HandRank as ThreeCardHandRank, SideBets as ThreeCardSideBets};
+        let three_card_state = ThreeCardState {
+            stage: ThreeCardStage::Complete,
+            has_result: true,
+            player_cards: vec![10, 23, 36], // 3 cards
+            dealer_cards: vec![5, 18, 31], // 3 cards
+            side_bets: ThreeCardSideBets::none(),
+            player_rank: ThreeCardHandRank::Pair,
+            dealer_rank: ThreeCardHandRank::HighCard,
+            dealer_qualifies: true,
+        };
+        let three_card_state_encoded = three_card_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "three_card_state_v2_typical",
+            "Three Card State: complete round with 3 cards each",
+            "ThreeCardState",
+            &three_card_state_encoded,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Ultimate Texas Hold'em State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::ultimate_holdem::{UltimateHoldemState, UltimateHoldemStage, BonusRank};
+        let uth_state = UltimateHoldemState {
+            stage: UltimateHoldemStage::River,
+            has_result: false,
+            hole_cards: vec![10, 23], // 2 hole cards
+            community_cards: vec![5, 18, 31, 44, 2], // 5 community cards
+            dealer_cards: vec![12, 25], // 2 dealer hole cards
+            side_bets: UltimateHoldemSideBets::none(),
+            bonus_rank: BonusRank::None,
+        };
+        let uth_state_encoded = uth_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "ultimate_holdem_state_v2_typical",
+            "Ultimate Hold'em State: river phase with all cards dealt",
+            "UltimateHoldemState",
+            &uth_state_encoded,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Casino War State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::casino_war::{CasinoWarState, CasinoWarStage};
+        let casino_war_state = CasinoWarState {
+            stage: CasinoWarStage::TieDecision,
+            player_card: 10, // Initial player card
+            dealer_card: 10, // Initial dealer card (tie!)
+            tie_bet: 50,
+            war_player_card: Some(23), // War player card
+            war_dealer_card: None, // Not yet drawn
+        };
+        let casino_war_state_encoded = casino_war_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "casino_war_state_v2_typical",
+            "Casino War State: tie decision phase after initial tie",
+            "CasinoWarState",
+            &casino_war_state_encoded,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Video Poker State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::video_poker::{VideoPokerState, VideoPokerStage};
+        let video_poker_state = VideoPokerState {
+            stage: VideoPokerStage::AwaitingHold,
+            cards: [10, 23, 36, 49, 11], // 5 cards
+            result: None,
+        };
+        let video_poker_state_encoded = video_poker_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "video_poker_state_v2_typical",
+            "Video Poker State: awaiting hold phase with 5 cards",
+            "VideoPokerState",
+            &video_poker_state_encoded,
+        ));
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Hi-Lo State Blob
+        // ─────────────────────────────────────────────────────────────────────
+
+        use crate::hilo::{HiLoState, HiLoStage};
+        let hilo_state = HiLoState {
+            stage: HiLoStage::AwaitingGuess,
+            last_card: 23, // Current card shown
+            accumulator: 400, // Built up winnings
+            rules_id: 0,
+        };
+        let hilo_state_encoded = hilo_state.encode_v2().expect("encoding cannot fail");
+        vectors.push(GoldenVector::new(
+            "hilo_state_v2_typical",
+            "Hi-Lo State: awaiting guess phase with accumulated winnings",
+            "HiLoState",
+            &hilo_state_encoded,
+        ));
+
         Self {
             schema_version: GOLDEN_VECTORS_SCHEMA_VERSION,
             vectors,
@@ -1127,7 +1361,21 @@ mod tests {
             "hilo_v2_cashout",
         ];
 
-        for name in core_vectors.iter().chain(game_vectors.iter()) {
+        // State blob golden vectors (AC-1.2, AC-4.2)
+        let state_vectors = [
+            "blackjack_state_v2_typical",
+            "baccarat_state_v2_typical",
+            "roulette_state_v2_typical",
+            "craps_state_v2_typical",
+            "sic_bo_state_v2_typical",
+            "three_card_state_v2_typical",
+            "ultimate_holdem_state_v2_typical",
+            "casino_war_state_v2_typical",
+            "video_poker_state_v2_typical",
+            "hilo_state_v2_typical",
+        ];
+
+        for name in core_vectors.iter().chain(game_vectors.iter()).chain(state_vectors.iter()) {
             assert!(
                 vectors.get(name).is_some(),
                 "Golden vector '{}' must exist",
@@ -1136,7 +1384,7 @@ mod tests {
         }
 
         // Verify count matches
-        let expected_count = core_vectors.len() + game_vectors.len();
+        let expected_count = core_vectors.len() + game_vectors.len() + state_vectors.len();
         assert_eq!(
             vectors.vectors.len(),
             expected_count,
@@ -1212,5 +1460,253 @@ mod tests {
             let vec2 = v2.get(name).unwrap();
             assert_eq!(vec1, vec2, "Golden vector '{}' must be stable", name);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AC-1.1: Move payload size reduction tests (>= 40%)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// AC-1.1: Typical move payloads achieve >= 40% size reduction vs v1 estimate.
+    ///
+    /// V1 JSON estimates assume typical overhead:
+    /// - Action string: ~10-20 bytes
+    /// - Numeric amounts: 4-8 bytes per field
+    /// - Object wrapper and field names: ~20-40 bytes
+    #[test]
+    fn test_move_payload_size_reduction_ac_1_1() {
+        // Test cases: (game, v2_payload, v1_estimate, description)
+        let test_cases = vec![
+            // Blackjack hit: v1 ~= 25 bytes ({"action":"hit"})
+            (
+                crate::blackjack::BlackjackMove::Hit.encode_v2().unwrap(),
+                25,
+                "blackjack_hit",
+            ),
+            // Roulette spin: v1 ~= 25 bytes ({"action":"spin"})
+            (
+                crate::roulette::RouletteMove::Spin.encode_v2().unwrap(),
+                25,
+                "roulette_spin",
+            ),
+            // Craps roll: v1 ~= 25 bytes ({"action":"roll"})
+            (
+                crate::craps::CrapsMove::Roll.encode_v2().unwrap(),
+                25,
+                "craps_roll",
+            ),
+            // Roulette bet: v1 ~= 60 bytes ({"action":"bet","type":"straight","number":17,"amount":100})
+            (
+                crate::roulette::RouletteMove::PlaceBet(
+                    crate::roulette::RouletteBet::new(crate::RouletteBetType::Straight, 17, 100),
+                )
+                .encode_v2()
+                .unwrap(),
+                60,
+                "roulette_bet",
+            ),
+            // Craps bet: v1 ~= 55 bytes ({"action":"bet","type":"passLine","amount":100})
+            (
+                crate::craps::CrapsMove::PlaceBet(crate::craps::CrapsBet::simple(
+                    crate::CrapsBetType::PassLine,
+                    100,
+                ))
+                .encode_v2()
+                .unwrap(),
+                55,
+                "craps_bet",
+            ),
+            // Hi-Lo higher: v1 ~= 30 bytes ({"action":"higher"})
+            (
+                crate::hilo::HiLoMove::Higher.encode_v2().unwrap(),
+                30,
+                "hilo_higher",
+            ),
+        ];
+
+        for (v2_payload, v1_estimate, desc) in test_cases {
+            let v2_size = v2_payload.len();
+            let reduction = 1.0 - (v2_size as f64 / v1_estimate as f64);
+
+            assert!(
+                reduction >= 0.40,
+                "AC-1.1: {} must achieve >= 40% size reduction, got {:.1}% (v2={} bytes, v1_est={} bytes)",
+                desc,
+                reduction * 100.0,
+                v2_size,
+                v1_estimate
+            );
+        }
+    }
+
+    /// AC-1.1: Header-only moves are exactly 1 byte.
+    #[test]
+    fn test_header_only_moves_1_byte_ac_1_1() {
+        let header_only_moves: Vec<(&str, Vec<u8>)> = vec![
+            ("blackjack_hit", crate::blackjack::BlackjackMove::Hit.encode_v2().unwrap()),
+            ("blackjack_stand", crate::blackjack::BlackjackMove::Stand.encode_v2().unwrap()),
+            ("roulette_spin", crate::roulette::RouletteMove::Spin.encode_v2().unwrap()),
+            ("roulette_clear", crate::roulette::RouletteMove::ClearBets.encode_v2().unwrap()),
+            ("craps_roll", crate::craps::CrapsMove::Roll.encode_v2().unwrap()),
+            ("hilo_higher", crate::hilo::HiLoMove::Higher.encode_v2().unwrap()),
+            ("hilo_lower", crate::hilo::HiLoMove::Lower.encode_v2().unwrap()),
+        ];
+
+        for (name, payload) in header_only_moves {
+            assert_eq!(
+                payload.len(),
+                1,
+                "AC-1.1: Header-only move '{}' must be exactly 1 byte, got {} bytes",
+                name,
+                payload.len()
+            );
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AC-1.2: State blob size reduction tests (>= 30%)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// AC-1.2: Roulette state blob achieves >= 30% size reduction vs v1 estimate.
+    #[test]
+    fn test_roulette_state_size_reduction_ac_1_2() {
+        use crate::roulette::{RouletteState, RoulettePhase, ZeroRule, RouletteBet};
+
+        let state = RouletteState {
+            phase: RoulettePhase::Complete,
+            zero_rule: ZeroRule::Standard,
+            result: Some(17),
+            bets: vec![
+                RouletteBet::new(crate::RouletteBetType::Straight, 17, 100),
+                RouletteBet::simple(crate::RouletteBetType::Red, 200),
+            ],
+            total_wagered: 300,
+            pending_return: 3600,
+            history: vec![17, 0, 32, 15, 3],
+        };
+
+        let v2_bytes = state.encode_v2().unwrap();
+        let v1_estimate = state.estimate_v1_size();
+        let reduction = 1.0 - (v2_bytes.len() as f64 / v1_estimate as f64);
+
+        assert!(
+            reduction >= 0.30,
+            "AC-1.2: Roulette state must achieve >= 30% reduction, got {:.1}% (v2={} bytes, v1_est={} bytes)",
+            reduction * 100.0,
+            v2_bytes.len(),
+            v1_estimate
+        );
+    }
+
+    /// AC-1.2: All 10 games' state blobs achieve >= 30% size reduction.
+    #[test]
+    fn test_all_state_blobs_size_reduction_ac_1_2() {
+        // Test all games with typical state sizes
+        // Using golden vectors as the source of truth for typical states
+
+        let vectors = GoldenVectors::canonical();
+        let state_vector_names = [
+            ("blackjack_state_v2_typical", 60),  // v1 estimate: ~60 bytes
+            ("baccarat_state_v2_typical", 50),   // v1 estimate: ~50 bytes
+            ("roulette_state_v2_typical", 100),  // v1 estimate: ~100 bytes
+            ("craps_state_v2_typical", 70),      // v1 estimate: ~70 bytes
+            ("sic_bo_state_v2_typical", 60),     // v1 estimate: ~60 bytes
+            ("three_card_state_v2_typical", 55), // v1 estimate: ~55 bytes
+            ("ultimate_holdem_state_v2_typical", 90), // v1 estimate: ~90 bytes
+            ("casino_war_state_v2_typical", 40), // v1 estimate: ~40 bytes
+            ("video_poker_state_v2_typical", 45), // v1 estimate: ~45 bytes
+            ("hilo_state_v2_typical", 35),       // v1 estimate: ~35 bytes
+        ];
+
+        for (name, v1_estimate) in state_vector_names {
+            let vector = vectors.get(name).expect(&format!("Vector {} must exist", name));
+            let v2_size = vector.preimage_length;
+            let reduction = 1.0 - (v2_size as f64 / v1_estimate as f64);
+
+            assert!(
+                reduction >= 0.30,
+                "AC-1.2: {} must achieve >= 30% reduction, got {:.1}% (v2={} bytes, v1_est={} bytes)",
+                name,
+                reduction * 100.0,
+                v2_size,
+                v1_estimate
+            );
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AC-4.1, AC-4.2: State blob parity tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// AC-4.2: State blob golden vectors are stable across runs.
+    #[test]
+    fn test_state_blob_vectors_stable_ac_4_2() {
+        let v1 = GoldenVectors::canonical();
+        let v2 = GoldenVectors::canonical();
+
+        let state_vectors = [
+            "blackjack_state_v2_typical",
+            "baccarat_state_v2_typical",
+            "roulette_state_v2_typical",
+            "craps_state_v2_typical",
+            "sic_bo_state_v2_typical",
+            "three_card_state_v2_typical",
+            "ultimate_holdem_state_v2_typical",
+            "casino_war_state_v2_typical",
+            "video_poker_state_v2_typical",
+            "hilo_state_v2_typical",
+        ];
+
+        for name in state_vectors {
+            let vec1 = v1.get(name).expect(&format!("Vector {} must exist", name));
+            let vec2 = v2.get(name).expect(&format!("Vector {} must exist", name));
+            assert_eq!(vec1, vec2, "State blob vector '{}' must be stable", name);
+        }
+    }
+
+    /// AC-4.2: State blob roundtrip encoding is correct.
+    #[test]
+    fn test_roulette_state_roundtrip_ac_4_2() {
+        use crate::roulette::{RouletteState, RoulettePhase, ZeroRule, RouletteBet};
+
+        let original = RouletteState {
+            phase: RoulettePhase::Complete,
+            zero_rule: ZeroRule::Standard,
+            result: Some(17),
+            bets: vec![
+                RouletteBet::new(crate::RouletteBetType::Straight, 17, 100),
+                RouletteBet::simple(crate::RouletteBetType::Red, 200),
+            ],
+            total_wagered: 300,
+            pending_return: 3600,
+            history: vec![17, 0, 32, 15, 3],
+        };
+
+        let encoded = original.encode_v2().unwrap();
+        let decoded = RouletteState::decode_v2(&encoded).unwrap();
+
+        assert_eq!(original, decoded, "AC-4.2: Roulette state must roundtrip correctly");
+    }
+
+    /// AC-4.2: Craps state blob roundtrip encoding is correct.
+    #[test]
+    fn test_craps_state_roundtrip_ac_4_2() {
+        use crate::craps::{CrapsState, CrapsPhase, CrapsBet, FieldPaytable};
+
+        let original = CrapsState {
+            phase: CrapsPhase::Point,
+            point: 6,
+            die1: 3,
+            die2: 3,
+            point_established_epoch: true,
+            made_points_mask: 0b0010,
+            field_paytable: FieldPaytable::Standard,
+            bets: vec![CrapsBet::simple(crate::CrapsBetType::PassLine, 100)],
+            total_wagered: 100,
+        };
+
+        let encoded = original.encode_v2().unwrap();
+        let decoded = CrapsState::decode_v2(&encoded).unwrap();
+
+        assert_eq!(original, decoded, "AC-4.2: Craps state must roundtrip correctly");
     }
 }
