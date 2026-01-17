@@ -90,6 +90,7 @@ pub mod exports;
 pub mod golden_vectors;
 pub mod roulette;
 pub mod sic_bo;
+pub mod three_card;
 
 // Re-export codec primitives for convenience
 pub use codec::{
