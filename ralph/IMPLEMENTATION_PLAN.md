@@ -47,7 +47,7 @@ All other specs archived to `ralph/specs/archive/`.
    - [x] Add end-to-end transaction test
 
 3. **Phase 3: Recovery Automation** (Medium)
-   - [ ] Add nonce reset command
+   - [x] Add nonce reset command
    - [ ] Add full-stack health check
    - [ ] Add transaction flow smoke test
 
@@ -67,6 +67,9 @@ CONFIRM_RESET=1 ./scripts/testnet-consensus-recover.sh
 
 # End-to-end transaction flow test (AC-2.4)
 ./scripts/test-transaction-flow.sh
+
+# Nonce reset (AC-3.1) - shows browser console commands
+./scripts/clear-browser-nonce.sh
 
 # Check chain status
 curl -s https://testnet.regenesis.dev/api/explorer/blocks?limit=1 | jq .
