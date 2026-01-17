@@ -48,7 +48,7 @@ All other specs archived to `ralph/specs/archive/`.
 
 3. **Phase 3: Recovery Automation** (Medium)
    - [x] Add nonce reset command
-   - [ ] Add full-stack health check
+   - [x] Add full-stack health check
    - [ ] Add transaction flow smoke test
 
 4. **Phase 4: Defensive Improvements** (Low)
