@@ -1023,9 +1023,12 @@ impl Simulator {
     }
 
     pub fn submit_transactions(&self, transactions: Vec<Transaction>) {
-        if let Err(e) = self.mempool_tx.send(Pending { transactions }) {
-            tracing::warn!("Failed to broadcast transactions (no subscribers): {}", e);
-        }
+        let mempool = self.mempool.clone();
+        let pending = Pending { transactions };
+        // Spawn async task to submit to buffered mempool
+        tokio::spawn(async move {
+            mempool.submit(pending).await;
+        });
     }
 
     pub async fn submit_state(&self, summary: Summary, inner: Vec<(Position, Digest)>) {
@@ -1305,8 +1308,13 @@ impl Simulator {
         (receiver, guard)
     }
 
-    pub fn mempool_subscriber(&self) -> broadcast::Receiver<Pending> {
-        self.mempool_tx.subscribe()
+    pub async fn mempool_subscriber(&self) -> crate::MempoolSubscriber {
+        self.mempool.subscribe().await
+    }
+
+    /// Get the current number of mempool subscribers (for metrics/health checks)
+    pub fn mempool_subscriber_count(&self) -> usize {
+        self.mempool.subscriber_count()
     }
 
     pub fn register_subscription(&self, filter: &UpdatesFilter) -> SubscriptionGuard {

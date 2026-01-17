@@ -311,7 +311,7 @@ async fn handle_mempool_ws(
 ) {
     tracing::info!("Mempool WebSocket connected");
     let (mut sender, mut receiver) = socket.split();
-    let mut txs = simulator.mempool_subscriber();
+    let mut txs = simulator.mempool_subscriber().await;
     let (out_tx, mut out_rx) = outbound_channel(simulator.config.ws_outbound_capacity());
     let writer_simulator = simulator.clone();
     let writer_handle = tokio::spawn(async move {
@@ -365,10 +365,10 @@ async fn handle_mempool_ws(
                     _ => {} // Ignore other message types
                 }
             }
-            // Handle broadcast transactions
-            tx_result = txs.recv() => {
-                match tx_result {
-                    Ok(tx) => {
+            // Handle buffered mempool transactions
+            tx_opt = txs.recv() => {
+                match tx_opt {
+                    Some(tx) => {
                         let result = enqueue_message(
                             &out_tx,
                             Message::Binary(tx.encode().to_vec()),
@@ -380,16 +380,8 @@ async fn handle_mempool_ws(
                             break;
                         }
                     }
-                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                        tracing::warn!(
-                            "Mempool WebSocket client lagged behind, skipped {} messages. Consider increasing buffer size.",
-                            skipped
-                        );
-                        record_lagged(&simulator, WsStreamKind::Mempool, skipped);
-                        // Continue receiving - client may catch up
-                    }
-                    Err(broadcast::error::RecvError::Closed) => {
-                        tracing::info!("Mempool broadcast channel closed");
+                    None => {
+                        tracing::info!("Mempool subscriber stream ended");
                         break;
                     }
                 }

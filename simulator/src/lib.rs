@@ -1,4 +1,4 @@
-use nullspace_types::{api::Pending, Identity};
+use nullspace_types::Identity;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -17,6 +17,8 @@ pub use api::Api;
 mod cache;
 mod fanout;
 mod explorer;
+mod mempool;
+pub use mempool::{BufferedMempool, BufferedMempoolConfig, MempoolSubscriber};
 pub use explorer::{AccountActivity, ExplorerBlock, ExplorerState, ExplorerTransaction};
 mod explorer_persistence;
 use explorer_persistence::ExplorerPersistence;
@@ -318,13 +320,11 @@ pub struct Simulator {
     summary_persistence: Option<SummaryPersistence>,
     subscriptions: Arc<Mutex<SubscriptionTracker>>,
     update_tx: broadcast::Sender<InternalUpdate>,
-    mempool_tx: broadcast::Sender<Pending>,
-    // Keep initial receivers alive to prevent channel closure when no subscribers exist.
-    // These are never read from, but their existence keeps the channels open.
+    // Keep initial receiver alive to prevent channel closure when no subscribers exist.
     #[allow(dead_code)]
     _update_rx: broadcast::Receiver<InternalUpdate>,
-    #[allow(dead_code)]
-    _mempool_rx: broadcast::Receiver<Pending>,
+    // Buffered mempool with replay window - transactions won't be lost if no subscribers
+    mempool: Arc<BufferedMempool>,
     fanout: Option<Arc<Fanout>>,
     cache: Option<Arc<RedisCache>>,
     ws_metrics: WsMetrics,
@@ -363,7 +363,8 @@ impl Simulator {
         summary_persistence: Option<SummaryPersistence>,
     ) -> Self {
         let (update_tx, update_rx) = broadcast::channel(config.updates_broadcast_capacity());
-        let (mempool_tx, mempool_rx) = broadcast::channel(config.mempool_broadcast_capacity());
+        // Use buffered mempool with replay window instead of lossy broadcast channel
+        let mempool = Arc::new(BufferedMempool::with_config(BufferedMempoolConfig::from_env()));
         let state = Arc::new(RwLock::new(State::default()));
         let mut explorer = ExplorerState::default();
         explorer.set_retention(
@@ -471,9 +472,8 @@ impl Simulator {
             summary_persistence,
             subscriptions: Arc::new(Mutex::new(SubscriptionTracker::default())),
             update_tx,
-            mempool_tx,
             _update_rx: update_rx,
-            _mempool_rx: mempool_rx,
+            mempool,
             fanout,
             cache,
             ws_metrics: WsMetrics::default(),
@@ -703,7 +703,7 @@ mod tests {
     async fn test_submit_transaction() {
         let (_, network_identity) = create_network_keypair();
         let simulator = Simulator::new(network_identity);
-        let mut mempool_rx = simulator.mempool_subscriber();
+        let mut mempool_rx = simulator.mempool_subscriber().await;
 
         let (private, _) = create_account_keypair(1);
         let tx = Transaction::sign(
@@ -716,7 +716,10 @@ mod tests {
 
         simulator.submit_transactions(vec![tx.clone()]);
 
-        let received_txs = mempool_rx.recv().await.unwrap();
+        // Wait a bit for the spawned task to complete
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let received_txs = mempool_rx.recv().await.expect("expected transaction");
         assert_eq!(received_txs.transactions.len(), 1);
         let received_tx = &received_txs.transactions[0];
         assert_eq!(received_tx.public, tx.public);
