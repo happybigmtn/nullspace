@@ -214,9 +214,10 @@
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
   - Implemented: `ultimate_holdem.rs` module with `UltimateHoldemMove` (payload encoding) and `UltimateHoldemState` (state blob encoding); opcodes Check/Bet/Fold/Deal/Reveal/SetRules; Bet payload is 2 bytes with 2-bit multiplier (AC-1.1); Deal with one side bet <=3 bytes (AC-1.2); typical state compaction >=35% with 6-bit card IDs and 2-bit stage (AC-2.1); `decode_dual()` accepts v1/v2 (AC-3.1); 49 tests covering all ACs with golden vectors for Check/Fold/Reveal/Deal and bet multiplier roundtrips
-- [ ] Casino War v2 payload/state (spec: `compact-encoding-casino-war.md`).
+- [x] Casino War v2 payload/state (spec: `compact-encoding-casino-war.md`).
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
+  - Implemented: `casino_war.rs` module with `CasinoWarMove` (payload encoding) and `CasinoWarState` (state blob encoding); opcodes Play/War/Surrender/SetTieBet/SetRules; Play/War/Surrender are 1 byte (AC-1.1); SetTieBet <=3 bytes for small amounts (AC-1.2); typical state compaction >=30% with 6-bit card IDs and optional war cards (AC-2.1); `decode_dual()` accepts v1/v2 (AC-3.1); 34 tests covering all ACs with golden vectors for Play/War/Surrender/SetTieBet
 - [ ] Video Poker v2 payload/state (spec: `compact-encoding-video-poker.md`).
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None

@@ -84,6 +84,7 @@
 mod payload;
 pub mod baccarat;
 pub mod blackjack;
+pub mod casino_war;
 pub mod codec;
 pub mod craps;
 pub mod exports;
