@@ -34,22 +34,7 @@ All other specs archived to `ralph/specs/archive/`.
 
 ## Implementation Order
 
-1. **Phase 1: Debug Website Rendering** (Critical)
-   - [x] Add visible error boundaries with error messages
-   - [x] Add WASM initialization logging
-   - [x] Add startup health check endpoint
-   - [x] Add visual loading states
-
-2. **Phase 2: Transaction Pipeline Observability** (Critical)
-   - [x] Add transaction submission logging
-   - [x] Add validator transaction receipt logging
-   - [x] Add mempool depth metric
-   - [x] Add end-to-end transaction test
-
-3. **Phase 3: Recovery Automation** (Medium)
-   - [x] Add nonce reset command
-   - [x] Add full-stack health check
-   - [ ] Add transaction flow smoke test
+Phases 1-3 completed - see `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`
 
 4. **Phase 4: Defensive Improvements** (Low)
    - [ ] Remove FLOOR_MAP entirely
@@ -70,6 +55,9 @@ CONFIRM_RESET=1 ./scripts/testnet-consensus-recover.sh
 
 # Nonce reset (AC-3.1) - shows browser console commands
 ./scripts/clear-browser-nonce.sh
+
+# Transaction flow smoke test (AC-3.3) - quick pass/fail for CI/CD
+./scripts/smoke-test-transactions.sh
 
 # Check chain status
 curl -s https://testnet.regenesis.dev/api/explorer/blocks?limit=1 | jq .
