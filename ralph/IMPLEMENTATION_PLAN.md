@@ -41,7 +41,7 @@ All other specs archived to `ralph/specs/archive/`.
    - [x] Add visual loading states
 
 2. **Phase 2: Transaction Pipeline Observability** (Critical)
-   - [ ] Add transaction submission logging
+   - [x] Add transaction submission logging
    - [ ] Add validator transaction receipt logging
    - [ ] Add mempool depth metric
    - [ ] Add end-to-end transaction test

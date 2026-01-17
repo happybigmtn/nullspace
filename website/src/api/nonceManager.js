@@ -537,6 +537,8 @@ export class NonceManager {
       const nonce = this.getNextNonce();
 
       try {
+        // AC-2.1: Always-visible transaction submission logging
+        console.log('[TX] Submitting', { type: txType, nonce, publicKey: this.publicKeyHex?.slice(0, 16) + '...' });
         logDebug('[NonceManager] submit', { txType, nonce, publicKey: this.publicKeyHex });
         // Create the transaction with the nonce
         const txData = this.withSigningKey(() => createTxFn(nonce));
@@ -557,6 +559,9 @@ export class NonceManager {
         // Submit the transaction
         const result = await this.client.submitTransaction(txData);
 
+        // AC-2.1: Always-visible transaction response logging
+        console.log('[TX] Response', { type: txType, nonce, status: result.status, txHash, txDigest: txDigest?.slice(0, 16) });
+
         if (result.status === 'accepted') {
           logDebug('[NonceManager] accepted', { txType, nonce, publicKey: this.publicKeyHex });
           // Increment nonce for next transaction
@@ -569,7 +574,8 @@ export class NonceManager {
 
         return { ...result, nonce, txHash, txDigest };
       } catch (error) {
-        // Continue trying to submit transactions until confirmed
+        // AC-2.1: Always-visible transaction error logging
+        console.log('[TX] Error', { type: txType, nonce, error: error.message });
         console.error(`Error submitting ${txType} transaction with nonce ${nonce}:`, error.message);
         throw error;
       }
