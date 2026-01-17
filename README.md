@@ -205,6 +205,31 @@ outcome = SHA256(network_seed || session_id || move_number)
 | **Auditable** | Full state snapshots enable replay of any historical round |
 | **Non-manipulable** | Seed fixed before bets placed, no player input to RNG |
 
+### Compact v2 Encoding
+
+All 10 casino games use a compact binary encoding (v2) that reduces on-chain payload sizes by 30-80%:
+
+| Game | Move Payload | State Blob | Key Optimization |
+|------|-------------|------------|------------------|
+| Blackjack | 1-2 bytes | ≥35% reduction | 1-byte opcodes (Hit/Stand/Double/Split) |
+| Baccarat | 1-3 bytes | ≥35% reduction | ULEB128 bet amounts, 1-byte Deal/Clear |
+| Roulette | 1-4 bytes | ≥30% reduction | 5-bit bet types, batch ≥40% reduction |
+| Craps | 1-4 bytes | ≥30% reduction | 5-bit bet types, made_points_mask tracking |
+| Sic Bo | 1-4 bytes | ≥30% reduction | 5-bit bet types, 9-bit dice history |
+| Three Card | 1-3 bytes | ≥35% reduction | 1-byte Play/Fold/Reveal, 3-bit side bet mask |
+| Ultimate Hold'em | 1-3 bytes | ≥35% reduction | 2-bit bet multiplier, 2-bit stage |
+| Casino War | 1-3 bytes | ≥30% reduction | 1-byte Play/War/Surrender |
+| Video Poker | 1-3 bytes | ≥80% reduction | 5-bit hold mask, 6-bit hand rank |
+| HiLo | 1 byte | ≥30% reduction | Header-only Higher/Lower/Same/Cashout |
+
+**Encoding features:**
+- **ULEB128** variable-length integers for amounts and IDs
+- **Dual-decode migration** accepting both v1 and v2 payloads
+- **Golden vectors** for cross-language parity (Rust → JS/TS via `export_protocol`)
+- **Deterministic encoding** with frozen hash tests for stability
+
+See `ralph/specs/compact-encoding-*.md` for per-game specifications.
+
 ## Project Structure
 
 ```
@@ -218,6 +243,7 @@ nullspace/
 +-- mobile/              # React Native mobile app
 +-- node/                # Rust consensus validators
 +-- packages/            # Shared packages (protocol definitions)
++-- ralph/               # Rust protocol-messages crate (compact v2 encoding, golden vectors)
 +-- scripts/             # Operational scripts
 +-- services/            # Backend services
     +-- auth/            # Session auth + AI proxy
@@ -236,6 +262,7 @@ nullspace/
 | `services/auth` | Session auth + AI proxy endpoint (`POST /ai/strategy`) |
 | `gateway` | WebSocket session manager for app clients (registration, deposits, updates stream) |
 | `client` bins | Operational tooling (bridge relayer, seed submitter, tournament scheduler) |
+| `protocol-messages` | Rust crate for compact v2 encoding, golden vectors, and TS export (`ralph/crates/`) |
 
 ## Backend Services
 
@@ -425,6 +452,8 @@ Report vulnerabilities privately:
 ## Additional Documentation
 
 - [AGENTS.md](AGENTS.md) for agent/automation instructions.
+- [ralph/IMPLEMENTATION_PLAN.md](ralph/IMPLEMENTATION_PLAN.md) for compact encoding implementation status.
+- [ralph/specs/](ralph/specs/) for per-game compact encoding specifications.
 
 ## License
 
