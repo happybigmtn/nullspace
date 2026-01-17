@@ -34,12 +34,7 @@ All other specs archived to `ralph/specs/archive/`.
 
 ## Implementation Order
 
-Phases 1-3 completed - see `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`
-
-4. **Phase 4: Defensive Improvements** (Low)
-   - [x] Remove FLOOR_MAP entirely
-   - [x] Add nonce sync on every transaction (AC-4.2)
-   - [ ] Add transaction rejection feedback
+All phases (1-4) completed - see `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`
 
 ## Quick Commands
 

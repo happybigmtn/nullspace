@@ -594,8 +594,17 @@ pub(super) async fn submit(
             }
             Err(err) => {
                 let message = match err {
-                    crate::submission::SubmitError::InvalidSeed => "invalid_seed",
-                    crate::submission::SubmitError::InvalidSummary => "invalid_summary",
+                    crate::submission::SubmitError::InvalidSeed => "invalid_seed".to_string(),
+                    crate::submission::SubmitError::InvalidSummary => "invalid_summary".to_string(),
+                    // AC-4.3: Return specific nonce rejection feedback to client
+                    crate::submission::SubmitError::NonceTooLow {
+                        public_key_hex,
+                        tx_nonce,
+                        expected_nonce,
+                    } => format!(
+                        "nonce_too_low:{}:tx_nonce={}:expected={}",
+                        public_key_hex, tx_nonce, expected_nonce
+                    ),
                 };
                 (StatusCode::BAD_REQUEST, message).into_response()
             }

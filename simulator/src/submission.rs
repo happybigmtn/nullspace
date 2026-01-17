@@ -9,17 +9,27 @@ use commonware_cryptography::{
 use commonware_utils::hex;
 use nullspace_types::{
     api::Submission,
-    execution::{Instruction, Transaction},
+    execution::{Instruction, Key, Transaction, Value},
     NAMESPACE,
 };
+use commonware_cryptography::sha256::Digest;
+use commonware_storage::qmdb::any::unordered::{variable, Update as StorageUpdate};
 use std::sync::Arc;
 
 use crate::Simulator;
+
+type StateOp = variable::Operation<Digest, Value>;
 
 #[derive(Debug)]
 pub enum SubmitError {
     InvalidSeed,
     InvalidSummary,
+    /// Transaction nonce is below the expected next nonce (AC-4.3)
+    NonceTooLow {
+        public_key_hex: String,
+        tx_nonce: u64,
+        expected_nonce: u64,
+    },
 }
 
 pub async fn apply_submission(
@@ -55,6 +65,27 @@ pub async fn apply_submission(
             } else {
                 tracing::info!(txs = 0, "received empty transactions submission");
             }
+
+            // AC-4.3: Validate nonces before submitting to mempool
+            // This provides immediate feedback to clients about rejected transactions
+            for tx in &txs {
+                let expected_nonce = get_account_nonce(&simulator, &tx.public).await;
+                if tx.nonce < expected_nonce {
+                    let public_key_hex = hex(&tx.public.encode());
+                    tracing::warn!(
+                        public_key = %public_key_hex,
+                        tx_nonce = tx.nonce,
+                        expected_nonce,
+                        "rejecting transaction: nonce too low"
+                    );
+                    return Err(SubmitError::NonceTooLow {
+                        public_key_hex,
+                        tx_nonce: tx.nonce,
+                        expected_nonce,
+                    });
+                }
+            }
+
             simulator.submit_transactions(txs);
             Ok(())
         }
@@ -257,5 +288,20 @@ fn log_admin_transactions(txs: &[Transaction]) {
             }
             _ => {}
         }
+    }
+}
+
+/// Query account nonce from simulator state (AC-4.3)
+///
+/// Returns the expected next nonce for the account. For new accounts that don't
+/// exist in state yet, returns 0 (any nonce >= 0 is valid for new accounts).
+async fn get_account_nonce(simulator: &Simulator, public_key: &PublicKey) -> u64 {
+    let account_key = Sha256::hash(&Key::Account(public_key.clone()).encode());
+    match simulator.query_state(&account_key).await {
+        Some(lookup) => match lookup.operation {
+            StateOp::Update(StorageUpdate(_, Value::Account(account))) => account.nonce,
+            _ => 0,
+        },
+        None => 0,
     }
 }
