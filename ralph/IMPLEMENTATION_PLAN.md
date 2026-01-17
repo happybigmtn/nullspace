@@ -36,7 +36,7 @@ All other specs archived to `ralph/specs/archive/`.
 
 1. **Phase 1: Debug Website Rendering** (Critical)
    - [x] Add visible error boundaries with error messages
-   - [ ] Add WASM initialization logging
+   - [x] Add WASM initialization logging
    - [ ] Add startup health check endpoint
    - [ ] Add visual loading states
 

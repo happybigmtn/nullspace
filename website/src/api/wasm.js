@@ -4,13 +4,26 @@ const GLOBAL_WASM_BINDINGS_KEY = '__NULLSPACE_WASM_BINDINGS__';
 
 export async function initWasm() {
   if (!wasmModule) {
+    console.log('[WASM] Checking for pre-initialized bindings...');
     const globalBindings = globalThis?.[GLOBAL_WASM_BINDINGS_KEY];
     if (globalBindings) {
+      console.log('[WASM] Using pre-initialized global bindings');
       wasmModule = globalBindings;
       return wasmModule;
     }
-    wasmModule = await import('../../wasm/pkg/nullspace_wasm.js');
-    await wasmModule.default();
+    try {
+      console.log('[WASM] Loading module from nullspace_wasm.js...');
+      wasmModule = await import('../../wasm/pkg/nullspace_wasm.js');
+      console.log('[WASM] Module JS loaded, initializing WASM binary...');
+      await wasmModule.default();
+      console.log('[WASM] WASM binary initialized successfully');
+    } catch (error) {
+      console.error('[WASM] Initialization failed:', error);
+      // Re-throw to let callers handle the error
+      throw error;
+    }
+  } else {
+    console.log('[WASM] Using cached module');
   }
   return wasmModule;
 }
@@ -28,11 +41,14 @@ export class WasmWrapper {
   }
 
   async init() {
+    console.log('[WASM] WasmWrapper.init() starting...');
     this.wasm = await initWasm();
     // Convert identity hex to bytes if provided
     if (this.identityHex) {
       this.identityBytes = this.hexToBytes(this.identityHex);
+      console.log('[WASM] WasmWrapper identity configured');
     }
+    console.log('[WASM] WasmWrapper.init() complete');
     return this;
   }
 
