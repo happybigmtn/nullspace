@@ -3,6 +3,7 @@ import { WasmWrapper } from '../api/wasm.js';
 import { CasinoClient } from '../api/client.js';
 import { getVaultRecord } from '../security/keyVault';
 import { subscribeVault } from '../security/vaultRuntime';
+import { setHealthStage } from '../services/startupHealth';
 
 export type ConnectionStatus =
   | 'missing_identity'
@@ -100,7 +101,9 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
         const wasmWrapper = new WasmWrapper(identityHex);
         const casinoClient = new CasinoClient(baseUrl, wasmWrapper);
         localClient = casinoClient;
+        setHealthStage('websocket_connecting');
         await casinoClient.init();
+        setHealthStage('websocket_connected');
 
         const kp = casinoClient.getOrCreateKeypair();
         if (!kp) {
@@ -131,14 +134,20 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
         setVaultMode('unlocked');
         await casinoClient.switchUpdates(kp.publicKey);
         if (casinoClient.waitForFirstSeed) {
+          setHealthStage('seed_waiting');
           try {
             await Promise.race([
               casinoClient.waitForFirstSeed(),
               new Promise((_, reject) => setTimeout(() => reject(new Error('seed-timeout')), 5000)),
             ]);
+            setHealthStage('seed_received');
           } catch (seedErr: any) {
             console.warn('[useCasinoConnection] waitForFirstSeed failed:', seedErr?.message ?? seedErr);
+            setHealthStage('seed_timeout', seedErr?.message ?? 'Seed timeout');
           }
+        } else {
+          // No waitForFirstSeed method - mark as received since we can proceed
+          setHealthStage('seed_received', 'No seed wait required');
         }
 
         let account;
@@ -168,6 +177,7 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
         setCurrentView(casinoClient.getCurrentView?.() ?? null);
         setStatus('connected');
         setStatusDetail(undefined);
+        setHealthStage('ready');
 
         unsubscribeSeed = (casinoClient.onEvent?.('Seed', () => {
           setCurrentView(casinoClient.getCurrentView?.() ?? null);
@@ -183,6 +193,7 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
         setStatus('error');
         setError(e?.message ?? String(e));
         setStatusDetail(ERROR_DETAIL);
+        setHealthStage('error', e?.message ?? String(e));
       }
     };
 

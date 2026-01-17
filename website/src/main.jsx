@@ -4,10 +4,12 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { ThemeProvider } from './hooks/useTheme';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { setHealthStage, setHealthError } from './services/startupHealth';
 import './index.css';
 
 // Log app startup for debugging
 console.log('[APP] main.jsx starting');
+setHealthStage('main_jsx_loaded');
 
 // Font loading detection
 if ('fonts' in document) {

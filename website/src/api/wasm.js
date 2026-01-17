@@ -1,4 +1,6 @@
 // Wrapper for WASM functionality
+import { setHealthStage } from '../services/startupHealth';
+
 let wasmModule = null;
 const GLOBAL_WASM_BINDINGS_KEY = '__NULLSPACE_WASM_BINDINGS__';
 
@@ -9,16 +11,20 @@ export async function initWasm() {
     if (globalBindings) {
       console.log('[WASM] Using pre-initialized global bindings');
       wasmModule = globalBindings;
+      setHealthStage('wasm_loaded', 'Using pre-initialized bindings');
       return wasmModule;
     }
     try {
+      setHealthStage('wasm_loading');
       console.log('[WASM] Loading module from nullspace_wasm.js...');
       wasmModule = await import('../../wasm/pkg/nullspace_wasm.js');
       console.log('[WASM] Module JS loaded, initializing WASM binary...');
       await wasmModule.default();
       console.log('[WASM] WASM binary initialized successfully');
+      setHealthStage('wasm_loaded');
     } catch (error) {
       console.error('[WASM] Initialization failed:', error);
+      setHealthStage('wasm_error', error?.message ?? String(error));
       // Re-throw to let callers handle the error
       throw error;
     }

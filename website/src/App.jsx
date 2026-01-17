@@ -6,11 +6,13 @@ import { InstallBanner } from './components/ui/InstallBanner';
 import { captureReferralFromSearch, claimReferralIfReady } from './services/referrals';
 import { CasinoConnectionProvider } from './chain/CasinoConnectionContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { setHealthStage } from './services/startupHealth';
 // Import vaultRuntime in main bundle to ensure it's not duplicated across lazy chunks
 // This ensures the in-memory vault state is shared between CasinoApp and SecurityApp
 import './security/vaultRuntime';
 
 console.log('[APP] App.jsx loading');
+setHealthStage('app_mounted');
 
 // Route-based code splitting (US-145)
 // CasinoApp is the largest route - lazy-load to reduce initial bundle
