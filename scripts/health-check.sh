@@ -53,7 +53,7 @@ check_block_freshness() {
     fi
 
     local indexed_ms
-    indexed_ms=$(python3 - <<'PY' <<<"$json"
+    indexed_ms=$(echo "$json" | python3 -c '
 import json,sys
 try:
     data=json.load(sys.stdin)
@@ -64,8 +64,7 @@ try:
         print(blocks[0].get("indexed_at_ms", -1))
 except Exception as e:
     print(-1)
-PY
-    )
+')
     if [ "$indexed_ms" = "-1" ]; then
         echo -e "${RED}NO_BLOCKS${NC}"
         ALL_HEALTHY=false
@@ -100,13 +99,13 @@ fetch_metrics() {
 read_metric() {
     local metrics="$1"
     local name="$2"
-    python3 - "$name" <<'PY' <<<"$metrics"
+    echo "$metrics" | python3 -c "
 import sys
-name = sys.argv[1]
+name = '$name'
 lines = []
 for line in sys.stdin:
     line = line.strip()
-    if not line or line.startswith("#"):
+    if not line or line.startswith('#'):
         continue
     parts = line.split()
     if len(parts) < 2:
@@ -118,7 +117,7 @@ suffix = []
 for metric, value in lines:
     if metric == name:
         exact = value
-    elif metric.endswith("_" + name):
+    elif metric.endswith('_' + name):
         suffix.append((metric, value))
 
 if exact is not None:
@@ -126,8 +125,8 @@ if exact is not None:
 elif len(suffix) == 1:
     print(suffix[0][1])
 else:
-    print("")
-PY
+    print('')
+"
 }
 
 check_metric_age() {
