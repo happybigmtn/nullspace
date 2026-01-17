@@ -56,9 +56,11 @@ impl BufferedMempoolConfig {
     }
 }
 
-/// Entry in the replay buffer with timestamp
+/// Entry in the replay buffer with timestamp and sequence number
 #[derive(Clone)]
 struct BufferEntry {
+    /// Unique sequence number for ordering
+    seq: usize,
     timestamp: Instant,
     pending: Pending,
 }
@@ -103,7 +105,11 @@ impl BufferedMempool {
     /// Transactions are added to the replay buffer and all waiters are notified.
     /// Unlike broadcast, this will NOT lose transactions if no subscribers exist.
     pub async fn submit(&self, pending: Pending) {
+        // Increment sequence first to get unique ID for this entry
+        let seq = self.sequence.fetch_add(1, Ordering::SeqCst) + 1;
+
         let entry = BufferEntry {
+            seq,
             timestamp: Instant::now(),
             pending,
         };
@@ -124,9 +130,6 @@ impl BufferedMempool {
             }
         }
 
-        // Increment sequence for ordering
-        self.sequence.fetch_add(1, Ordering::SeqCst);
-
         // Notify all waiters
         self.notify.notify_waiters();
     }
@@ -137,7 +140,8 @@ impl BufferedMempool {
         // Read current buffer state
         let buffer = self.buffer.read().await;
         let replay: Vec<Pending> = buffer.iter().map(|e| e.pending.clone()).collect();
-        let current_seq = self.sequence.load(Ordering::SeqCst);
+        // Get the highest sequence in the buffer (last entry) or current global seq
+        let last_seq = buffer.back().map(|e| e.seq).unwrap_or(0);
         drop(buffer);
 
         // Increment subscriber count
@@ -149,8 +153,7 @@ impl BufferedMempool {
             notify: Arc::clone(&self.notify),
             buffer: Arc::clone(&self.buffer),
             subscriber_count: Arc::clone(&self.subscriber_count),
-            last_seen_seq: current_seq,
-            sequence: Arc::clone(&self.sequence),
+            last_seen_seq: last_seq,
             replay_window: self.config.replay_window_duration,
         }
     }
@@ -191,10 +194,8 @@ pub struct MempoolSubscriber {
     buffer: Arc<RwLock<VecDeque<BufferEntry>>>,
     /// Reference to subscriber count for cleanup
     subscriber_count: Arc<AtomicUsize>,
-    /// Last seen sequence number to detect new transactions
+    /// Last delivered entry sequence number
     last_seen_seq: usize,
-    /// Reference to global sequence
-    sequence: Arc<AtomicUsize>,
     /// Replay window for filtering stale entries
     replay_window: Duration,
 }
@@ -203,6 +204,7 @@ impl MempoolSubscriber {
     /// Receive the next batch of pending transactions.
     ///
     /// First returns replayed transactions, then waits for new ones.
+    /// Each transaction is delivered exactly once in order.
     pub async fn recv(&mut self) -> Option<Pending> {
         // First, drain replay buffer
         if self.replay_index < self.replay.len() {
@@ -212,7 +214,7 @@ impl MempoolSubscriber {
         }
 
         // Clear replay buffer once exhausted to free memory
-        if !self.replay.is_empty() && self.replay_index >= self.replay.len() {
+        if !self.replay.is_empty() {
             self.replay.clear();
             self.replay.shrink_to_fit();
         }
@@ -220,23 +222,22 @@ impl MempoolSubscriber {
         // Wait for new transactions
         loop {
             // Check for new transactions in buffer
-            let current_seq = self.sequence.load(Ordering::SeqCst);
-            if current_seq > self.last_seen_seq {
-                // New transactions available
+            {
                 let buffer = self.buffer.read().await;
                 let cutoff = Instant::now() - self.replay_window;
 
-                // Find new entries we haven't seen
-                for entry in buffer.iter().rev() {
+                // Iterate FORWARD through buffer, find first entry we haven't seen
+                for entry in buffer.iter() {
+                    // Skip stale entries
                     if entry.timestamp < cutoff {
-                        break;
+                        continue;
                     }
-                    // Return the most recent unseen transaction
-                    self.last_seen_seq = current_seq;
-                    return Some(entry.pending.clone());
+                    // Return first entry with seq > last_seen_seq
+                    if entry.seq > self.last_seen_seq {
+                        self.last_seen_seq = entry.seq;
+                        return Some(entry.pending.clone());
+                    }
                 }
-                drop(buffer);
-                self.last_seen_seq = current_seq;
             }
 
             // Wait for notification of new transactions
@@ -354,5 +355,38 @@ mod tests {
             .expect("timeout waiting for transaction")
             .expect("expected transaction");
         // If we got here, new transaction was received
+    }
+
+    #[tokio::test]
+    async fn test_multiple_new_transactions_all_delivered() {
+        // This test verifies the fix for the bug where only the last transaction
+        // was delivered when multiple transactions arrived after subscription.
+        let mempool = Arc::new(BufferedMempool::new());
+
+        // Subscribe first (with empty buffer)
+        let mut subscriber = mempool.subscribe().await;
+
+        // Submit multiple transactions after subscription
+        let mempool_clone = Arc::clone(&mempool);
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            // Submit 3 transactions quickly
+            mempool_clone.submit(make_pending(1)).await;
+            mempool_clone.submit(make_pending(2)).await;
+            mempool_clone.submit(make_pending(3)).await;
+        });
+
+        // ALL 3 transactions must be received (this was the bug - only 1 was delivered)
+        for i in 1..=3 {
+            let result = tokio::time::timeout(Duration::from_secs(1), subscriber.recv()).await;
+            assert!(
+                result.is_ok(),
+                "Timeout waiting for transaction {i} - bug: not all transactions delivered"
+            );
+            assert!(
+                result.unwrap().is_some(),
+                "Expected transaction {i} to be Some"
+            );
+        }
     }
 }
