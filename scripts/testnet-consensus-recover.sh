@@ -47,7 +47,9 @@ remote "$NS_DB_HOST" "systemctl enable --now nullspace-consensus-watchdog.timer"
 echo "==> Restarting simulator on ${NS_SIM_HOST}"
 remote "$NS_SIM_HOST" "docker restart nullspace-simulator"
 
-echo "==> Restarting gateway + website on ${NS_GW_HOST}"
+echo "==> Clearing gateway nonce cache and restarting on ${NS_GW_HOST}"
+# Clear gateway nonce data to prevent nonce mismatch after chain reset
+remote "$NS_GW_HOST" "docker exec nullspace-gateway rm -rf /app/.gateway-data/nonces.json 2>/dev/null || true"
 remote "$NS_GW_HOST" "docker restart nullspace-gateway nullspace-website"
 
 echo "==> Verifying public endpoints"

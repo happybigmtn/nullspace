@@ -53,14 +53,26 @@ check_block_freshness() {
     fi
 
     local indexed_ms
-    indexed_ms=$(python - <<'PY' <<<"$json"
+    indexed_ms=$(python3 - <<'PY' <<<"$json"
 import json,sys
-data=json.load(sys.stdin)
-print(data["blocks"][0]["indexed_at_ms"])
+try:
+    data=json.load(sys.stdin)
+    blocks = data.get("blocks", [])
+    if not blocks or blocks[0] is None:
+        print(-1)
+    else:
+        print(blocks[0].get("indexed_at_ms", -1))
+except Exception as e:
+    print(-1)
 PY
     )
+    if [ "$indexed_ms" = "-1" ]; then
+        echo -e "${RED}NO_BLOCKS${NC}"
+        ALL_HEALTHY=false
+        return 1
+    fi
     local now_ms
-    now_ms=$(python - <<'PY'
+    now_ms=$(python3 - <<'PY'
 import time
 print(int(time.time()*1000))
 PY
@@ -88,7 +100,7 @@ fetch_metrics() {
 read_metric() {
     local metrics="$1"
     local name="$2"
-    python - "$name" <<'PY' <<<"$metrics"
+    python3 - "$name" <<'PY' <<<"$metrics"
 import sys
 name = sys.argv[1]
 lines = []
@@ -146,7 +158,7 @@ check_metric_age() {
     fi
 
     local now_ms
-    now_ms=$(python - <<'PY'
+    now_ms=$(python3 - <<'PY'
 import time
 print(int(time.time() * 1000))
 PY
@@ -185,7 +197,7 @@ check_mempool_connected() {
     fi
 
     local now_ms
-    now_ms=$(python - <<'PY'
+    now_ms=$(python3 - <<'PY'
 import time
 print(int(time.time() * 1000))
 PY
@@ -224,7 +236,7 @@ check_summary_upload_activity() {
     fi
 
     local now_ms
-    now_ms=$(python - <<'PY'
+    now_ms=$(python3 - <<'PY'
 import time
 print(int(time.time() * 1000))
 PY

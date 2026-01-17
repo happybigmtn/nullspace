@@ -203,7 +203,15 @@ export class NonceManager {
         const current = this.nonces.get(publicKeyHex);
         if (current !== undefined) {
           const drift = current > onChainNonce ? current - onChainNonce : onChainNonce - current;
-          if (current > onChainNonce) {
+          // Large backwards drift (local >> onChain) indicates chain reset - prefer on-chain
+          const CHAIN_RESET_THRESHOLD = 100n;
+          if (current > onChainNonce && drift >= CHAIN_RESET_THRESHOLD) {
+            console.warn(
+              `Large nonce drift detected for ${publicKeyHex.slice(0, 8)}; resetting to on-chain nonce ${onChainNonce} (local was ${current}, drift=${drift})`
+            );
+            this.nonces.set(publicKeyHex, onChainNonce);
+          } else if (current > onChainNonce) {
+            // Small drift - likely indexer lag, keep local
             console.warn(
               `Backend nonce behind local for ${publicKeyHex.slice(0, 8)}; keeping local nonce ${current} (drift=${drift})`
             );
