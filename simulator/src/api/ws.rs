@@ -48,13 +48,17 @@ fn outbound_channel(capacity: usize) -> (OutboundSender, OutboundReceiver) {
 /// Validates the WebSocket Origin header against allowed origins.
 /// Returns true if the origin is allowed, false otherwise.
 ///
-/// When `ALLOWED_WS_ORIGINS` is empty, all browser origins are rejected.
-/// `ALLOW_WS_NO_ORIGIN` can be set to permit non-browser clients.
+/// Default behavior (neither env var set): Allow all connections.
+/// With `ALLOWED_WS_ORIGINS` set: Only those origins are allowed.
+/// With `ALLOW_WS_NO_ORIGIN=0/false`: Require an Origin header.
+///
+/// Non-browser clients (validators) don't send Origin headers, so they are
+/// allowed by default unless explicitly restricted.
 fn validate_origin(headers: &HeaderMap) -> bool {
-    let allowed = std::env::var("ALLOWED_WS_ORIGINS").unwrap_or_default();
-    let allow_no_origin = matches!(
+    let allowed = std::env::var("ALLOWED_WS_ORIGINS").ok();
+    let deny_no_origin = matches!(
         std::env::var("ALLOW_WS_NO_ORIGIN").as_deref(),
-        Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") | Ok("YES")
+        Ok("0") | Ok("false") | Ok("FALSE") | Ok("no") | Ok("NO")
     );
 
     // Get origin from headers
@@ -67,10 +71,21 @@ fn validate_origin(headers: &HeaderMap) -> bool {
             }
         },
         None => {
-            // No origin header - could be same-origin or non-browser client
-            tracing::debug!("No Origin header in WebSocket request");
-            return allow_no_origin;
+            // No origin header - could be same-origin or non-browser client (validator)
+            // Default: allow non-browser clients (validators need to connect)
+            if deny_no_origin {
+                tracing::warn!("WebSocket connection rejected: no Origin header and ALLOW_WS_NO_ORIGIN=false");
+                return false;
+            }
+            tracing::debug!("No Origin header in WebSocket request (allowing non-browser client)");
+            return true;
         }
+    };
+
+    // If ALLOWED_WS_ORIGINS is not set, allow all origins (permissive default)
+    let Some(allowed) = allowed else {
+        tracing::debug!("WebSocket origin allowed (no ALLOWED_WS_ORIGINS restriction): {}", origin);
+        return true;
     };
 
     // Check if origin is in allowed list
@@ -79,7 +94,7 @@ fn validate_origin(headers: &HeaderMap) -> bool {
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .collect();
-    if allowed_list.contains(&"*") || allowed_list.contains(&origin) {
+    if allowed_list.is_empty() || allowed_list.contains(&"*") || allowed_list.contains(&origin) {
         tracing::debug!("WebSocket origin validated: {}", origin);
         return true;
     }

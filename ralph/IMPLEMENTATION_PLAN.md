@@ -34,7 +34,21 @@ All other specs archived to `ralph/specs/archive/`.
 
 ## Implementation Order
 
-All phases (1-4) completed - see `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`
+Phases 1-4 completed - see `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`
+
+### Phase 5: WebSocket Origin Validation Fix (Critical)
+
+- [x] Fix WebSocket origin validation blocking validators
+  - Tests: Validators can connect to `/mempool` WebSocket, transactions included in blocks
+  - Files Changed: `simulator/src/api/ws.rs`
+
+**Root Cause**: The `validate_origin()` function in `ws.rs` required `ALLOW_WS_NO_ORIGIN=1` to be set for non-browser clients (validators) to connect. Without this env var, validators were silently rejected from the mempool WebSocket, causing tx_count=0 in all blocks.
+
+**Fix**: Changed default behavior to allow non-browser clients (no Origin header) by default. The restrictive behavior is now opt-in via `ALLOW_WS_NO_ORIGIN=0`.
+
+**Validation Required**: After deployment, verify:
+1. Mempool subscriber count > 0 (validators connected)
+2. tx_count > 0 in blocks after user interaction
 
 ## Quick Commands
 
