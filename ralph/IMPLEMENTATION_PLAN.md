@@ -43,7 +43,7 @@ All other specs archived to `ralph/specs/archive/`.
 2. **Phase 2: Transaction Pipeline Observability** (Critical)
    - [x] Add transaction submission logging
    - [x] Add validator transaction receipt logging
-   - [ ] Add mempool depth metric
+   - [x] Add mempool depth metric
    - [ ] Add end-to-end transaction test
 
 3. **Phase 3: Recovery Automation** (Medium)

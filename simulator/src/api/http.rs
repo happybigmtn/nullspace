@@ -160,7 +160,7 @@ pub(super) async fn prometheus_metrics(
     if let Some(status) = metrics_auth_error(&headers) {
         return status.into_response();
     }
-    let body = render_prometheus_metrics(&simulator);
+    let body = render_prometheus_metrics(&simulator).await;
     (
         StatusCode::OK,
         [(
@@ -217,12 +217,14 @@ fn presence_ttl_ms() -> u64 {
         .unwrap_or(15_000)
 }
 
-fn render_prometheus_metrics(simulator: &Simulator) -> String {
+async fn render_prometheus_metrics(simulator: &Simulator) -> String {
     let ws = simulator.ws_metrics_snapshot();
     let http = simulator.http_metrics_snapshot();
     let system = simulator.system_metrics_snapshot();
     let explorer = simulator.explorer_metrics_snapshot();
     let updates = simulator.update_index_metrics_snapshot();
+    let mempool_pending = simulator.mempool_pending_count().await;
+    let mempool_subscribers = simulator.mempool_subscriber_count();
 
     let mut out = String::new();
 
@@ -415,6 +417,18 @@ fn render_prometheus_metrics(simulator: &Simulator) -> String {
         &mut out,
         "nullspace_simulator_update_index_failures_total",
         updates.failures,
+    );
+
+    // Mempool metrics - AC-2.3: mempool depth metric for transaction pipeline observability
+    append_gauge(
+        &mut out,
+        "nullspace_simulator_mempool_pending_count",
+        mempool_pending,
+    );
+    append_gauge(
+        &mut out,
+        "nullspace_simulator_mempool_subscriber_count",
+        mempool_subscribers,
     );
 
     out

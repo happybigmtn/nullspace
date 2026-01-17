@@ -1317,6 +1317,11 @@ impl Simulator {
         self.mempool.subscriber_count()
     }
 
+    /// Get the current number of pending transactions in the mempool buffer (for metrics)
+    pub async fn mempool_pending_count(&self) -> usize {
+        self.mempool.buffer_size().await
+    }
+
     pub fn register_subscription(&self, filter: &UpdatesFilter) -> SubscriptionGuard {
         let mut tracker = match self.subscriptions.lock() {
             Ok(tracker) => tracker,
