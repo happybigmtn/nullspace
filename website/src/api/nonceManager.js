@@ -159,11 +159,14 @@ export class NonceManager {
     // Do initial sync with provided account
     this.syncWithAccountState(account);
 
-    // Apply nonce floor when indexer lags chain - but ONLY if account exists.
-    // If account is null, the chain was reset and we should start from 0.
+    // Apply nonce floor when indexer lags chain - but ONLY if:
+    // 1. Account exists on chain
+    // 2. Floor is greater than current local nonce
+    // 3. Floor is <= server nonce (prevents floor from overriding after chain reset)
     if (account) {
       const floor = FLOOR_MAP[publicKeyHex];
-      if (typeof floor === 'number' && floor > this.getCurrentNonce()) {
+      const serverNonce = account.nonce;
+      if (typeof floor === 'number' && floor > this.getCurrentNonce() && floor <= serverNonce) {
         this.setNonce(floor);
       }
     }
