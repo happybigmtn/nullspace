@@ -44,7 +44,7 @@ All other specs archived to `ralph/specs/archive/`.
    - [x] Add transaction submission logging
    - [x] Add validator transaction receipt logging
    - [x] Add mempool depth metric
-   - [ ] Add end-to-end transaction test
+   - [x] Add end-to-end transaction test
 
 3. **Phase 3: Recovery Automation** (Medium)
    - [ ] Add nonce reset command
@@ -64,6 +64,9 @@ CONFIRM_RESET=1 ./scripts/testnet-consensus-recover.sh
 
 # Health check
 ./scripts/health-check.sh
+
+# End-to-end transaction flow test (AC-2.4)
+./scripts/test-transaction-flow.sh
 
 # Check chain status
 curl -s https://testnet.regenesis.dev/api/explorer/blocks?limit=1 | jq .
