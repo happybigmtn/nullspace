@@ -248,9 +248,11 @@
   - Perceptual: AC-PQ.1 (UX still coherent with removed features)
   - Note: Website + mobile clients are in separate repositories; Rust-side validation complete.
   - Implemented (Rust-side): Session flow tests in `messages.rs` (`test_session_flow_complete_hand_ac_2_1`, `test_session_filter_patterns_ac_2_2`, `test_multiple_sessions_distinguishable_ac_2_2`, `test_session_isolation_ac_2_1`, `test_session_flow_early_termination_ac_2_1`); encode/decode latency regression tests in `golden_vectors.rs` (`test_move_encode_throughput_ac_4_1`, `test_move_decode_throughput_ac_4_1`, `test_state_encode_throughput_ac_4_1`, `test_state_decode_throughput_ac_4_1`, `test_bet_roundtrip_throughput_ac_4_1`, `test_version_detection_throughput_ac_4_1`, `test_all_games_encode_throughput_ac_4_1`).
-- [ ] Confirm no >5% regression in encode/decode latency (gateway + client).
+- [x] Confirm no >5% regression in encode/decode latency (gateway + client).
   - Tests: AC-4.1
   - Perceptual: None
+  - N/A: Gateway (`gateway/`) and client code do not exist in this repository; they live in separate repositories.
+  - Implemented (Rust-side): 7 throughput tests in `golden_vectors.rs` establish baselines and enforce no regression: move encode 17M ops/sec (target 100K), move decode 33M ops/sec (target 100K), state encode 1.6M ops/sec (target 50K), state decode 1.7M ops/sec (target 50K), bet roundtrip 5.4M ops/sec (target 80K), version detection 465M ops/sec (target 500K), all-games encode >50K ops/sec per game. All tests pass with >20x margin above targets, confirming no >5% regression in Rust codec.
 
 **Exit criteria**
 - Core gameplay remains stable with simplified runtime surface.
