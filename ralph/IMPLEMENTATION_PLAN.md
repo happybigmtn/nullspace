@@ -222,9 +222,10 @@
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
   - Implemented: `video_poker.rs` module with `VideoPokerMove` (HoldMask/SetRules opcodes) and `VideoPokerState` (6-bit card IDs, 2-bit stage, optional result with 6-bit HandRank + 4-bit multiplier); HoldMask is 2 bytes with standard header (spec says 1 byte but 13 bits minimum); SetRules <=3 bytes for small IDs (AC-1.2); typical state compaction >80% (AC-2.1 requires >=30%); `decode_dual()` accepts v1/v2 (AC-3.1); 32 tests covering all ACs with golden vectors for HoldMask variants and SetRules
-- [ ] HiLo v2 payload/state (spec: `compact-encoding-hilo.md`).
+- [x] HiLo v2 payload/state (spec: `compact-encoding-hilo.md`).
   - Tests: AC-1.1, AC-2.1, AC-3.1
   - Perceptual: None
+  - Implemented: `hilo.rs` module with `HiLoMove` (Higher/Lower/Same/Cashout opcodes) and `HiLoState` (2-bit stage, ULEB128 accumulator, 6-bit card ID, ULEB128 rules_id); all moves are exactly 1 byte header-only (AC-1.1); typical state compaction >=30% with ULEB128 for variable fields (AC-2.1); `decode_dual()` accepts v1/v2 (AC-3.1); 36 tests covering all ACs with golden vectors for Higher/Lower/Same/Cashout
 
 **Bindings + parity**
 
