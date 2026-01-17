@@ -1422,10 +1422,21 @@ impl<
 
                     // Process transactions (already verified in indexer client)
                     pending_batches.inc();
-                    pending_transactions.inc_by(pending.transactions.len() as u64);
+                    let batch_size = pending.transactions.len();
+                    pending_transactions.inc_by(batch_size as u64);
+
+                    // AC-2.2: Log transaction arrival at validator
+                    info!(
+                        batch_size,
+                        "validator received transaction batch from mempool stream"
+                    );
+
                     let mut dropped_nonce = 0u64;
                     let mut future_nonce = 0u64;
                     let mut added = 0u64;
+                    let mut rejected_capacity = 0u64;
+                    let mut rejected_backlog = 0u64;
+                    let mut rejected_duplicate = 0u64;
                     let mut sample_dropped = 0u64;
                     let mut sample_rejected = 0u64;
                     let now_ms = system_time_ms(self.context.current());
@@ -1492,12 +1503,15 @@ impl<
                                 match reason {
                                     AddRejectReason::GlobalCapacity => {
                                         pending_transactions_rejected_capacity.inc();
+                                        rejected_capacity = rejected_capacity.saturating_add(1);
                                     }
                                     AddRejectReason::BacklogLimit => {
                                         pending_transactions_rejected_backlog.inc();
+                                        rejected_backlog = rejected_backlog.saturating_add(1);
                                     }
                                     AddRejectReason::DuplicateNonce => {
                                         pending_transactions_duplicate.inc();
+                                        rejected_duplicate = rejected_duplicate.saturating_add(1);
                                     }
                                 }
                                 if sample_rejected < 3 {
@@ -1512,12 +1526,22 @@ impl<
                             }
                         }
                     }
-                    if dropped_nonce > 0 || future_nonce > 0 {
+                    // AC-2.2: Log nonce validation results and inclusion/rejection summary
+                    {
+                        let (mempool_total, mempool_accounts) = mempool.stats();
+                        let rejected_total = rejected_capacity + rejected_backlog + rejected_duplicate;
                         info!(
+                            batch_size,
                             added,
                             dropped_nonce,
                             future_nonce,
-                            "processed mempool batch"
+                            rejected_total,
+                            rejected_capacity,
+                            rejected_backlog,
+                            rejected_duplicate,
+                            mempool_total,
+                            mempool_accounts,
+                            "processed mempool batch: nonce validation complete"
                         );
                     }
                 }
