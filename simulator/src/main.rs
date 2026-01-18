@@ -1,8 +1,12 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use commonware_codec::{DecodeExt, Encode};
+use commonware_cryptography::sha256::{Digest, Sha256};
+use commonware_storage::mmr::{hasher::Standard, Location};
+use commonware_storage::qmdb::verify_proof_and_extract_digests;
+use futures::stream::{self, StreamExt};
 use nullspace_simulator::{Api, Simulator, SimulatorConfig, SummaryPersistence};
-use nullspace_types::Identity;
+use nullspace_types::{api::VerifyError, Identity};
 use opentelemetry_otlp::WithExportConfig;
 use reqwest::Client;
 use serde_json::Value;
@@ -61,6 +65,91 @@ fn init_tracing() -> Result<()> {
     Ok(())
 }
 
+fn resolve_summary_replay_concurrency(value: Option<usize>) -> usize {
+    let fallback = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1);
+    match value {
+        Some(0) | None => fallback,
+        Some(value) => value,
+    }
+    .max(1)
+}
+
+#[allow(clippy::type_complexity)]
+fn verify_persisted_summary(
+    summary: &nullspace_types::api::Summary,
+    identity: &Identity,
+    enforce_signature_verification: bool,
+) -> Result<(Vec<(commonware_storage::mmr::Position, Digest)>, Vec<(commonware_storage::mmr::Position, Digest)>)> {
+    match summary.verify(identity) {
+        Ok(digests) => Ok(digests),
+        Err(err) => {
+            if enforce_signature_verification || !matches!(err, VerifyError::InvalidSignature) {
+                return Err(anyhow::anyhow!(err));
+            }
+
+            tracing::warn!(
+                ?err,
+                height = summary.progress.height,
+                state_ops = summary.state_proof_ops.len(),
+                events_ops = summary.events_proof_ops.len(),
+                "Persisted summary verification failed; bypassing signature check for staging"
+            );
+
+            let mut hasher = Standard::<Sha256>::new();
+            let state_ops_len = summary.state_proof_ops.len();
+            let events_ops_len = summary.events_proof_ops.len();
+
+            let state_digests = if summary.progress.state_start_op + state_ops_len as u64
+                == summary.progress.state_end_op
+            {
+                let state_start_loc = Location::from(summary.progress.state_start_op);
+                verify_proof_and_extract_digests(
+                    &mut hasher,
+                    &summary.state_proof,
+                    state_start_loc,
+                    &summary.state_proof_ops,
+                    &summary.progress.state_root,
+                )
+                .unwrap_or_default()
+            } else {
+                tracing::warn!(
+                    start = summary.progress.state_start_op,
+                    end = summary.progress.state_end_op,
+                    ops_len = state_ops_len,
+                    "State ops range mismatch while bypassing persisted summary signature"
+                );
+                Vec::new()
+            };
+
+            let events_digests = if summary.progress.events_start_op + events_ops_len as u64
+                == summary.progress.events_end_op
+            {
+                let events_start_loc = Location::from(summary.progress.events_start_op);
+                verify_proof_and_extract_digests(
+                    &mut hasher,
+                    &summary.events_proof,
+                    events_start_loc,
+                    &summary.events_proof_ops,
+                    &summary.progress.events_root,
+                )
+                .unwrap_or_default()
+            } else {
+                tracing::warn!(
+                    start = summary.progress.events_start_op,
+                    end = summary.progress.events_end_op,
+                    ops_len = events_ops_len,
+                    "Events ops range mismatch while bypassing persisted summary signature"
+                );
+                Vec::new()
+            };
+
+            Ok((state_digests, events_digests))
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -101,6 +190,10 @@ struct Args {
     /// Maximum number of blocks retained by the summary persistence (0 disables limit).
     #[arg(long)]
     summary_persistence_max_blocks: Option<usize>,
+
+    /// Max number of persisted summaries verified concurrently on startup (0 uses logical cores).
+    #[arg(long)]
+    summary_replay_concurrency: Option<usize>,
 
     /// Enforce signature verification for seeds and summaries (disable staging bypass).
     #[arg(long, default_value_t = false)]
@@ -449,6 +542,7 @@ async fn main() -> anyhow::Result<()> {
         cache_redis_prefix: args.cache_redis_prefix.or_else(|| defaults.cache_redis_prefix.clone()),
         cache_redis_ttl_seconds: map_optional_limit(args.cache_redis_ttl_seconds, defaults.cache_redis_ttl_seconds),
     };
+    let enforce_signature_verification = config.enforce_signature_verification;
 
     let (summary_persistence, summaries) = if let Some(path) = &args.summary_persistence_path {
         let (persistence, summaries) = SummaryPersistence::load_and_start_sqlite(
@@ -473,14 +567,39 @@ async fn main() -> anyhow::Result<()> {
         summary_persistence,
     ));
 
-    for summary in summaries {
-        let (state_digests, events_digests) = summary
-            .verify(&simulator.identity())
-            .context("verify persisted summary")?;
-        simulator
-            .submit_events(summary.clone(), events_digests)
-            .await;
-        simulator.submit_state(summary, state_digests).await;
+    if !summaries.is_empty() {
+        let total = summaries.len();
+        let replay_concurrency = resolve_summary_replay_concurrency(args.summary_replay_concurrency);
+        info!(
+            total,
+            concurrency = replay_concurrency,
+            "Replaying persisted summaries"
+        );
+        let identity = simulator.identity();
+        let mut stream = stream::iter(summaries.into_iter().map(|summary| {
+            let identity = identity.clone();
+            tokio::task::spawn_blocking(move || {
+                let digests =
+                    verify_persisted_summary(&summary, &identity, enforce_signature_verification);
+                (summary, digests)
+            })
+        }))
+        .buffered(replay_concurrency);
+
+        let mut processed = 0usize;
+        while let Some(result) = stream.next().await {
+            let (summary, digests) = result.context("summary replay task failed")?;
+            let (state_digests, events_digests) =
+                digests.context("verify persisted summary")?;
+            simulator
+                .submit_events(summary.clone(), events_digests)
+                .await;
+            simulator.submit_state(summary, state_digests).await;
+            processed += 1;
+            if processed % 1000 == 0 || processed == total {
+                info!(processed, total, "Replayed persisted summaries");
+            }
+        }
     }
 
     simulator.start_fanout();
