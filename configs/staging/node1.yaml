@@ -34,6 +34,7 @@ deque_size: 128
 
 # Execution settings
 execution_concurrency: 4
+allow_unsigned_summaries: true
 mempool_max_backlog: 64
 mempool_max_transactions: 100000
 max_pending_seed_listeners: 10000

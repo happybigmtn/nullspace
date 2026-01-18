@@ -105,6 +105,8 @@ pub struct Config {
     // Tunables (defaults preserve current constants in `node/src/main.rs`).
     #[serde(default = "default_max_uploads_outstanding")]
     pub max_uploads_outstanding: usize,
+    #[serde(default = "default_allow_unsigned_summaries")]
+    pub allow_unsigned_summaries: bool,
     #[serde(default = "default_max_message_size")]
     pub max_message_size: usize,
     #[serde(default = "default_leader_timeout_ms")]
@@ -236,6 +238,7 @@ pub struct ValidatedConfig {
     pub execution_concurrency: usize,
 
     pub max_uploads_outstanding: usize,
+    pub allow_unsigned_summaries: bool,
     pub max_message_size: usize,
     pub leader_timeout: Duration,
     pub notarization_timeout: Duration,
@@ -310,6 +313,7 @@ impl fmt::Debug for RedactedConfig<'_> {
             .field("indexer", &cfg.indexer)
             .field("execution_concurrency", &cfg.execution_concurrency)
             .field("max_uploads_outstanding", &cfg.max_uploads_outstanding)
+            .field("allow_unsigned_summaries", &cfg.allow_unsigned_summaries)
             .field("max_message_size", &cfg.max_message_size)
             .field("leader_timeout_ms", &cfg.leader_timeout_ms)
             .field("notarization_timeout_ms", &cfg.notarization_timeout_ms)
@@ -408,6 +412,10 @@ fn default_max_pending_seed_listeners() -> usize {
 
 fn default_max_uploads_outstanding() -> usize {
     defaults::DEFAULT_MAX_UPLOADS_OUTSTANDING
+}
+
+fn default_allow_unsigned_summaries() -> bool {
+    defaults::DEFAULT_ALLOW_UNSIGNED_SUMMARIES
 }
 
 fn default_max_message_size() -> usize {
@@ -804,6 +812,7 @@ impl Config {
             indexer: self.indexer,
             execution_concurrency: self.execution_concurrency,
             max_uploads_outstanding: self.max_uploads_outstanding,
+            allow_unsigned_summaries: self.allow_unsigned_summaries,
             max_message_size: self.max_message_size,
             leader_timeout: Duration::from_millis(self.leader_timeout_ms),
             notarization_timeout: Duration::from_millis(self.notarization_timeout_ms),

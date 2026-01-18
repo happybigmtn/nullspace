@@ -594,6 +594,7 @@ fn main_result() -> Result<()> {
                     indexer,
                     execution_concurrency: config.execution_concurrency,
                     max_uploads_outstanding: config.max_uploads_outstanding,
+                    allow_unsigned_summaries: config.allow_unsigned_summaries,
                     mempool_max_backlog: config.mempool_max_backlog,
                     mempool_max_transactions: config.mempool_max_transactions,
                     max_pending_seed_listeners: config.max_pending_seed_listeners,

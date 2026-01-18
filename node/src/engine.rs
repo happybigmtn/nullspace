@@ -201,6 +201,7 @@ pub struct ApplicationConfig<I: Indexer> {
     pub indexer: I,
     pub execution_concurrency: usize,
     pub max_uploads_outstanding: usize,
+    pub allow_unsigned_summaries: bool,
     pub mempool_max_backlog: usize,
     pub mempool_max_transactions: usize,
     pub max_pending_seed_listeners: usize,
@@ -354,6 +355,7 @@ impl<
                 replay_buffer: cfg.storage.replay_buffer,
                 indexer: cfg.application.indexer.clone(),
                 max_uploads_outstanding: cfg.application.max_uploads_outstanding,
+                allow_unsigned_summaries: cfg.application.allow_unsigned_summaries,
             },
         );
 

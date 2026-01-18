@@ -25,4 +25,5 @@ pub struct Config<I: Indexer> {
     pub buffer_pool: PoolRef,
     pub indexer: I,
     pub max_uploads_outstanding: usize,
+    pub allow_unsigned_summaries: bool,
 }

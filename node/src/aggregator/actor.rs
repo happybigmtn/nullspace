@@ -9,11 +9,12 @@ use commonware_codec::{
 };
 use commonware_consensus::aggregation::types::{Certificate, Index, Item};
 use commonware_cryptography::{
-    bls12381::primitives::variant::MinSig,
+    bls12381::primitives::{group::G1, variant::MinSig},
     ed25519::PublicKey,
     sha256::Digest,
     Digestible,
 };
+use commonware_math::algebra::CryptoGroup;
 use commonware_p2p::{Receiver, Sender};
 use commonware_resolver::{p2p, Resolver};
 use commonware_runtime::{Clock, Handle, Metrics, Spawner, Storage};
@@ -177,6 +178,17 @@ impl From<FixedCertificate> for AggregationCertificate {
             },
             certificate: fixed_certificate.signature,
         }
+    }
+}
+
+fn dummy_aggregation_signature() -> AggregationSignature {
+    <G1 as CryptoGroup>::generator()
+}
+
+fn dummy_aggregation_certificate(index: Index, digest: Digest) -> AggregationCertificate {
+    AggregationCertificate {
+        item: Item { index, digest },
+        certificate: dummy_aggregation_signature(),
     }
 }
 
@@ -717,33 +729,29 @@ impl<
             // so we may re-upload the same height again on restart.
             while uploads_outstanding < self.config.max_uploads_outstanding {
                 // Get next certificate
-                if !cache.has(cursor) || !certificates.has(cursor) {
+                if !cache.has(cursor) {
                     break;
                 }
-
-                // Increment uploads outstanding
-                uploads_outstanding += 1;
-                summary_uploads_outstanding.set(uploads_outstanding as i64);
-                summary_upload_last_attempt_ms.set(system_time_ms(self.context.current()));
-
-                // Get certificate
-                let certificate = match certificates.get(cursor).await {
-                    Ok(Some(certificate)) => certificate,
-                    Ok(None) => {
-                        error!(cursor, "certificate missing");
-                        return;
-                    }
-                    Err(err) => {
-                        error!(?err, cursor, "failed to fetch certificate");
-                        return;
-                    }
-                };
 
                 // Get result
                 let result = match results.read(cursor - 1).await {
                     Ok(result) => result,
                     Err(err) => {
                         error!(?err, cursor, "failed to fetch result");
+                        return;
+                    }
+                };
+
+                // Get certificate (or use dummy when allowed)
+                let certificate = match certificates.get(cursor).await {
+                    Ok(Some(certificate)) => certificate.into(),
+                    Ok(None) if self.config.allow_unsigned_summaries => {
+                        warn!(cursor, "aggregation certificate missing; using unsigned summary");
+                        dummy_aggregation_certificate(cursor, result.digest())
+                    }
+                    Ok(None) => break,
+                    Err(err) => {
+                        error!(?err, cursor, "failed to fetch certificate");
                         return;
                     }
                 };
@@ -765,6 +773,11 @@ impl<
                         return;
                     }
                 };
+
+                // Increment uploads outstanding
+                uploads_outstanding += 1;
+                summary_uploads_outstanding.set(uploads_outstanding as i64);
+                summary_upload_last_attempt_ms.set(system_time_ms(self.context.current()));
 
                 // Upload the summary to the indexer
                 let summary = Summary {
