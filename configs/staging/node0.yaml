@@ -10,7 +10,7 @@ polynomial: "00000000040385a5cfe0aef544f32090e7740eda6c4714c8dc7ee861a6ecf9bf2a6
 # Network (host networking: direct port binding)
 port: 9001
 metrics_port: 9100
-indexer: "https://indexer.testnet.regenesis.dev"
+indexer: "http://10.0.1.2:8080"
 
 # Storage (Docker volume mount)
 directory: "/data"

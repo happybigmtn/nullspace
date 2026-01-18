@@ -13,6 +13,12 @@
 - **No phantom criteria**: don’t introduce new ACs/PQ tests unless present in specs.
 - **No drive-by refactors**: avoid unrelated formatting/churn.
 
+### Test Output Rules (Token Conservation)
+- **Only show FAILING test output** — passing tests waste tokens
+- For passing tests, summarize: "✓ N tests passed"
+- If test output exceeds 50 lines, show only failures and error messages
+- Never dump full test logs into context
+
 ### Build Process (Must Follow)
 1. Identify the next unchecked task in `IMPLEMENTATION_PLAN.md` and quote:
    - task text

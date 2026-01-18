@@ -16,6 +16,11 @@
 - **Ranges must be explicit**: represent ranges as `AC-x.y–AC-x.z` (en dash) or as a comma list. Never concatenate IDs.
 - If you cannot find an AC you think should exist, do not guess. Record it under a "Missing/Unknown" section in the plan.
 
+### Spec Discovery (Token Conservation)
+1. Read `specs/INDEX.md` first — it lists all active specs
+2. Only read specs relevant to current gaps
+3. Don't load archived specs unless specifically needed
+
 ### Planning Process (Must Follow)
 1. Enumerate relevant Acceptance Criteria from `specs/sprint2/*.md` and `specs/*.md` (excluding `specs/archive/`).
 2. Compare those ACs to the current plan and identify gaps or incorrect mappings.

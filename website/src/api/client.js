@@ -937,8 +937,30 @@ export class CasinoClient {
         return result.value;
       } else {
         logDebug('Value is not an Account type:', result.value.type);
+      }
+    }
+
+    // Fallback: direct account endpoint (avoids key encoding/hash mismatches)
+    try {
+      const pubkeyHex = this.wasm.bytesToHex(publicKeyBytes);
+      const response = await fetch(`${this.baseUrl}/account/${pubkeyHex}`, {
+        headers: {
+          'x-request-id': makeRequestId()
+        }
+      });
+      if (response.status === 404) {
         return null;
       }
+      if (response.ok) {
+        const payload = await response.json();
+        if (payload && payload.nonce !== undefined && payload.nonce !== null) {
+          return payload;
+        }
+      } else {
+        logDebug(`Account fallback query returned ${response.status}`);
+      }
+    } catch (error) {
+      logDebug('Account fallback query failed:', error?.message ?? error);
     }
 
     return null;

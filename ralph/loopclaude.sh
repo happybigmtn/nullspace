@@ -133,7 +133,12 @@ else
 fi
 
 ITERATION=0
+TOTAL_COST=0
 CURRENT_BRANCH=$(git branch --show-current)
+
+# Temp file for raw output (for completion detection)
+RAWFILE=$(mktemp)
+trap "rm -f $RAWFILE" EXIT
 
 echo -e "${BOLD}🚀 Starting Ralph${NC}"
 echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -170,13 +175,26 @@ while true; do
             --dangerously-skip-permissions \
             --output-format=stream-json \
             --model opus \
-            --verbose 2>&1 | filter_output
+            --verbose 2>&1 | tee "$RAWFILE" | filter_output
     else
         cat "$PROMPT_FILE" | claude -p \
             --dangerously-skip-permissions \
             --output-format=stream-json \
             --model opus \
-            --verbose 2>&1 | filter_output
+            --verbose 2>&1 | tee "$RAWFILE" | filter_output
+    fi
+
+    # Track cumulative cost
+    iteration_cost=$(grep -o '"total_cost_usd":[0-9.]*' "$RAWFILE" 2>/dev/null | tail -1 | cut -d: -f2)
+    if [ -n "$iteration_cost" ]; then
+        TOTAL_COST=$(echo "$TOTAL_COST + $iteration_cost" | bc 2>/dev/null || echo "$TOTAL_COST")
+        echo -e "${DIM}💰 Session cost: \$${TOTAL_COST}${NC}"
+    fi
+
+    # Check for completion signal
+    if grep -qE '<promise>COMPLETE</promise>|all tasks complete|plan complete' "$RAWFILE" 2>/dev/null; then
+        echo -e "${GREEN}✅ All tasks complete!${NC}"
+        break
     fi
 
     # Commit + push changes after each iteration (build mode only)
