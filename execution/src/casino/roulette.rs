@@ -56,6 +56,9 @@ mod payouts {
     pub const SIX_LINE: u64 = 5;
 }
 
+/// Max bet amount to keep i64-safe return amounts (straight pays 35:1, return = 36x).
+const MAX_BET_AMOUNT: u64 = (i64::MAX as u64) / (payouts::STRAIGHT + 1);
+
 /// State header length: bet_count(1) + zero_rule(1) + phase(1) + totalWagered(8) + pendingReturn(8).
 const STATE_HEADER_V2_LEN: usize = 19;
 const BET_BYTES: usize = 10;
@@ -65,6 +68,14 @@ const RED_NUMBERS: [u8; 18] = [
     1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
 ];
 const DOUBLE_ZERO: u8 = 37;
+
+fn clamp_bet_amount(amount: u64) -> u64 {
+    super::payload::clamp_bet_amount(amount, MAX_BET_AMOUNT)
+}
+
+fn clamp_and_validate_bet_amount(amount: u64) -> Result<u64, GameError> {
+    super::payload::clamp_and_validate_amount(amount, MAX_BET_AMOUNT)
+}
 
 fn is_zero_result(zero_rule: ZeroRule, result: u8) -> bool {
     match zero_rule {
@@ -293,6 +304,7 @@ impl RouletteBet {
         let bet_type = BetType::try_from(bytes[0]).ok()?;
         let number = bytes[1];
         let amount = u64::from_be_bytes(bytes[2..10].try_into().ok()?);
+        let amount = clamp_bet_amount(amount);
         if amount == 0 {
             return None;
         }
@@ -563,7 +575,8 @@ impl CasinoGame for Roulette {
         match payload[0] {
             // [0, bet_type, number, amount_bytes...] - Place bet
             0 => {
-                let (bet_type, number, amount) = super::payload::parse_place_bet_payload(payload)?;
+                let (bet_type, number, amount) =
+                    super::payload::parse_place_bet_payload(payload)?;
 
                 // Bets can only be placed before the first spin.
                 if state.phase != Phase::Betting || state.result.is_some() {
@@ -571,7 +584,7 @@ impl CasinoGame for Roulette {
                 }
 
                 let bet_type = BetType::try_from(bet_type)?;
-                super::payload::ensure_nonzero_amount(amount)?;
+                let amount = clamp_and_validate_bet_amount(amount)?;
 
                 if !is_valid_bet_number(bet_type, number, state.zero_rule) {
                     return Err(GameError::InvalidPayload);
@@ -583,11 +596,7 @@ impl CasinoGame for Roulette {
                 }
 
                 // Add bet (allow duplicates for roulette - bet on same spot multiple times)
-                state.bets.push(RouletteBet {
-                    bet_type,
-                    number,
-                    amount,
-                });
+                state.bets.push(RouletteBet { bet_type, number, amount });
                 // Use checked_add to prevent overflow - reject bet if it would overflow
                 // (otherwise player gets charged but wager total doesn't increase)
                 state.total_wagered = state
@@ -861,10 +870,7 @@ impl CasinoGame for Roulette {
                             .try_into()
                             .map_err(|_| GameError::InvalidPayload)?,
                     );
-
-                    if amount == 0 {
-                        return Err(GameError::InvalidPayload);
-                    }
+                    let amount = clamp_and_validate_bet_amount(amount)?;
 
                     // Check for overflow in total wager
                     total_wager = total_wager

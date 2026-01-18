@@ -59,6 +59,10 @@ use std::fmt::Write;
 const MAX_HAND_SIZE: usize = 11;
 /// Maximum number of hands allowed (splits).
 const MAX_HANDS: usize = 4;
+/// Max base bet amount to keep i64-safe deductions.
+const MAX_BASE_BET_AMOUNT: u64 = i64::MAX as u64;
+/// Max side bet amount to keep i64-safe return amounts (Lucky Ladies pays 200:1 => 201x return).
+const MAX_SIDE_BET_AMOUNT: u64 = (i64::MAX as u64) / 201;
 const STATE_VERSION: u8 = 4;
 const CARD_UNKNOWN: u8 = 0xFF;
 const STATE_HEADER_V2_LEN: usize = 14;
@@ -67,6 +71,16 @@ const STATE_HEADER_V4_LEN: usize = 46;
 const RULES_LEN: usize = 2;
 const UI_EXTRA_LEN: usize = 3;
 const ROYAL_MATCH_KQ_MULTIPLIER: u64 = 25;
+
+fn clamp_base_bet(session: &mut GameSession) {
+    if session.bet > MAX_BASE_BET_AMOUNT {
+        session.bet = MAX_BASE_BET_AMOUNT;
+    }
+}
+
+fn clamp_side_bet_amount(amount: u64) -> u64 {
+    super::payload::clamp_bet_amount(amount, MAX_SIDE_BET_AMOUNT)
+}
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum BlackjackDecks {
@@ -698,6 +712,11 @@ fn parse_state(blob: &[u8]) -> Option<BlackjackState> {
     } else {
         return None;
     };
+    let side_bet_21plus3 = clamp_side_bet_amount(side_bet_21plus3);
+    let side_bet_lucky_ladies = clamp_side_bet_amount(side_bet_lucky_ladies);
+    let side_bet_perfect_pairs = clamp_side_bet_amount(side_bet_perfect_pairs);
+    let side_bet_bust_it = clamp_side_bet_amount(side_bet_bust_it);
+    let side_bet_royal_match = clamp_side_bet_amount(side_bet_royal_match);
     let initial_player_cards: [u8; 2] = reader.read_bytes(2)?.try_into().ok()?;
     if !initial_player_cards
         .iter()
@@ -824,6 +843,8 @@ impl CasinoGame for Blackjack {
             return Err(GameError::InvalidPayload);
         }
 
+        clamp_base_bet(session);
+
         let mv = Move::try_from(payload[0])?;
         let mut state = parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
 
@@ -834,7 +855,8 @@ impl CasinoGame for Blackjack {
         match state.stage {
             Stage::Betting => match mv {
                 Move::Set21Plus3 => {
-                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
+                    let new_bet =
+                        clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
                     let payout = apply_side_bet_update(&mut state.side_bet_21plus3, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
@@ -912,14 +934,18 @@ impl CasinoGame for Blackjack {
                         }
 
                         // Parse and apply 21+3 side bet
-                        let side_bet_21plus3 = super::payload::parse_u64_be(payload, 1)?;
+                        let side_bet_21plus3 =
+                            clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
                         let mut payout_update =
                             apply_side_bet_update(&mut state.side_bet_21plus3, side_bet_21plus3)?;
 
                         if payload.len() >= 33 {
-                            let side_bet_lucky_ladies = super::payload::parse_u64_be(payload, 9)?;
-                            let side_bet_perfect_pairs = super::payload::parse_u64_be(payload, 17)?;
-                            let side_bet_bust_it = super::payload::parse_u64_be(payload, 25)?;
+                            let side_bet_lucky_ladies =
+                                clamp_side_bet_amount(super::payload::parse_u64_be(payload, 9)?);
+                            let side_bet_perfect_pairs =
+                                clamp_side_bet_amount(super::payload::parse_u64_be(payload, 17)?);
+                            let side_bet_bust_it =
+                                clamp_side_bet_amount(super::payload::parse_u64_be(payload, 25)?);
 
                             payout_update = payout_update
                                 .saturating_add(apply_side_bet_update(
@@ -936,7 +962,8 @@ impl CasinoGame for Blackjack {
                                 )?);
                         }
                         if payload.len() == 41 {
-                            let side_bet_royal_match = super::payload::parse_u64_be(payload, 33)?;
+                            let side_bet_royal_match =
+                                clamp_side_bet_amount(super::payload::parse_u64_be(payload, 33)?);
                             payout_update = payout_update.saturating_add(apply_side_bet_update(
                                 &mut state.side_bet_royal_match,
                                 side_bet_royal_match,

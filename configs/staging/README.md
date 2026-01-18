@@ -14,6 +14,9 @@ Notes:
 - Gateway should set `GATEWAY_ALLOWED_ORIGINS` and `GATEWAY_ORIGIN` in staging.
 - For the global craps table, set `GATEWAY_LIVE_TABLE_CRAPS=1` and `GATEWAY_LIVE_TABLE_ADMIN_KEY_FILE`.
 - To report global player counts, set `GATEWAY_INSTANCE_ID` and (optionally) `GATEWAY_LIVE_TABLE_PRESENCE_TOKEN`.
+- On staging, apply simulator persistence via a systemd drop-in (avoid editing `.env` files), e.g. `Environment=SIMULATOR_ARGS=--summary-persistence-path=/var/lib/nullspace/simulator/summary.sqlite ...`.
+- `ns-sim-1` should not run validators; disable `nullspace-node*.service` there to avoid forked indexer data.
+- Staging validators should use a very large `prune_interval` to keep history available for new/repairing nodes.
 
 Generate local configs with:
 `cargo run --bin generate-keys -- --nodes 4 --output configs/local`

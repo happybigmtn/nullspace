@@ -70,6 +70,9 @@ mod payouts {
     pub const NEXT_COMMISSION_DIVISOR: u64 = 100;    // 1% commission
 }
 
+/// Max bet amount to keep i64-safe return amounts (Fire bet pays 999:1 => 1000x return).
+const MAX_BET_AMOUNT: u64 = (i64::MAX as u64) / (payouts::FIRE_6_POINTS + 1);
+
 const STATE_VERSION: u8 = 2;
 const STATE_HEADER_LEN: usize = 8;
 const BET_BYTES: usize = 19;
@@ -244,6 +247,8 @@ impl CrapsBet {
         let status = BetStatus::try_from(bytes[2]).ok()?;
         let amount = u64::from_be_bytes(bytes[3..11].try_into().ok()?);
         let odds_amount = u64::from_be_bytes(bytes[11..19].try_into().ok()?);
+        let amount = clamp_bet_amount(amount);
+        let odds_amount = clamp_bet_amount(odds_amount);
         if amount == 0 {
             return None;
         }
@@ -255,6 +260,14 @@ impl CrapsBet {
             odds_amount,
         })
     }
+}
+
+fn clamp_bet_amount(amount: u64) -> u64 {
+    super::payload::clamp_bet_amount(amount, MAX_BET_AMOUNT)
+}
+
+fn clamp_and_validate_bet_amount(amount: u64) -> Result<u64, GameError> {
+    super::payload::clamp_and_validate_amount(amount, MAX_BET_AMOUNT)
 }
 
 fn is_valid_bet_state(bet: &CrapsBet) -> bool {
@@ -1552,7 +1565,7 @@ impl CasinoGame for Craps {
                     BetType::try_from(bet_type).map_err(|_| GameError::InvalidPayload)?;
 
                 // Validate bet
-                super::payload::ensure_nonzero_amount(amount)?;
+                let amount = clamp_and_validate_bet_amount(amount)?;
                 if state.bets.len() >= limits::CRAPS_MAX_BETS {
                     return Err(GameError::InvalidMove);
                 }
@@ -1669,12 +1682,11 @@ impl CasinoGame for Craps {
                         .try_into()
                         .map_err(|_| GameError::InvalidPayload)?,
                 );
-                if odds_amount == 0 {
-                    return Err(GameError::InvalidPayload);
-                }
+                let odds_amount = clamp_and_validate_bet_amount(odds_amount)?;
 
                 // Find last contract bet (PASS, DONT_PASS, COME, DONT_COME with status ON)
                 let mut found = false;
+                let mut deducted: u64 = 0;
                 for bet in state.bets.iter_mut().rev() {
                     if matches!(
                         bet.bet_type,
@@ -1684,12 +1696,10 @@ impl CasinoGame for Craps {
                         if ![4u8, 5, 6, 8, 9, 10].contains(&bet.target) {
                             return Err(GameError::InvalidMove);
                         }
-                        // Use checked_add to prevent overflow - reject if it would overflow
-                        // (otherwise player gets charged but odds amount doesn't increase)
-                        bet.odds_amount = bet
-                            .odds_amount
-                            .checked_add(odds_amount)
-                            .ok_or(GameError::InvalidPayload)?;
+                        let new_odds =
+                            bet.odds_amount.saturating_add(odds_amount).min(MAX_BET_AMOUNT);
+                        deducted = new_odds.saturating_sub(bet.odds_amount);
+                        bet.odds_amount = new_odds;
                         found = true;
                         break;
                     }
@@ -1701,7 +1711,7 @@ impl CasinoGame for Craps {
 
                 session.state_blob = serialize_state(&state);
                 Ok(GameResult::ContinueWithUpdate {
-                    payout: -(odds_amount as i64),
+                    payout: -(deducted as i64),
                     logs: vec![],
                 })
             }
@@ -1869,10 +1879,7 @@ impl CasinoGame for Craps {
                             .try_into()
                             .map_err(|_| GameError::InvalidPayload)?,
                     );
-
-                    if amount == 0 {
-                        return Err(GameError::InvalidPayload);
-                    }
+                    let amount = clamp_and_validate_bet_amount(amount)?;
 
                     // Validate bet type/target combinations (simplified - full validation in action 0)
                     // Yes (Place), No (Lay) need targets 2-12 excluding 7

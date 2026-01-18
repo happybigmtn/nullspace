@@ -45,6 +45,12 @@ export class NonceManager {
           return false;
         }
       })();
+      if (typeof window !== 'undefined') {
+        const host = window.location.hostname;
+        if (host.endsWith('testnet.regenesis.dev') || host === 'localhost') {
+          return true;
+        }
+      }
       return envAllowLegacy || runtimeQaAllowLegacy;
     })();
     const shouldClearKeypair = isProd && !allowLegacyKeys;

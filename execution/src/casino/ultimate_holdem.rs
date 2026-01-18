@@ -54,6 +54,24 @@ const STATE_LEN_BASE: usize = 40;
 const STATE_LEN_WITH_RULES: usize = 41;
 
 const PROGRESSIVE_BET_UNIT: u64 = 1;
+/// Max base bet amount to keep i64-safe deductions (play bet up to 4x ante).
+const MAX_BASE_BET_AMOUNT: u64 = (i64::MAX as u64) / 4;
+/// Max side bet amount to keep i64-safe return amounts (6-card bonus pays 1000:1 => 1001x return).
+const MAX_SIDE_BET_AMOUNT: u64 = (i64::MAX as u64) / 1001;
+
+fn clamp_base_bet(session: &mut GameSession) {
+    if session.bet > MAX_BASE_BET_AMOUNT {
+        session.bet = MAX_BASE_BET_AMOUNT;
+    }
+}
+
+fn clamp_side_bet_amount(amount: u64) -> u64 {
+    super::payload::clamp_bet_amount(amount, MAX_SIDE_BET_AMOUNT)
+}
+
+fn clamp_progressive_bet(amount: u64) -> u64 {
+    super::payload::clamp_bet_amount(amount, PROGRESSIVE_BET_UNIT)
+}
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -219,9 +237,9 @@ fn parse_state(state: &[u8]) -> Option<UthState> {
     {
         return None;
     }
-    let trips_bet = reader.read_u64_be()?;
-    let six_card_bonus_bet = reader.read_u64_be()?;
-    let progressive_bet = reader.read_u64_be()?;
+    let trips_bet = clamp_side_bet_amount(reader.read_u64_be()?);
+    let six_card_bonus_bet = clamp_side_bet_amount(reader.read_u64_be()?);
+    let progressive_bet = clamp_progressive_bet(reader.read_u64_be()?);
     let rules = if reader.remaining() > 0 {
         UthRules::from_byte(reader.read_u8()?)
     } else {
@@ -857,6 +875,7 @@ impl CasinoGame for UltimateHoldem {
     fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
         // Start in a betting stage so optional side bets (Trips) can be placed before any cards
         // are dealt. Ante was deducted by CasinoStartGame; deduct Blind here.
+        clamp_base_bet(session);
         let state = UthState {
             stage: Stage::Betting,
             player: [CARD_UNKNOWN; 2],
@@ -888,6 +907,8 @@ impl CasinoGame for UltimateHoldem {
             return Err(GameError::InvalidPayload);
         }
 
+        clamp_base_bet(session);
+
         let action = Action::try_from(payload[0])?;
         let mut state = parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
 
@@ -905,7 +926,8 @@ impl CasinoGame for UltimateHoldem {
                     Ok(GameResult::Continue(vec![]))
                 }
                 Action::SetTrips => {
-                    let new_trips = super::payload::parse_u64_be(payload, 1)?;
+                    let new_trips =
+                        clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
                     payout_update = apply_trips_update(&mut state, new_trips)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
@@ -918,7 +940,8 @@ impl CasinoGame for UltimateHoldem {
                     })
                 }
                 Action::SetSixCardBonus => {
-                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
+                    let new_bet =
+                        clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
                     payout_update = apply_six_card_bonus_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
@@ -931,10 +954,8 @@ impl CasinoGame for UltimateHoldem {
                     })
                 }
                 Action::SetProgressive => {
-                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
-                    if new_bet != 0 && new_bet != PROGRESSIVE_BET_UNIT {
-                        return Err(GameError::InvalidMove);
-                    }
+                    let new_bet =
+                        clamp_progressive_bet(super::payload::parse_u64_be(payload, 1)?);
                     payout_update = apply_progressive_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
@@ -952,7 +973,8 @@ impl CasinoGame for UltimateHoldem {
                     }
 
                     if payload.len() == 9 {
-                        let new_trips = super::payload::parse_u64_be(payload, 1)?;
+                        let new_trips =
+                            clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
                         payout_update = apply_trips_update(&mut state, new_trips)?;
                     } else if payload.len() != 1 {
                         return Err(GameError::InvalidPayload);
@@ -986,14 +1008,12 @@ impl CasinoGame for UltimateHoldem {
                         }
 
                         // Parse side bet amounts
-                        let trips = super::payload::parse_u64_be(payload, 1)?;
-                        let six_card = super::payload::parse_u64_be(payload, 9)?;
-                        let progressive = super::payload::parse_u64_be(payload, 17)?;
-
-                        // Validate progressive bet (must be 0 or 1)
-                        if progressive != 0 && progressive != PROGRESSIVE_BET_UNIT {
-                            return Err(GameError::InvalidMove);
-                        }
+                        let trips =
+                            clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
+                        let six_card =
+                            clamp_side_bet_amount(super::payload::parse_u64_be(payload, 9)?);
+                        let progressive =
+                            clamp_progressive_bet(super::payload::parse_u64_be(payload, 17)?);
 
                         // Apply all side bets atomically
                         let mut total_deduction: i64 = 0;

@@ -28,9 +28,17 @@ use nullspace_types::casino::GameSession;
 
 /// Base multiplier in basis points (1.0 = 10000)
 const BASE_MULTIPLIER: i64 = 10_000;
+/// Max base bet amount to keep i64-safe deductions.
+const MAX_BASE_BET_AMOUNT: u64 = i64::MAX as u64;
 const STATE_LEN_BASE: usize = 9;
 const STATE_LEN_WITH_RULES: usize = 10;
 const STATE_LEN_WITH_MULTIPLIERS: usize = 22;
+
+fn clamp_base_bet(session: &mut GameSession) {
+    if session.bet > MAX_BASE_BET_AMOUNT {
+        session.bet = MAX_BASE_BET_AMOUNT;
+    }
+}
 
 fn format_card_label(card: u8) -> String {
     if !cards::is_valid_card(card) {
@@ -254,6 +262,8 @@ impl CasinoGame for HiLo {
         if payload.is_empty() {
             return Err(GameError::InvalidPayload);
         }
+
+        clamp_base_bet(session);
 
         let mv = Move::try_from(payload[0])?;
         let state = parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;

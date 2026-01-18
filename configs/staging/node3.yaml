@@ -37,3 +37,4 @@ execution_concurrency: 4
 mempool_max_backlog: 64
 mempool_max_transactions: 100000
 max_pending_seed_listeners: 10000
+prune_interval: 1000000000

@@ -52,15 +52,16 @@ remote "$NS_DB_HOST" "docker exec -i postgres psql -U postgres -c \"CREATE USER 
 remote "$NS_DB_HOST" "docker exec -i postgres psql -U postgres -c \"GRANT ALL PRIVILEGES ON DATABASE explorer TO nullspace\" 2>/dev/null || echo 'Privileges already granted'"
 
 echo "==> Step 2: Updating simulator config on ${NS_SIM_HOST}"
-# Add explorer persistence URL to simulator args if not already present
-remote "$NS_SIM_HOST" "grep -q 'explorer-persistence-url' /etc/nullspace/simulator.env && echo 'Explorer persistence already configured' || sed -i 's|SIMULATOR_ARGS=|SIMULATOR_ARGS=--explorer-persistence-url=${EXPLORER_POSTGRES_URL} |' /etc/nullspace/simulator.env"
-
-# Also set the env var to allow hostname (for Docker networking)
-remote "$NS_SIM_HOST" "grep -q 'EXPLORER_PERSISTENCE_ALLOW_HOSTNAME' /etc/nullspace/simulator.env || echo 'EXPLORER_PERSISTENCE_ALLOW_HOSTNAME=1' >> /etc/nullspace/simulator.env"
+# Use a systemd drop-in to set persistence args (avoid editing .env files)
+PERSISTENCE_ARGS="--explorer-persistence-url=${EXPLORER_POSTGRES_URL} --summary-persistence-path=/var/lib/nullspace/simulator/summary.sqlite --summary-persistence-max-blocks=50000"
+remote "$NS_SIM_HOST" "install -d /etc/systemd/system/nullspace-simulator.service.d"
+remote "$NS_SIM_HOST" "printf '%s\n' '[Service]' \"Environment=SIMULATOR_ARGS=${PERSISTENCE_ARGS}\" 'Environment=EXPLORER_PERSISTENCE_ALLOW_HOSTNAME=1' > /etc/systemd/system/nullspace-simulator.service.d/persistence.conf"
+remote "$NS_SIM_HOST" "systemctl daemon-reload"
+remote "$NS_SIM_HOST" "systemctl disable --now nullspace-node.service nullspace-node0.service nullspace-node2.service nullspace-node3.service >/dev/null 2>&1 || true"
 
 echo "==> Step 3: Resetting validator state on ${NS_DB_HOST}"
 remote "$NS_DB_HOST" "docker stop ${VALIDATOR_CONTAINERS[*]}"
-remote "$NS_DB_HOST" "rm -rf ${VALIDATOR_DIRS[*]}"
+remote "$NS_DB_HOST" "ts=\$(date -u +%Y%m%d-%H%M%S); for dir in ${VALIDATOR_DIRS[*]}; do if [ -d \"\$dir\" ]; then mv \"\$dir\" \"\${dir}-backup-\${ts}\"; fi; done"
 remote "$NS_DB_HOST" "install -d -o nullspace -g nullspace ${VALIDATOR_DIRS[*]}"
 remote "$NS_DB_HOST" "docker start ${VALIDATOR_CONTAINERS[*]}"
 remote "$NS_DB_HOST" "systemctl enable --now nullspace-consensus-watchdog.timer"
@@ -69,7 +70,7 @@ echo "==> Step 4: Restarting simulator on ${NS_SIM_HOST}"
 remote "$NS_SIM_HOST" "docker restart nullspace-simulator"
 
 echo "==> Step 5: Clearing gateway nonce cache and restarting on ${NS_GW_HOST}"
-remote "$NS_GW_HOST" "docker exec nullspace-gateway rm -rf /app/.gateway-data/nonces.json 2>/dev/null || true"
+remote "$NS_GW_HOST" "docker exec nullspace-gateway sh -c 'ts=\$(date -u +%Y%m%d-%H%M%S); if [ -f /app/.gateway-data/nonces.json ]; then mv /app/.gateway-data/nonces.json /app/.gateway-data/nonces.json.backup-\${ts}; fi'"
 remote "$NS_GW_HOST" "docker restart nullspace-gateway nullspace-website"
 
 echo "==> Step 6: Waiting for services to stabilize..."

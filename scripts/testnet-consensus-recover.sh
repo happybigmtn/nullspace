@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Testnet consensus recovery (staging).
-# Destructive: wipes validator state on ns-db-1.
+# Destructive: resets validator state on ns-db-1 (moves data to timestamped backups).
 
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519_hetzner}"
 SSH_USER="${SSH_USER:-root}"
@@ -13,6 +13,7 @@ NS_GW_HOST="${NS_GW_HOST:-178.156.212.135}"
 
 VALIDATOR_CONTAINERS=(nullspace-node-0 nullspace-node-1 nullspace-node-2 nullspace-node-3)
 VALIDATOR_DIRS=(/var/lib/nullspace/node-0 /var/lib/nullspace/node-1 /var/lib/nullspace/node-2 /var/lib/nullspace/node-3)
+STAMP="$(date -u +%Y%m%d-%H%M%S)"
 
 if [[ "${CONFIRM_RESET:-}" != "1" ]]; then
   echo "Refusing to run: destructive reset requires CONFIRM_RESET=1" >&2
@@ -39,17 +40,20 @@ remote() {
 
 echo "==> Resetting validator state on ${NS_DB_HOST}"
 remote "$NS_DB_HOST" "docker stop ${VALIDATOR_CONTAINERS[*]}"
-remote "$NS_DB_HOST" "rm -rf ${VALIDATOR_DIRS[*]}"
+remote "$NS_DB_HOST" "for dir in ${VALIDATOR_DIRS[*]}; do if [ -d \"\$dir\" ]; then mv \"\$dir\" \"\$dir.backup-${STAMP}\"; fi; done"
 remote "$NS_DB_HOST" "install -d -o nullspace -g nullspace ${VALIDATOR_DIRS[*]}"
 remote "$NS_DB_HOST" "docker start ${VALIDATOR_CONTAINERS[*]}"
 remote "$NS_DB_HOST" "systemctl enable --now nullspace-consensus-watchdog.timer"
+
+echo "==> Backing up simulator SQLite on ${NS_SIM_HOST}"
+remote "$NS_SIM_HOST" "if [ -d /var/lib/nullspace/simulator ]; then mkdir -p /var/lib/nullspace/simulator/backup-${STAMP}; mv /var/lib/nullspace/simulator/*.sqlite* /var/lib/nullspace/simulator/backup-${STAMP}/ 2>/dev/null || true; fi"
 
 echo "==> Restarting simulator on ${NS_SIM_HOST}"
 remote "$NS_SIM_HOST" "docker restart nullspace-simulator"
 
 echo "==> Clearing gateway nonce cache and restarting on ${NS_GW_HOST}"
-# Clear gateway nonce data to prevent nonce mismatch after chain reset
-remote "$NS_GW_HOST" "docker exec nullspace-gateway rm -rf /app/.gateway-data/nonces.json 2>/dev/null || true"
+# Clear gateway nonce data to prevent nonce mismatch after chain reset (backup instead of delete)
+remote "$NS_GW_HOST" "docker exec nullspace-gateway sh -lc 'if [ -f /app/.gateway-data/nonces.json ]; then mv /app/.gateway-data/nonces.json /app/.gateway-data/nonces.json.backup-${STAMP}; fi'"
 remote "$NS_GW_HOST" "docker restart nullspace-gateway nullspace-website"
 
 echo "==> Verifying public endpoints"

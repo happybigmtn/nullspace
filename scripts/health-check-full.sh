@@ -38,6 +38,9 @@ AUTH_URL="${AUTH_URL:-https://auth.testnet.regenesis.dev}"
 VALIDATOR_CONTAINERS=(nullspace-node-0 nullspace-node-1 nullspace-node-2 nullspace-node-3)
 MIN_MEMPOOL_SUBSCRIBERS="${MIN_MEMPOOL_SUBSCRIBERS:-4}"
 TX_CHECK_BLOCKS="${TX_CHECK_BLOCKS:-10}"
+AGG_LAG_THRESHOLD="${AGG_LAG_THRESHOLD:-200}"
+AGG_TIP_STALE_SECONDS="${AGG_TIP_STALE_SECONDS:-300}"
+SUMMARY_UPLOAD_STALE_SECONDS="${SUMMARY_UPLOAD_STALE_SECONDS:-300}"
 
 # Flags
 VERBOSE=false
@@ -298,6 +301,77 @@ else
 fi
 
 echo
+
+# ─────────────────────────────────────────────
+# Section 6: Aggregation Health (validators -> indexer)
+# ─────────────────────────────────────────────
+if ! $NO_SSH; then
+  echo "─── Aggregation Health ───"
+
+  METRICS_RAW=$(remote "$NS_DB_HOST" "curl -sf --max-time 5 http://127.0.0.1:9100/metrics" 2>/dev/null || true)
+  if [ -z "$METRICS_RAW" ]; then
+    log_warn "Aggregation metrics unavailable (validator metrics unreachable)"
+  else
+    AGG_INFO=$(echo "$METRICS_RAW" | python3 - <<'PY'
+import sys, time
+metrics = sys.stdin.read().splitlines()
+data = {}
+for line in metrics:
+    if not line or line.startswith('#'):
+        continue
+    parts = line.split()
+    if len(parts) >= 2:
+        data[parts[0]] = parts[1]
+def get(name, default=0):
+    try:
+        return int(float(data.get(name, default)))
+    except Exception:
+        return int(default)
+now_ms = int(time.time() * 1000)
+finalized = get("nullspace_engine_marshal_finalized_height")
+agg_tip = get("nullspace_engine_aggregation_tip")
+agg_tip_updated = get("nullspace_engine_aggregator_aggregation_tip_updated_ms")
+summary_last = get("nullspace_engine_aggregator_summary_upload_last_attempt_ms")
+lag = max(finalized - agg_tip, 0) if finalized and agg_tip else 0
+tip_age = int((now_ms - agg_tip_updated) / 1000) if agg_tip_updated else -1
+summary_age = int((now_ms - summary_last) / 1000) if summary_last else -1
+print(f"{finalized}|{agg_tip}|{lag}|{tip_age}|{summary_age}")
+PY
+)
+    FINALIZED_HEIGHT=$(echo "$AGG_INFO" | cut -d'|' -f1)
+    AGG_TIP=$(echo "$AGG_INFO" | cut -d'|' -f2)
+    AGG_LAG=$(echo "$AGG_INFO" | cut -d'|' -f3)
+    AGG_TIP_AGE=$(echo "$AGG_INFO" | cut -d'|' -f4)
+    SUMMARY_AGE=$(echo "$AGG_INFO" | cut -d'|' -f5)
+
+    log_verbose "Aggregation tip: $AGG_TIP (finalized: $FINALIZED_HEIGHT, lag: $AGG_LAG)"
+    log_verbose "Aggregation tip age: ${AGG_TIP_AGE}s, summary upload age: ${SUMMARY_AGE}s"
+
+    if [ "$FINALIZED_HEIGHT" -eq 0 ] || [ "$AGG_TIP" -eq 0 ]; then
+      log_warn "Aggregation metrics missing (finalized or tip is 0)"
+    else
+      if [ "$AGG_LAG" -ge "$AGG_LAG_THRESHOLD" ]; then
+        log_warn "Aggregation lag high ($AGG_LAG >= $AGG_LAG_THRESHOLD)"
+      else
+        log_ok "Aggregation lag ($AGG_LAG)"
+      fi
+
+      if [ "$AGG_TIP_AGE" -ge 0 ] && [ "$AGG_TIP_AGE" -gt "$AGG_TIP_STALE_SECONDS" ]; then
+        log_warn "Aggregation tip stale (${AGG_TIP_AGE}s > ${AGG_TIP_STALE_SECONDS}s)"
+      else
+        log_ok "Aggregation tip freshness (${AGG_TIP_AGE}s)"
+      fi
+
+      if [ "$SUMMARY_AGE" -ge 0 ] && [ "$SUMMARY_AGE" -gt "$SUMMARY_UPLOAD_STALE_SECONDS" ]; then
+        log_warn "Summary upload stale (${SUMMARY_AGE}s > ${SUMMARY_UPLOAD_STALE_SECONDS}s)"
+      else
+        log_ok "Summary upload freshness (${SUMMARY_AGE}s)"
+      fi
+    fi
+  fi
+
+  echo
+fi
 
 # ─────────────────────────────────────────────
 # Summary

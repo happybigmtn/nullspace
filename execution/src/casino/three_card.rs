@@ -79,6 +79,24 @@ const STATE_LEN_BASE: usize = 32;
 const STATE_LEN_WITH_RULES: usize = 33;
 
 const PROGRESSIVE_BET_UNIT: u64 = 1;
+/// Max base bet amount to keep i64-safe deductions.
+const MAX_BASE_BET_AMOUNT: u64 = i64::MAX as u64;
+/// Max side bet amount to keep i64-safe return amounts (6-card bonus pays 1000:1 => 1001x return).
+const MAX_SIDE_BET_AMOUNT: u64 = (i64::MAX as u64) / (payouts::SIX_CARD_ROYAL_FLUSH + 1);
+
+fn clamp_base_bet(session: &mut GameSession) {
+    if session.bet > MAX_BASE_BET_AMOUNT {
+        session.bet = MAX_BASE_BET_AMOUNT;
+    }
+}
+
+fn clamp_side_bet_amount(amount: u64) -> u64 {
+    super::payload::clamp_bet_amount(amount, MAX_SIDE_BET_AMOUNT)
+}
+
+fn clamp_progressive_bet(amount: u64) -> u64 {
+    super::payload::clamp_bet_amount(amount, PROGRESSIVE_BET_UNIT)
+}
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -322,9 +340,9 @@ fn parse_state(state: &[u8]) -> Option<TcState> {
     {
         return None;
     }
-    let pairplus_bet = reader.read_u64_be()?;
-    let six_card_bonus_bet = reader.read_u64_be()?;
-    let progressive_bet = reader.read_u64_be()?;
+    let pairplus_bet = clamp_side_bet_amount(reader.read_u64_be()?);
+    let six_card_bonus_bet = clamp_side_bet_amount(reader.read_u64_be()?);
+    let progressive_bet = clamp_progressive_bet(reader.read_u64_be()?);
     let rules = if reader.remaining() > 0 {
         ThreeCardRules::from_byte(reader.read_u8()?)?
     } else {
@@ -724,6 +742,8 @@ impl CasinoGame for ThreeCardPoker {
             return Err(GameError::InvalidPayload);
         }
 
+        clamp_base_bet(session);
+
         let mv = Move::try_from(payload[0])?;
         let mut state = parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
 
@@ -740,7 +760,8 @@ impl CasinoGame for ThreeCardPoker {
                     Ok(GameResult::Continue(vec![]))
                 }
                 Move::SetPairPlus => {
-                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
+                    let new_bet =
+                        clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
                     let payout = apply_pairplus_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
@@ -759,7 +780,8 @@ impl CasinoGame for ThreeCardPoker {
 
                     let mut payout_update: i64 = 0;
                     if payload.len() == 9 {
-                        let new_bet = super::payload::parse_u64_be(payload, 1)?;
+                        let new_bet =
+                            clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
                         payout_update = apply_pairplus_update(&mut state, new_bet)?;
                     } else if payload.len() != 1 {
                         return Err(GameError::InvalidPayload);
@@ -782,7 +804,8 @@ impl CasinoGame for ThreeCardPoker {
                     })
                 }
                 Move::SetSixCardBonus => {
-                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
+                    let new_bet =
+                        clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
                     let payout = apply_six_card_bonus_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
@@ -795,10 +818,8 @@ impl CasinoGame for ThreeCardPoker {
                     })
                 }
                 Move::SetProgressive => {
-                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
-                    if new_bet != 0 && new_bet != PROGRESSIVE_BET_UNIT {
-                        return Err(GameError::InvalidMove);
-                    }
+                    let new_bet =
+                        clamp_progressive_bet(super::payload::parse_u64_be(payload, 1)?);
                     let payout = apply_progressive_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
@@ -822,14 +843,12 @@ impl CasinoGame for ThreeCardPoker {
                         }
 
                         // Parse side bet amounts
-                        let pair_plus = super::payload::parse_u64_be(payload, 1)?;
-                        let six_card = super::payload::parse_u64_be(payload, 9)?;
-                        let progressive = super::payload::parse_u64_be(payload, 17)?;
-
-                        // Validate progressive bet (must be 0 or 1)
-                        if progressive != 0 && progressive != PROGRESSIVE_BET_UNIT {
-                            return Err(GameError::InvalidMove);
-                        }
+                        let pair_plus =
+                            clamp_side_bet_amount(super::payload::parse_u64_be(payload, 1)?);
+                        let six_card =
+                            clamp_side_bet_amount(super::payload::parse_u64_be(payload, 9)?);
+                        let progressive =
+                            clamp_progressive_bet(super::payload::parse_u64_be(payload, 17)?);
 
                         // Apply all side bets atomically
                         let mut total_deduction: i64 = 0;

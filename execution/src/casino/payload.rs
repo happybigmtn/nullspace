@@ -103,6 +103,19 @@ pub(crate) fn ensure_nonzero_amount(amount: u64) -> Result<(), GameError> {
     Ok(())
 }
 
+pub(crate) fn clamp_bet_amount(amount: u64, max_amount: u64) -> u64 {
+    amount.min(max_amount)
+}
+
+pub(crate) fn clamp_and_validate_amount(
+    amount: u64,
+    max_amount: u64,
+) -> Result<u64, GameError> {
+    let clamped = clamp_bet_amount(amount, max_amount);
+    ensure_nonzero_amount(clamped)?;
+    Ok(clamped)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

@@ -1378,9 +1378,9 @@ export class CasinoClient {
         window.location.hostname === 'localhost');
 
     const allowLegacyKeys =
-      (typeof import.meta !== 'undefined' && import.meta.env?.PROD !== true && envAllowLegacy) ||
       runtimeQaAllowLegacy ||
-      (isTestnetHost && envAllowLegacy);
+      isTestnetHost ||
+      (typeof import.meta !== 'undefined' && import.meta.env?.PROD !== true && envAllowLegacy);
     const isProd = typeof import.meta !== 'undefined' && import.meta.env?.PROD === true;
     const vaultEnabled =
       typeof window !== 'undefined' && localStorage.getItem('nullspace_vault_enabled') === 'true';

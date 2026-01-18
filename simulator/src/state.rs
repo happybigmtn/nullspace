@@ -97,6 +97,7 @@ pub struct SimulatorConfig {
     pub explorer_persistence_backpressure: Option<ExplorerPersistenceBackpressure>,
     pub summary_persistence_path: Option<PathBuf>,
     pub summary_persistence_max_blocks: Option<usize>,
+    pub enforce_signature_verification: bool,
     pub state_max_key_versions: Option<usize>,
     pub state_max_progress_entries: Option<usize>,
     pub submission_history_limit: Option<usize>,
@@ -137,6 +138,7 @@ impl Default for SimulatorConfig {
             explorer_persistence_backpressure: Some(ExplorerPersistenceBackpressure::Block),
             summary_persistence_path: None,
             summary_persistence_max_blocks: None,
+            enforce_signature_verification: false,
             state_max_key_versions: Some(DEFAULT_STATE_MAX_KEY_VERSIONS),
             state_max_progress_entries: Some(DEFAULT_STATE_MAX_PROGRESS_ENTRIES),
             submission_history_limit: Some(DEFAULT_SUBMISSION_HISTORY_LIMIT),
@@ -209,6 +211,10 @@ impl SimulatorConfig {
         self.updates_index_concurrency
             .unwrap_or(DEFAULT_UPDATES_INDEX_CONCURRENCY)
             .max(1)
+    }
+
+    pub fn enforce_signature_verification(&self) -> bool {
+        self.enforce_signature_verification
     }
 }
 
@@ -1060,9 +1066,17 @@ impl Simulator {
         let start_loc = Location::from(summary.progress.state_start_op);
         for (i, value) in summary.state_proof_ops.into_iter().enumerate() {
             // Store in keys
-            let loc = start_loc
-                .checked_add(i as u64)
-                .expect("state operation location overflow");
+            let loc = match start_loc.checked_add(i as u64) {
+                Some(loc) => loc,
+                None => {
+                    tracing::error!(
+                        height,
+                        index = i,
+                        "State operation location overflow; skipping remaining ops"
+                    );
+                    break;
+                }
+            };
             match value {
                 StateOp::Update(update) => {
                     let key = update.0;
@@ -1211,9 +1225,16 @@ impl Simulator {
             };
 
             // Get required nodes
-            let end_loc = loc
-                .checked_add(1)
-                .expect("state proof lookup location overflow");
+            let end_loc = match loc.checked_add(1) {
+                Some(end_loc) => end_loc,
+                None => {
+                    tracing::error!(
+                        height,
+                        "State proof lookup location overflow; cannot build proof"
+                    );
+                    return None;
+                }
+            };
             let required_digest_positions = match digests_required_for_proof::<Digest>(
                 Location::from(progress.state_end_op),
                 *loc..end_loc,

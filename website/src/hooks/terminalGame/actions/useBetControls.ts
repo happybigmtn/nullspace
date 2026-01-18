@@ -41,11 +41,18 @@ export const useBetControls = ({
 
     const isTableGame = [GameType.BACCARAT, GameType.CRAPS, GameType.ROULETTE, GameType.SIC_BO].includes(gameState.type);
     if (gameState.stage === 'PLAYING' && !isTableGame) return;
-    if (stats.chips < amount) {
+
+    const maxAffordable = Math.max(0, stats.chips);
+    const clampedAmount = Math.min(amount, maxAffordable);
+
+    if (clampedAmount <= 0) {
       setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
       return;
     }
-    setGameState(prev => ({ ...prev, bet: amount, message: `BET SIZE: ${amount}` }));
+
+    const message =
+      clampedAmount !== amount ? `MAX BET: ${maxAffordable}` : `BET SIZE: ${clampedAmount}`;
+    setGameState(prev => ({ ...prev, bet: clampedAmount, message }));
   }, [gameState.stage, gameState.type, stats.chips, isOnChain, currentSessionIdRef, setGameState]);
 
   const toggleShield = useCallback(async () => {
@@ -173,12 +180,18 @@ export const useBetControls = ({
       return false;
     }
 
-    if (stats.chips < lastBet) {
+    const maxAffordable = Math.max(0, stats.chips);
+    if (maxAffordable <= 0) {
       setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
       return false;
     }
 
-    setGameState(prev => ({ ...prev, bet: lastBet }));
+    const clampedAmount = Math.min(lastBet, maxAffordable);
+    if (clampedAmount !== lastBet) {
+      setGameState(prev => ({ ...prev, bet: clampedAmount, message: `MAX BET: ${maxAffordable}` }));
+    } else {
+      setGameState(prev => ({ ...prev, bet: clampedAmount }));
+    }
     return true;
   }, [gameState.lastBet, stats.chips, setGameState]);
 

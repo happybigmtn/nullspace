@@ -71,6 +71,9 @@ mod payouts {
     pub const FOUR_NUMBER_EASY_HOP: u64 = 7;
 }
 
+/// Max bet amount to keep i64-safe return amounts (max total payout 180:1 => 181x return).
+const MAX_BET_AMOUNT: u64 = (i64::MAX as u64) / (payouts::TOTAL_3_OR_18 + 1);
+
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum SicBoPaytable {
@@ -174,6 +177,7 @@ impl SicBoBet {
         let bet_type = BetType::try_from(bytes[0]).ok()?;
         let number = bytes[1];
         let amount = u64::from_be_bytes(bytes[2..10].try_into().ok()?);
+        let amount = clamp_bet_amount(amount);
         if amount == 0 {
             return None;
         }
@@ -183,6 +187,14 @@ impl SicBoBet {
             amount,
         })
     }
+}
+
+fn clamp_bet_amount(amount: u64) -> u64 {
+    super::payload::clamp_bet_amount(amount, MAX_BET_AMOUNT)
+}
+
+fn clamp_and_validate_bet_amount(amount: u64) -> Result<u64, GameError> {
+    super::payload::clamp_and_validate_amount(amount, MAX_BET_AMOUNT)
 }
 
 fn is_valid_bet_number(bet_type: BetType, number: u8) -> bool {
@@ -620,13 +632,9 @@ impl CasinoGame for SicBo {
                     return Err(GameError::InvalidPayload);
                 }
 
-                super::payload::ensure_nonzero_amount(amount)?;
+                let amount = clamp_and_validate_bet_amount(amount)?;
 
-                state.bets.push(SicBoBet {
-                    bet_type,
-                    number,
-                    amount,
-                });
+                state.bets.push(SicBoBet { bet_type, number, amount });
                 session.state_blob = serialize_state(&state);
                 session.move_count += 1;
                 Ok(GameResult::ContinueWithUpdate {
@@ -748,10 +756,7 @@ impl CasinoGame for SicBo {
                             .try_into()
                             .map_err(|_| GameError::InvalidPayload)?,
                     );
-
-                    if amount == 0 {
-                        return Err(GameError::InvalidPayload);
-                    }
+                    let amount = clamp_and_validate_bet_amount(amount)?;
 
                     // Check for overflow in total wager
                     total_wager = total_wager

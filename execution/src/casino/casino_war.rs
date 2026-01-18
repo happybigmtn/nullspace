@@ -24,6 +24,20 @@ const STATE_LEN_BASE: usize = 12;
 const STATE_LEN_WITH_RULES: usize = 13;
 /// WoO: Casino War is played with six decks.
 const CASINO_WAR_DECKS: u8 = 6;
+/// Max base bet amount to keep i64-safe deductions.
+const MAX_BASE_BET_AMOUNT: u64 = i64::MAX as u64;
+/// Max tie bet amount to keep i64-safe return amounts (11:1 payout => 12x return).
+const MAX_TIE_BET_AMOUNT: u64 = (i64::MAX as u64) / 12;
+
+fn clamp_base_bet(session: &mut GameSession) {
+    if session.bet > MAX_BASE_BET_AMOUNT {
+        session.bet = MAX_BASE_BET_AMOUNT;
+    }
+}
+
+fn clamp_tie_bet_amount(amount: u64) -> u64 {
+    super::payload::clamp_bet_amount(amount, MAX_TIE_BET_AMOUNT)
+}
 
 fn format_card_label(card: u8) -> String {
     if !cards::is_valid_card(card) {
@@ -181,7 +195,7 @@ fn parse_state(state: &[u8]) -> Option<CasinoWarState> {
     if !matches!(dealer_card, HIDDEN_CARD) && dealer_card >= 52 {
         return None;
     }
-    let tie_bet = reader.read_u64_be()?;
+    let tie_bet = clamp_tie_bet_amount(reader.read_u64_be()?);
     let rules = if reader.remaining() > 0 {
         CasinoWarRules::from_byte(reader.read_u8()?)?
     } else {
@@ -236,6 +250,8 @@ impl CasinoGame for CasinoWar {
             return Err(GameError::InvalidPayload);
         }
 
+        clamp_base_bet(session);
+
         let mv = Move::try_from(payload[0])?;
         let mut state = parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
 
@@ -262,6 +278,7 @@ impl CasinoGame for CasinoWar {
                             .try_into()
                             .map_err(|_| GameError::InvalidPayload)?,
                     );
+                    let next_amount = clamp_tie_bet_amount(next_amount);
 
                     let prev_amount = state.tie_bet;
 
@@ -463,6 +480,7 @@ impl CasinoGame for CasinoWar {
                                 .try_into()
                                 .map_err(|_| GameError::InvalidPayload)?,
                         );
+                        let next_amount = clamp_tie_bet_amount(next_amount);
 
                         // Apply tie bet
                         let prev_amount = state.tie_bet;

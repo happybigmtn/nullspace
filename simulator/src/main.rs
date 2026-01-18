@@ -102,6 +102,10 @@ struct Args {
     #[arg(long)]
     summary_persistence_max_blocks: Option<usize>,
 
+    /// Enforce signature verification for seeds and summaries (disable staging bypass).
+    #[arg(long, default_value_t = false)]
+    enforce_signature_verification: bool,
+
     /// Postgres connection string for explorer persistence (overrides SQLite path when set).
     #[arg(long)]
     explorer_persistence_url: Option<String>,
@@ -419,6 +423,7 @@ async fn main() -> anyhow::Result<()> {
         explorer_persistence_backpressure,
         summary_persistence_path: args.summary_persistence_path.clone(),
         summary_persistence_max_blocks: map_optional_limit(args.summary_persistence_max_blocks, None),
+        enforce_signature_verification: args.enforce_signature_verification,
         state_max_key_versions: map_optional_limit(args.state_max_key_versions, defaults.state_max_key_versions),
         state_max_progress_entries: map_optional_limit(args.state_max_progress_entries, defaults.state_max_progress_entries),
         submission_history_limit: map_optional_limit(args.submission_history_limit, defaults.submission_history_limit),
