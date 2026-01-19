@@ -65,6 +65,43 @@ fn init_tracing() -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_deterministic_config_fields() {
+        let args = Args::parse_from([
+            "simulator",
+            "--identity",
+            "deadbeef",
+            "--deterministic-seed",
+            "7",
+            "--deterministic-time-scale-ms",
+            "5",
+        ]);
+        let config = build_config(&args).expect("config should parse");
+        assert_eq!(config.deterministic_seed, Some(7));
+        assert_eq!(config.deterministic_time_scale_ms, Some(5));
+    }
+
+    #[test]
+    fn rejects_zero_time_scale() {
+        let args = Args::parse_from([
+            "simulator",
+            "--identity",
+            "deadbeef",
+            "--deterministic-time-scale-ms",
+            "0",
+        ]);
+        let err = build_config(&args).unwrap_err();
+        assert!(
+            err.to_string().contains("deterministic_time_scale_ms"),
+            "unexpected error: {err}"
+        );
+    }
+}
+
 fn resolve_summary_replay_concurrency(value: Option<usize>) -> usize {
     let fallback = std::thread::available_parallelism()
         .map(|count| count.get())
@@ -162,6 +199,14 @@ struct Args {
 
     #[arg(short, long)]
     identity: String,
+
+    /// Seed for deterministic scheduling (optional).
+    #[arg(long)]
+    deterministic_seed: Option<u64>,
+
+    /// Deterministic time scale per tick in milliseconds (must be > 0 when set).
+    #[arg(long)]
+    deterministic_time_scale_ms: Option<u64>,
 
     /// Maximum number of blocks retained by the explorer index (0 disables limit).
     #[arg(long)]
@@ -343,6 +388,63 @@ fn map_optional_default_on_zero<T: Copy + PartialEq + From<u8>>(
     }
 }
 
+fn build_config(args: &Args) -> Result<SimulatorConfig> {
+    let defaults = SimulatorConfig::default();
+    let explorer_persistence_backpressure = match args.explorer_persistence_backpressure.as_deref()
+    {
+        Some(value) => Some(value.parse().map_err(|err| {
+            anyhow::anyhow!("invalid explorer persistence backpressure policy: {err}")
+        })?),
+        None => defaults.explorer_persistence_backpressure,
+    };
+    if let Some(0) = args.deterministic_time_scale_ms {
+        anyhow::bail!("deterministic_time_scale_ms must be > 0 when set");
+    }
+
+    Ok(SimulatorConfig {
+        explorer_max_blocks: map_optional_limit(args.explorer_max_blocks, defaults.explorer_max_blocks),
+        explorer_max_account_entries: map_optional_limit(args.explorer_max_account_entries, defaults.explorer_max_account_entries),
+        explorer_max_accounts: map_optional_limit(args.explorer_max_accounts, defaults.explorer_max_accounts),
+        explorer_max_game_event_accounts: map_optional_limit(args.explorer_max_game_event_accounts, defaults.explorer_max_game_event_accounts),
+        deterministic_seed: args.deterministic_seed.or(defaults.deterministic_seed),
+        deterministic_time_scale_ms: args
+            .deterministic_time_scale_ms
+            .or(defaults.deterministic_time_scale_ms),
+        explorer_persistence_path: args.explorer_persistence_path.clone(),
+        explorer_persistence_url: args.explorer_persistence_url.clone(),
+        explorer_persistence_buffer: map_optional_limit(args.explorer_persistence_buffer, defaults.explorer_persistence_buffer),
+        explorer_persistence_batch_size: map_optional_limit(args.explorer_persistence_batch_size, defaults.explorer_persistence_batch_size),
+        explorer_persistence_backpressure,
+        summary_persistence_path: args.summary_persistence_path.clone(),
+        summary_persistence_max_blocks: map_optional_limit(args.summary_persistence_max_blocks, None),
+        enforce_signature_verification: args.enforce_signature_verification,
+        state_max_key_versions: map_optional_limit(args.state_max_key_versions, defaults.state_max_key_versions),
+        state_max_progress_entries: map_optional_limit(args.state_max_progress_entries, defaults.state_max_progress_entries),
+        submission_history_limit: map_optional_limit(args.submission_history_limit, defaults.submission_history_limit),
+        seed_history_limit: map_optional_limit(args.seed_history_limit, defaults.seed_history_limit),
+        http_rate_limit_per_second: map_optional_limit(args.http_rate_limit_per_second, defaults.http_rate_limit_per_second),
+        http_rate_limit_burst: map_optional_limit(args.http_rate_limit_burst, defaults.http_rate_limit_burst),
+        submit_rate_limit_per_minute: map_optional_limit(args.submit_rate_limit_per_minute, defaults.submit_rate_limit_per_minute),
+        submit_rate_limit_burst: map_optional_limit(args.submit_rate_limit_burst, defaults.submit_rate_limit_burst),
+        http_body_limit_bytes: map_optional_limit(args.http_body_limit_bytes, defaults.http_body_limit_bytes),
+        ws_outbound_buffer: map_optional_default_on_zero(args.ws_outbound_buffer, defaults.ws_outbound_buffer),
+        ws_max_connections: map_optional_limit(args.ws_max_connections, defaults.ws_max_connections),
+        ws_max_connections_per_ip: map_optional_limit(args.ws_max_connections_per_ip, defaults.ws_max_connections_per_ip),
+        ws_max_message_bytes: map_optional_default_on_zero(args.ws_max_message_bytes, defaults.ws_max_message_bytes),
+        updates_broadcast_buffer: map_optional_default_on_zero(args.updates_broadcast_buffer, defaults.updates_broadcast_buffer),
+        mempool_broadcast_buffer: map_optional_default_on_zero(args.mempool_broadcast_buffer, defaults.mempool_broadcast_buffer),
+        updates_index_concurrency: map_optional_default_on_zero(args.updates_index_concurrency, defaults.updates_index_concurrency),
+        fanout_redis_url: args.fanout_redis_url.clone(),
+        fanout_channel: args.fanout_channel.clone().or_else(|| defaults.fanout_channel.clone()),
+        fanout_origin: args.fanout_origin.clone(),
+        fanout_publish: args.fanout_publish.or(defaults.fanout_publish),
+        fanout_subscribe: args.fanout_subscribe.or(defaults.fanout_subscribe),
+        cache_redis_url: args.cache_redis_url.clone(),
+        cache_redis_prefix: args.cache_redis_prefix.clone().or_else(|| defaults.cache_redis_prefix.clone()),
+        cache_redis_ttl_seconds: map_optional_limit(args.cache_redis_ttl_seconds, defaults.cache_redis_ttl_seconds),
+    })
+}
+
 fn require_env(var: &str) -> Result<String> {
     let value = std::env::var(var).unwrap_or_default();
     if value.trim().is_empty() {
@@ -496,52 +598,7 @@ async fn main() -> anyhow::Result<()> {
 
     verify_validator_identities(&identity).await?;
 
-    let defaults = SimulatorConfig::default();
-    let explorer_persistence_backpressure = match args.explorer_persistence_backpressure.as_deref()
-    {
-        Some(value) => Some(value.parse().map_err(|err| {
-            anyhow::anyhow!("invalid explorer persistence backpressure policy: {err}")
-        })?),
-        None => defaults.explorer_persistence_backpressure,
-    };
-    let config = SimulatorConfig {
-        explorer_max_blocks: map_optional_limit(args.explorer_max_blocks, defaults.explorer_max_blocks),
-        explorer_max_account_entries: map_optional_limit(args.explorer_max_account_entries, defaults.explorer_max_account_entries),
-        explorer_max_accounts: map_optional_limit(args.explorer_max_accounts, defaults.explorer_max_accounts),
-        explorer_max_game_event_accounts: map_optional_limit(args.explorer_max_game_event_accounts, defaults.explorer_max_game_event_accounts),
-        explorer_persistence_path: args.explorer_persistence_path,
-        explorer_persistence_url: args.explorer_persistence_url,
-        explorer_persistence_buffer: map_optional_limit(args.explorer_persistence_buffer, defaults.explorer_persistence_buffer),
-        explorer_persistence_batch_size: map_optional_limit(args.explorer_persistence_batch_size, defaults.explorer_persistence_batch_size),
-        explorer_persistence_backpressure,
-        summary_persistence_path: args.summary_persistence_path.clone(),
-        summary_persistence_max_blocks: map_optional_limit(args.summary_persistence_max_blocks, None),
-        enforce_signature_verification: args.enforce_signature_verification,
-        state_max_key_versions: map_optional_limit(args.state_max_key_versions, defaults.state_max_key_versions),
-        state_max_progress_entries: map_optional_limit(args.state_max_progress_entries, defaults.state_max_progress_entries),
-        submission_history_limit: map_optional_limit(args.submission_history_limit, defaults.submission_history_limit),
-        seed_history_limit: map_optional_limit(args.seed_history_limit, defaults.seed_history_limit),
-        http_rate_limit_per_second: map_optional_limit(args.http_rate_limit_per_second, defaults.http_rate_limit_per_second),
-        http_rate_limit_burst: map_optional_limit(args.http_rate_limit_burst, defaults.http_rate_limit_burst),
-        submit_rate_limit_per_minute: map_optional_limit(args.submit_rate_limit_per_minute, defaults.submit_rate_limit_per_minute),
-        submit_rate_limit_burst: map_optional_limit(args.submit_rate_limit_burst, defaults.submit_rate_limit_burst),
-        http_body_limit_bytes: map_optional_limit(args.http_body_limit_bytes, defaults.http_body_limit_bytes),
-        ws_outbound_buffer: map_optional_default_on_zero(args.ws_outbound_buffer, defaults.ws_outbound_buffer),
-        ws_max_connections: map_optional_limit(args.ws_max_connections, defaults.ws_max_connections),
-        ws_max_connections_per_ip: map_optional_limit(args.ws_max_connections_per_ip, defaults.ws_max_connections_per_ip),
-        ws_max_message_bytes: map_optional_default_on_zero(args.ws_max_message_bytes, defaults.ws_max_message_bytes),
-        updates_broadcast_buffer: map_optional_default_on_zero(args.updates_broadcast_buffer, defaults.updates_broadcast_buffer),
-        mempool_broadcast_buffer: map_optional_default_on_zero(args.mempool_broadcast_buffer, defaults.mempool_broadcast_buffer),
-        updates_index_concurrency: map_optional_default_on_zero(args.updates_index_concurrency, defaults.updates_index_concurrency),
-        fanout_redis_url: args.fanout_redis_url,
-        fanout_channel: args.fanout_channel.or_else(|| defaults.fanout_channel.clone()),
-        fanout_origin: args.fanout_origin,
-        fanout_publish: args.fanout_publish.or(defaults.fanout_publish),
-        fanout_subscribe: args.fanout_subscribe.or(defaults.fanout_subscribe),
-        cache_redis_url: args.cache_redis_url,
-        cache_redis_prefix: args.cache_redis_prefix.or_else(|| defaults.cache_redis_prefix.clone()),
-        cache_redis_ttl_seconds: map_optional_limit(args.cache_redis_ttl_seconds, defaults.cache_redis_ttl_seconds),
-    };
+    let config = build_config(&args)?;
     let enforce_signature_verification = config.enforce_signature_verification;
 
     let (summary_persistence, summaries) = if let Some(path) = &args.summary_persistence_path {

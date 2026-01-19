@@ -79,6 +79,10 @@ pub struct Config {
     pub directory: String,
     pub worker_threads: usize,
     pub log_level: String,
+    #[serde(default)]
+    pub deterministic_seed: Option<u64>,
+    #[serde(default)]
+    pub deterministic_time_scale_ms: Option<u64>,
 
     pub allowed_peers: Vec<String>,
     pub bootstrappers: Vec<String>,
@@ -220,6 +224,8 @@ pub struct ValidatedConfig {
     pub directory: PathBuf,
     pub worker_threads: usize,
     pub log_level: Level,
+    pub deterministic_seed: Option<u64>,
+    pub deterministic_time_scale: Option<Duration>,
 
     pub allowed_peers: Vec<String>,
     pub bootstrappers: Vec<String>,
@@ -798,6 +804,10 @@ impl Config {
             directory: PathBuf::from(self.directory),
             worker_threads: self.worker_threads,
             log_level,
+            deterministic_seed: self.deterministic_seed,
+            deterministic_time_scale: self
+                .deterministic_time_scale_ms
+                .map(Duration::from_millis),
             allowed_peers: self.allowed_peers,
             bootstrappers: self.bootstrappers,
             message_backlog: self.message_backlog,

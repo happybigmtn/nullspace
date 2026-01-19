@@ -71,6 +71,8 @@ fn config_redacted_debug_does_not_leak_secrets() {
         directory: "/tmp/nullspace".to_string(),
         worker_threads: 4,
         log_level: "info".to_string(),
+        deterministic_seed: None,
+        deterministic_time_scale_ms: None,
         allowed_peers: vec!["peer1".to_string()],
         bootstrappers: vec!["bootstrap1".to_string()],
         message_backlog: 128,

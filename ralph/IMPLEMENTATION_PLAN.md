@@ -1,55 +1,277 @@
 # Implementation Plan
 
-**Phase**: ✅ Complete
-**Date**: 2026-01-17
-**Scope**: Fix testnet transaction pipeline - website rendering and transaction flow.
+**Phase**: Planning
+**Date**: 2026-01-19
+**Scope**: Sprint breakdown for full Nullspace platform delivery.
 
-## Status
+## Sprint 01 - Foundations and Local Dev
+- [ ] Add deterministic seed/time-scaling config parsing for simulator and node
+  - Specs: `specs/sprint-01-foundations.md` AC-1.1, AC-1.2
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p nullspace-simulator`
+  - Perceptual: None
+- [ ] Add local bootstrap guardrails (missing env/config checks, port reuse handling)
+  - Specs: `specs/sprint-01-foundations.md` AC-1.1, AC-1.5
+  - Tests/backpressure:
+    - Programmatic: `./scripts/agent-loop.sh`
+    - Programmatic: `./scripts/health-check.sh`
+  - Perceptual: None
+- [ ] Add faucet helper for funding test wallets
+  - Specs: `specs/sprint-01-foundations.md` AC-1.3
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p tests` (or integration test harness)
+  - Perceptual: None
+- [ ] Add config schema validation for gateway and services
+  - Specs: `specs/sprint-01-foundations.md` AC-1.2
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C gateway test`
+  - Perceptual: None
+- [ ] Update docs for bootstrap, teardown, and troubleshooting
+  - Specs: `specs/sprint-01-foundations.md` AC-1.4
+  - Tests/backpressure:
+    - Programmatic: N/A (manual doc verification)
+  - Perceptual: None
+- [ ] Add correlation id propagation across gateway -> engine -> indexer logs
+  - Specs: `specs/sprint-01-foundations.md` AC-1.6
+  - Tests/backpressure:
+    - Programmatic: integration test asserting shared request id
+  - Perceptual: None
 
-All implementation tasks complete. Spec archived to `ralph/specs/archive/testnet-transaction-pipeline-fix.md`.
+## Sprint 02 - Core Table Engine and RNG (Single Game)
+- [ ] Implement round scheduler state machine with deterministic clock
+  - Specs: `specs/sprint-02-core-table-engine.md` AC-2.1
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p execution`
+  - Perceptual: None
+- [ ] Implement RNG commit, lock, reveal pipeline with hash chain verification
+  - Specs: `specs/sprint-02-core-table-engine.md` AC-2.2
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p execution`
+  - Perceptual: None
+- [ ] Implement bet validation and settlement logic for flagship game
+  - Specs: `specs/sprint-02-core-table-engine.md` AC-2.3
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p execution`
+  - Perceptual: None
+- [ ] Add append-only event log writer and snapshot loader
+  - Specs: `specs/sprint-02-core-table-engine.md` AC-2.4
+  - Tests/backpressure:
+    - Programmatic: replay tests in `cargo test -p execution`
+  - Perceptual: None
+- [ ] Expose round/totals/player history query interfaces
+  - Specs: `specs/sprint-02-core-table-engine.md` AC-2.5
+  - Tests/backpressure:
+    - Programmatic: integration tests for query API
+  - Perceptual: None
+- [ ] Add end-to-end simulator scenario for bet placement and payouts
+  - Specs: `specs/sprint-02-core-table-engine.md` AC-2.6
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p nullspace-simulator`
+  - Perceptual: None
 
-## Completed Work
+## Sprint 03 - Gateway, WebSocket Fanout, and Auth
+- [ ] Implement WebSocket auth handshake and origin validation
+  - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.1
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C gateway test`
+  - Perceptual: None
+- [ ] Add schema validation for all inbound messages
+  - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.2
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C gateway test`
+  - Perceptual: None
+- [ ] Implement fanout with backpressure controls
+  - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.3
+  - Tests/backpressure:
+    - Programmatic: load test harness for simulated clients
+  - Perceptual: None
+- [ ] Add per-wallet/IP rate limiting with explicit error responses
+  - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.4
+  - Tests/backpressure:
+    - Programmatic: gateway integration tests
+  - Perceptual: None
+- [ ] Implement engine forwarding with retries and idempotency keys
+  - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.5
+  - Tests/backpressure:
+    - Programmatic: integration tests for duplicate bet intents
+  - Perceptual: None
+- [ ] Add presence and clock sync broadcasting
+  - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.6
+  - Tests/backpressure:
+    - Programmatic: end-to-end gateway sync test
+  - Perceptual: None
 
-All phases (1-5) archived to `ralph/specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`.
+## Sprint 04 - Simulator/Indexer and Explorer APIs
+- [ ] Implement event ingestion pipeline and persistence schema
+  - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.1
+  - Tests/backpressure:
+    - Programmatic: integration tests for stored rounds
+  - Perceptual: None
+- [ ] Add snapshot replay and log catch-up on indexer startup
+  - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.2
+  - Tests/backpressure:
+    - Programmatic: restart integration test
+  - Perceptual: None
+- [ ] Implement explorer HTTP endpoints for rounds, bets, leaderboards
+  - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.3
+  - Tests/backpressure:
+    - Programmatic: API tests with pagination/filters
+  - Perceptual: None
+- [ ] Add aggregation jobs for volume, house edge, and payouts
+  - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.4
+  - Tests/backpressure:
+    - Programmatic: unit tests with fixture data
+  - Perceptual: None
+- [ ] Add backfill process for empty storage
+  - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.5
+  - Tests/backpressure:
+    - Programmatic: integration test on empty DB
+  - Perceptual: None
+- [ ] Expose health and metrics endpoints
+  - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.6
+  - Tests/backpressure:
+    - Programmatic: `./scripts/health-check.sh`
+  - Perceptual: None
 
-### Summary of Fixes
+## Sprint 05 - Web Client MVP
+- [ ] Implement wallet connect and network status indicators
+  - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.1
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C website test`
+  - Perceptual: None
+- [ ] Build table view with countdown and phase labels from gateway updates
+  - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.2, AC-PQ.1
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C website test`
+  - Perceptual: AC-PQ.1
+- [ ] Implement bet slip, validation, and confirmation flow
+  - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.3
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C website test`
+  - Perceptual: None
+- [ ] Render real-time outcomes and totals from WebSocket updates
+  - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.4
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C website test`
+  - Perceptual: None
+- [ ] Add fairness verification panel for commit/reveal values
+  - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.5
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C website test`
+  - Perceptual: None
+- [ ] Ensure keyboard accessibility and visible focus states on bet controls
+  - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.6
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C website test`
+  - Perceptual: None
 
-1. **BufferedMempool** - Replay buffer for late subscribers (30s window)
-2. **Nonce Floor Bug** - Removed FLOOR_MAP override causing nonce drift
-3. **Website Rendering** - Error boundaries, WASM logging, loading states
-4. **Transaction Observability** - Logging, metrics, e2e test scripts
-5. **WebSocket Origin Validation** - Fixed validators being silently rejected
+## Sprint 06 - Multi-Game Expansion and Compact Encoding v2
+- [ ] Implement compact v2 encoding for additional games
+  - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.1
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p execution`
+  - Perceptual: None
+- [ ] Add game registry and per-game configuration loading
+  - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.2
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p execution`
+  - Perceptual: None
+- [ ] Update gateway routing to include game id in subscriptions and bet intents
+  - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.3
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C gateway test`
+  - Perceptual: None
+- [ ] Update indexer schema and APIs to include game identifiers
+  - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.4
+  - Tests/backpressure:
+    - Programmatic: API tests for per-game queries
+  - Perceptual: None
+- [ ] Update web client for multi-game UI and routing
+  - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.5
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C website test`
+  - Perceptual: None
+- [ ] Add regression tests for flagship game outcomes and encoding
+  - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.6
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p execution`
+  - Perceptual: None
 
-### Root Cause (Zero Transactions)
+## Sprint 07 - Payments, Treasury, and Admin Ops
+- [ ] Implement deposit/withdraw ledger reconciliation against chain state
+  - Specs: `specs/sprint-07-payments-admin.md` AC-7.1
+  - Tests/backpressure:
+    - Programmatic: integration tests for ledger updates
+  - Perceptual: None
+- [ ] Add house bankroll/exposure tracking and limit checks
+  - Specs: `specs/sprint-07-payments-admin.md` AC-7.2
+  - Tests/backpressure:
+    - Programmatic: unit tests for limit enforcement
+  - Perceptual: None
+- [ ] Build admin ops endpoints for config updates and audit log entries
+  - Specs: `specs/sprint-07-payments-admin.md` AC-7.3
+  - Tests/backpressure:
+    - Programmatic: API tests for admin auth and audit logging
+  - Perceptual: None
+- [ ] Implement responsible gaming caps in bet validation
+  - Specs: `specs/sprint-07-payments-admin.md` AC-7.4
+  - Tests/backpressure:
+    - Programmatic: `cargo test -p execution`
+  - Perceptual: None
+- [ ] Update web client to show limit errors and exposure warnings
+  - Specs: `specs/sprint-07-payments-admin.md` AC-7.5
+  - Tests/backpressure:
+    - Programmatic: `pnpm -C website test`
+  - Perceptual: None
 
-The `validate_origin()` function in `ws.rs` required `ALLOW_WS_NO_ORIGIN=1` for non-browser clients. Without this, validators were silently rejected from the mempool WebSocket.
+## Sprint 08 - Mobile Client
+- [ ] Implement wallet connection and session persistence on mobile
+  - Specs: `specs/sprint-08-mobile-client.md` AC-8.1
+  - Tests/backpressure:
+    - Programmatic: mobile unit tests
+  - Perceptual: None
+- [ ] Build table view and bet controls optimized for touch
+  - Specs: `specs/sprint-08-mobile-client.md` AC-8.2, AC-PQ.2
+  - Tests/backpressure:
+    - Programmatic: mobile UI tests
+  - Perceptual: AC-PQ.2
+- [ ] Add WebSocket reconnect strategy and offline detection
+  - Specs: `specs/sprint-08-mobile-client.md` AC-8.3
+  - Tests/backpressure:
+    - Programmatic: integration tests simulating network drop
+  - Perceptual: None
+- [ ] Add read-only mode with banner messaging
+  - Specs: `specs/sprint-08-mobile-client.md` AC-8.4
+  - Tests/backpressure:
+    - Programmatic: mobile UI tests for offline state
+  - Perceptual: None
 
-**Fix**: Changed default to allow non-browser clients. Restrictive behavior now opt-in via `ALLOW_WS_NO_ORIGIN=0`.
+## Sprint 09 - Production Readiness
+- [ ] Add load test harness for gateway and engine
+  - Specs: `specs/sprint-09-production-readiness.md` AC-9.1
+  - Tests/backpressure:
+    - Programmatic: load test report with pass/fail thresholds
+  - Perceptual: None
+- [ ] Define dashboards and alert thresholds for critical services
+  - Specs: `specs/sprint-09-production-readiness.md` AC-9.2
+  - Tests/backpressure:
+    - Programmatic: dashboard config validation or lint
+  - Perceptual: None
+- [ ] Write and test disaster recovery runbook using snapshots
+  - Specs: `specs/sprint-09-production-readiness.md` AC-9.3
+  - Tests/backpressure:
+    - Programmatic: recovery drill logs from `scripts/health-check.sh` or runbook script
+  - Perceptual: None
+- [ ] Add fuzz/property tests for gateway parsing and execution rules
+  - Specs: `specs/sprint-09-production-readiness.md` AC-9.4
+  - Tests/backpressure:
+    - Programmatic: `cargo test` / `pnpm test` includes fuzz targets
+  - Perceptual: None
+- [ ] Add staging pipeline smoke tests and regression gates
+  - Specs: `specs/sprint-09-production-readiness.md` AC-9.5
+  - Tests/backpressure:
+    - Programmatic: `scripts/agent-review.sh`
+  - Perceptual: None
 
-## Post-Deployment Validation
-
-After deployment, verify:
-1. Mempool subscriber count > 0 (validators connected)
-2. tx_count > 0 in blocks after user interaction
-
-## Quick Commands
-
-```bash
-# Standard consensus recovery
-CONFIRM_RESET=1 ./scripts/testnet-consensus-recover.sh
-
-# Health check
-./scripts/health-check.sh
-
-# End-to-end transaction flow test (AC-2.4)
-./scripts/test-transaction-flow.sh
-
-# Nonce reset (AC-3.1) - shows browser console commands
-./scripts/clear-browser-nonce.sh
-
-# Transaction flow smoke test (AC-3.3) - quick pass/fail for CI/CD
-./scripts/smoke-test-transactions.sh
-
-# Check chain status
-curl -s https://testnet.regenesis.dev/api/explorer/blocks?limit=1 | jq .
-```
+## Missing/Unknown
+- None
