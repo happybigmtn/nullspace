@@ -10,6 +10,7 @@ import { createGameStartedHandler } from './chainEvents/handleGameStarted';
 import { createGameMovedHandler } from './chainEvents/handleGameMoved';
 import { createGameCompletedHandler } from './chainEvents/handleGameCompleted';
 import { CHAIN_TO_FRONTEND_GAME_TYPE } from '../../services/games';
+import { getCasinoKeyIdForStorage } from '../../security/keyVault';
 
 type CrapsPendingRollLog = {
   sessionId: bigint;
@@ -32,6 +33,8 @@ export type UseChainEventsArgs = {
   stats: PlayerStats;
   setLeaderboard: Dispatch<SetStateAction<LeaderboardEntry[]>>;
   isRegisteredRef: MutableRefObject<boolean>;
+  hasRegisteredRef: MutableRefObject<boolean | null>;
+  setIsRegistered: Dispatch<SetStateAction<boolean>>;
   isPendingRef: MutableRefObject<boolean>;
   pendingMoveCountRef: MutableRefObject<number>;
   crapsPendingRollLogRef: MutableRefObject<CrapsPendingRollLog>;
@@ -70,6 +73,8 @@ export const useChainEvents = ({
   stats,
   setLeaderboard,
   isRegisteredRef,
+  hasRegisteredRef,
+  setIsRegistered,
   isPendingRef,
   pendingMoveCountRef,
   crapsPendingRollLogRef,
@@ -223,6 +228,22 @@ export const useChainEvents = ({
              lowerMessage.includes('invalidmove') ||
              lowerMessage.includes('invalid payload') ||
              lowerMessage.includes('invalidpayload');
+           const isNonceError = lowerMessage.includes('nonce') || lowerMessage.includes('expected=');
+           const isAlreadyRegistered = lowerMessage.includes('already registered');
+
+           if (isAlreadyRegistered) {
+             hasRegisteredRef.current = true;
+             isRegisteredRef.current = true;
+             setIsRegistered(true);
+             const keyId = getCasinoKeyIdForStorage();
+             if (keyId) {
+               localStorage.setItem(`casino_registered_${keyId}`, 'true');
+             }
+           }
+
+           if (isNonceError) {
+             void chainService?.forceSyncNonce();
+           }
 
            if (errorSessionId !== null && current !== null && errorSessionId === current && !isRecoverableError) {
              currentSessionIdRef.current = null;
@@ -288,6 +309,8 @@ export const useChainEvents = ({
      crapsPendingRollLogRef,
      crapsChainRollLogRef,
     isRegisteredRef,
+    hasRegisteredRef,
+    setIsRegistered,
   ]);
 
   // Fallback polling for simulator deployments that omit signed update proofs.

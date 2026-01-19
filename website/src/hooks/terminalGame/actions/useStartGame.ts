@@ -195,10 +195,25 @@ export const useStartGame = ({
                 auraMeter: existingPlayer.auraMeter ?? prev.auraMeter ?? 0,
               }));
             } else {
-              hasRegisteredRef.current = false;
-              const keyId = getCasinoKeyIdForStorage();
-              if (keyId) {
-                localStorage.removeItem(`casino_registered_${keyId}`);
+              const account = await clientRef.current.getAccount(publicKeyBytesRef.current).catch(() => null);
+              const accountNonce = Number(account?.nonce ?? 0);
+              const accountHasHistory = Number.isFinite(accountNonce) && accountNonce > 0;
+
+              if (accountHasHistory) {
+                playerExistsOnChain = true;
+                hasRegisteredRef.current = true;
+                const keyId = getCasinoKeyIdForStorage();
+                if (keyId) {
+                  localStorage.setItem(`casino_registered_${keyId}`, 'true');
+                }
+                setIsRegistered(true);
+                logDebug('[useStartGame] Account exists but player missing; treating as registered');
+              } else {
+                hasRegisteredRef.current = false;
+                const keyId = getCasinoKeyIdForStorage();
+                if (keyId) {
+                  localStorage.removeItem(`casino_registered_${keyId}`);
+                }
               }
             }
           }
@@ -209,12 +224,48 @@ export const useStartGame = ({
 
         if (!playerExistsOnChain) {
           const playerName = `Player_${Date.now().toString(36)}`;
-          await chainService.register(playerName);
+          let registered = false;
+          let lastError: unknown = null;
+
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              await chainService.register(playerName);
+              registered = true;
+              break;
+            } catch (error) {
+              lastError = error;
+              const message = (error as any)?.message ?? String(error);
+              const lowerMessage = message.toLowerCase();
+
+              if (lowerMessage.includes('already registered')) {
+                logDebug('[useStartGame] Register rejected as already registered; continuing');
+                registered = true;
+                break;
+              }
+
+              if (lowerMessage.includes('nonce')) {
+                try {
+                  await chainService.forceSyncNonce();
+                } catch {
+                  // ignore sync errors
+                }
+                continue;
+              }
+
+              throw error;
+            }
+          }
+
+          if (!registered) {
+            throw lastError ?? new Error('Register failed');
+          }
+
           hasRegisteredRef.current = true;
           const keyId = getCasinoKeyIdForStorage();
           if (keyId) {
             localStorage.setItem(`casino_registered_${keyId}`, 'true');
           }
+          setIsRegistered(true);
 
           const maxAttempts = 10;
           for (let i = 0; i < maxAttempts; i++) {

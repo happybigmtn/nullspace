@@ -252,6 +252,7 @@ jobs:
             docker run -d --name nullspace-node-0 \
               --restart unless-stopped \
               --network host \
+              -e ALLOW_PRIVATE_IPS=1 \
               -v /var/lib/nullspace/node-0:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
@@ -262,6 +263,7 @@ jobs:
             docker run -d --name nullspace-node-1 \
               --restart unless-stopped \
               --network host \
+              -e ALLOW_PRIVATE_IPS=1 \
               -v /var/lib/nullspace/node-1:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
@@ -272,6 +274,7 @@ jobs:
             docker run -d --name nullspace-node-2 \
               --restart unless-stopped \
               --network host \
+              -e ALLOW_PRIVATE_IPS=1 \
               -v /var/lib/nullspace/node-2:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
@@ -282,6 +285,7 @@ jobs:
             docker run -d --name nullspace-node-3 \
               --restart unless-stopped \
               --network host \
+              -e ALLOW_PRIVATE_IPS=1 \
               -v /var/lib/nullspace/node-3:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
@@ -582,25 +586,25 @@ jobs:
 
             # Use host networking for peer connectivity
             docker run -d --name nullspace-node-0 --restart unless-stopped \
-              --network host -v /var/lib/nullspace/node-0:/data \
+              --network host -e ALLOW_PRIVATE_IPS=1 -v /var/lib/nullspace/node-0:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
               --config /etc/nullspace/node0.yaml --peers /etc/nullspace/peers.yaml
 
             docker run -d --name nullspace-node-1 --restart unless-stopped \
-              --network host -v /var/lib/nullspace/node-1:/data \
+              --network host -e ALLOW_PRIVATE_IPS=1 -v /var/lib/nullspace/node-1:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
               --config /etc/nullspace/node1.yaml --peers /etc/nullspace/peers.yaml
 
             docker run -d --name nullspace-node-2 --restart unless-stopped \
-              --network host -v /var/lib/nullspace/node-2:/data \
+              --network host -e ALLOW_PRIVATE_IPS=1 -v /var/lib/nullspace/node-2:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
               --config /etc/nullspace/node2.yaml --peers /etc/nullspace/peers.yaml
 
             docker run -d --name nullspace-node-3 --restart unless-stopped \
-              --network host -v /var/lib/nullspace/node-3:/data \
+              --network host -e ALLOW_PRIVATE_IPS=1 -v /var/lib/nullspace/node-3:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
               --config /etc/nullspace/node3.yaml --peers /etc/nullspace/peers.yaml

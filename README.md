@@ -279,6 +279,7 @@ nullspace/
   - `RATE_LIMIT_SUBMIT_PER_MIN`, `RATE_LIMIT_SUBMIT_BURST`
   - `ALLOW_HTTP_NO_ORIGIN=1` and `ALLOW_WS_NO_ORIGIN=1` for CLI health checks
 - Staging validators (ns-db-1) run on a single host with ports 9001-9004; if `ALLOW_PRIVATE_IPS` is not set, `configs/staging/peers.yaml` must use the public IP (`5.161.124.82`) instead of loopback/private addresses. If you want loopback/private peers, set `ALLOW_PRIVATE_IPS=1` for the node containers.
+- Testnet UI forces a nonce resync on init (testnet/localhost) and treats `account.nonce > 0` as "registered" when `CasinoPlayer` lookups lag. This prevents "player already registered" and "waiting for chain" loops caused by stale local nonce or delayed indexer state.
 
 ### Gateway Configuration
 

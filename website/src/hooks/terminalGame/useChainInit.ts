@@ -129,6 +129,16 @@ export const useChainInit = ({
       const account = await client.getAccount(keypair.publicKey);
       await client.initNonceManager(keypair.publicKeyHex, keypair.publicKey, account);
 
+      const nonceManager: any = (client as any).nonceManager;
+      const shouldForceSyncNonce =
+        typeof window !== 'undefined'
+        && (window.location.hostname === 'localhost'
+          || window.location.hostname.endsWith('testnet.regenesis.dev'));
+      if (shouldForceSyncNonce && typeof nonceManager?.forceSyncFromChain === 'function') {
+        await nonceManager.forceSyncFromChain();
+        logDebug('[useChainInit] Force-synced nonce from chain');
+      }
+
       try {
         const playerState = await client.getCasinoPlayer(keypair.publicKey);
         if (playerState) {
@@ -191,12 +201,25 @@ export const useChainInit = ({
             }
           }
         } else {
-          hasRegisteredRef.current = false;
-          setIsRegistered(false);
-          const keyId = getCasinoKeyIdForStorage();
-          if (keyId) {
-            localStorage.removeItem(`casino_registered_${keyId}`);
-            logDebug('[useChainInit] Cleared localStorage registration flag for key:', keyId.substring(0, 8) + '...');
+          const accountNonce = Number(account?.nonce ?? 0);
+          const accountHasHistory = Number.isFinite(accountNonce) && accountNonce > 0;
+
+          if (accountHasHistory) {
+            hasRegisteredRef.current = true;
+            setIsRegistered(true);
+            const keyId = getCasinoKeyIdForStorage();
+            if (keyId) {
+              localStorage.setItem(`casino_registered_${keyId}`, 'true');
+            }
+            logDebug('[useChainInit] Account exists but player state missing; preserving registration');
+          } else {
+            hasRegisteredRef.current = false;
+            setIsRegistered(false);
+            const keyId = getCasinoKeyIdForStorage();
+            if (keyId) {
+              localStorage.removeItem(`casino_registered_${keyId}`);
+              logDebug('[useChainInit] Cleared localStorage registration flag for key:', keyId.substring(0, 8) + '...');
+            }
           }
         }
       } catch (playerError) {

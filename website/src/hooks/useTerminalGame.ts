@@ -323,6 +323,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     stats: state.stats,
     setLeaderboard: setters.setLeaderboard,
     isRegisteredRef: refs.isRegisteredRef,
+    hasRegisteredRef: refs.hasRegisteredRef,
+    setIsRegistered: setters.setIsRegistered,
     isPendingRef: refs.isPendingRef,
     pendingMoveCountRef: refs.pendingMoveCountRef,
     crapsPendingRollLogRef: refs.crapsPendingRollLogRef,
