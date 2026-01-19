@@ -197,24 +197,14 @@ export const useStartGame = ({
             } else {
               const account = await clientRef.current.getAccount(publicKeyBytesRef.current).catch(() => null);
               const accountNonce = Number(account?.nonce ?? 0);
-              const accountHasHistory = Number.isFinite(accountNonce) && accountNonce > 0;
-
-              if (accountHasHistory) {
-                playerExistsOnChain = true;
-                hasRegisteredRef.current = true;
-                const keyId = getCasinoKeyIdForStorage();
-                if (keyId) {
-                  localStorage.setItem(`casino_registered_${keyId}`, 'true');
-                }
-                setIsRegistered(true);
-                logDebug('[useStartGame] Account exists but player missing; treating as registered');
-              } else {
-                hasRegisteredRef.current = false;
-                const keyId = getCasinoKeyIdForStorage();
-                if (keyId) {
-                  localStorage.removeItem(`casino_registered_${keyId}`);
-                }
+              hasRegisteredRef.current = false;
+              const keyId = getCasinoKeyIdForStorage();
+              if (keyId) {
+                localStorage.removeItem(`casino_registered_${keyId}`);
               }
+              logDebug('[useStartGame] Casino player missing; treating as unregistered', {
+                accountNonce: Number.isFinite(accountNonce) ? accountNonce : 'unknown',
+              });
             }
           }
         } catch (e) {

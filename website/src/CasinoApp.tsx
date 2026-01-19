@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { GameType } from './types';
 import { ROULETTE_DOUBLE_ZERO } from './utils/gameUtils';
 import { useTerminalGame } from './hooks/useTerminalGame';
@@ -25,6 +25,7 @@ import { ModeSelectView, type PlayMode } from './components/casino/ModeSelectVie
 import { RegistrationView } from './components/casino/RegistrationView';
 import { ActiveGame } from './components/casino/ActiveGame';
 import { RewardsDrawer } from './components/casino/RewardsDrawer';
+import { QABetHarness } from './components/casino/QABetHarness';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { playSfx, setSfxEnabled } from './services/sfx';
 import { track } from './services/telemetry';
@@ -126,6 +127,15 @@ export default function CasinoApp() {
       return DEFAULT_RESPONSIBLE_PLAY;
     }
   });
+
+  const qaEnabled = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const qaFlag = String(import.meta.env.VITE_QA_BETS ?? '').toLowerCase() === 'true';
+    if (!qaFlag) return false;
+    const params = new URLSearchParams(window.location.search);
+    const qaParam = params.get('qa');
+    return qaParam === '1' || qaParam?.toLowerCase() === 'true';
+  }, []);
 
   useEffect(() => {
     try {
@@ -620,6 +630,15 @@ export default function CasinoApp() {
                setRpMode('settings');
            }}
            onStop={stopPlaying}
+       />
+
+       <QABetHarness
+           enabled={qaEnabled}
+           gameState={gameState}
+           stats={stats}
+           actions={{ ...safeActions, setGameState }}
+           lastTxSig={lastTxSig}
+           isOnChain={isOnChain}
        />
 
     </div>

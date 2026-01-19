@@ -461,15 +461,26 @@ function migrateRegistrationFlag(oldPrivateKeyHex: string, publicKeyHex: string)
 }
 
 function clearPendingNonceAndTxs() {
-  // Reset nonce
-  localStorage.setItem('casino_nonce', '0');
-  // Remove any stored tx records
+  // Reset nonce(s)
   const keysToRemove: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && key.startsWith('casino_tx_')) keysToRemove.push(key);
+    if (!key) continue;
+    if (key === 'casino_nonce' || key.startsWith('casino_nonce_') || key.startsWith('casino_tx_')) {
+      keysToRemove.push(key);
+    }
   }
-  for (const k of keysToRemove) localStorage.removeItem(k);
+  for (const k of keysToRemove) {
+    try {
+      if (k === 'casino_nonce' || k.startsWith('casino_nonce_')) {
+        localStorage.removeItem(k);
+      } else {
+        localStorage.removeItem(k);
+      }
+    } catch {
+      // ignore
+    }
+  }
 }
 
 async function createVaultSecrets(options?: { migrateExistingCasinoKey?: boolean }): Promise<{

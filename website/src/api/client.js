@@ -1495,7 +1495,18 @@ export class CasinoClient {
         console.warn('WARNING: Private keys are stored in localStorage. This is not secure for production use.');
       }
 
-      const storedPrivateKeyHex = localStorage.getItem('casino_private_key');
+      let storedPrivateKeyHex = localStorage.getItem('casino_private_key');
+      const allowDeterministicQaKey =
+        runtimeQaAllowLegacy ||
+        (typeof import.meta !== 'undefined' && !!import.meta.env?.VITE_QA_DEFAULT_PRIV);
+      if (!allowDeterministicQaKey && storedPrivateKeyHex) {
+        const normalizedStored = storedPrivateKeyHex.replace(/^0x/i, '').toLowerCase();
+        const normalizedDefault = DEFAULT_QA_PRIV.replace(/^0x/i, '').toLowerCase();
+        if (normalizedStored === normalizedDefault) {
+          removeStoredPrivateKey();
+          storedPrivateKeyHex = null;
+        }
+      }
       const storedPrivateKeyBytes = parseStoredPrivateKeyHex(storedPrivateKeyHex);
 
       if (storedPrivateKeyBytes) {
@@ -1513,12 +1524,21 @@ export class CasinoClient {
 
       if (!this.wasm.keypair) {
         let seedBytes = null;
-        // Prefer deterministic QA key so accounts already exist on testnet.
-        try {
-          const qaBytes = parseStoredPrivateKeyHex(DEFAULT_QA_PRIV);
-          if (qaBytes) seedBytes = qaBytes;
-        } catch {
-          // ignore
+        let seedSource = null;
+        const allowDeterministicQaKey =
+          runtimeQaAllowLegacy ||
+          (typeof import.meta !== 'undefined' && !!import.meta.env?.VITE_QA_DEFAULT_PRIV);
+        // Prefer deterministic QA key only when QA mode is explicitly enabled.
+        if (allowDeterministicQaKey) {
+          try {
+            const qaBytes = parseStoredPrivateKeyHex(DEFAULT_QA_PRIV);
+            if (qaBytes) {
+              seedBytes = qaBytes;
+              seedSource = 'qa';
+            }
+          } catch {
+            // ignore
+          }
         }
         if (!seedBytes) {
           try {
@@ -1526,6 +1546,7 @@ export class CasinoClient {
               const raw = new Uint8Array(32);
               globalThis.crypto.getRandomValues(raw);
               seedBytes = raw;
+              seedSource = 'random';
             }
           } catch {
             // ignore
@@ -1536,7 +1557,11 @@ export class CasinoClient {
           try {
             this.wasm.createKeypair(seedBytes);
             localStorage.setItem('casino_private_key', this.wasm.bytesToHex(seedBytes));
-            logDebug('Initialized keypair (QA default) and saved to localStorage');
+            logDebug(
+              seedSource === 'qa'
+                ? 'Initialized keypair (QA default) and saved to localStorage'
+                : 'Initialized keypair and saved to localStorage'
+            );
           } catch (e) {
             console.warn('[CasinoClient] Failed to initialize keypair, falling back:', e);
             try {

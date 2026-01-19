@@ -230,6 +230,7 @@ export const useChainEvents = ({
              lowerMessage.includes('invalidpayload');
            const isNonceError = lowerMessage.includes('nonce') || lowerMessage.includes('expected=');
            const isAlreadyRegistered = lowerMessage.includes('already registered');
+           const isPlayerNotFound = lowerMessage.includes('player not found');
 
            if (isAlreadyRegistered) {
              hasRegisteredRef.current = true;
@@ -238,6 +239,21 @@ export const useChainEvents = ({
              const keyId = getCasinoKeyIdForStorage();
              if (keyId) {
                localStorage.setItem(`casino_registered_${keyId}`, 'true');
+             }
+           }
+
+           if (isPlayerNotFound) {
+             hasRegisteredRef.current = false;
+             isRegisteredRef.current = false;
+             setIsRegistered(false);
+             const keyId = getCasinoKeyIdForStorage();
+             if (keyId) {
+               localStorage.removeItem(`casino_registered_${keyId}`);
+             }
+             try {
+               void chainService?.forceSyncNonce();
+             } catch {
+               // ignore
              }
            }
 
@@ -254,9 +270,19 @@ export const useChainEvents = ({
              crapsChainRollLogRef.current = null;
            }
 
+           const currentMessage = (gameStateRef.current?.message ?? '').toString().toUpperCase();
+           const shouldPreserveMessage = isAlreadyRegistered && currentMessage.includes('WAITING FOR CHAIN');
+           const nextMessage = shouldPreserveMessage
+             ? currentMessage
+             : isAlreadyRegistered
+               ? 'REGISTERED'
+               : isPlayerNotFound
+                 ? 'PLAYER NOT REGISTERED'
+                 : message.toUpperCase().slice(0, 72);
+
            setGameState(prev => ({
              ...prev,
-             message: message.toUpperCase().slice(0, 72),
+             message: nextMessage,
            }));
          } finally {
            clearChainResponseTimeout();

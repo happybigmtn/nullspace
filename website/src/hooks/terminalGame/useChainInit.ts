@@ -201,26 +201,14 @@ export const useChainInit = ({
             }
           }
         } else {
-          const accountNonce = Number(account?.nonce ?? 0);
-          const accountHasHistory = Number.isFinite(accountNonce) && accountNonce > 0;
-
-          if (accountHasHistory) {
-            hasRegisteredRef.current = true;
-            setIsRegistered(true);
-            const keyId = getCasinoKeyIdForStorage();
-            if (keyId) {
-              localStorage.setItem(`casino_registered_${keyId}`, 'true');
-            }
-            logDebug('[useChainInit] Account exists but player state missing; preserving registration');
-          } else {
-            hasRegisteredRef.current = false;
-            setIsRegistered(false);
-            const keyId = getCasinoKeyIdForStorage();
-            if (keyId) {
-              localStorage.removeItem(`casino_registered_${keyId}`);
-              logDebug('[useChainInit] Cleared localStorage registration flag for key:', keyId.substring(0, 8) + '...');
-            }
+          hasRegisteredRef.current = false;
+          setIsRegistered(false);
+          const keyId = getCasinoKeyIdForStorage();
+          if (keyId) {
+            localStorage.removeItem(`casino_registered_${keyId}`);
+            logDebug('[useChainInit] Cleared localStorage registration flag for key:', keyId.substring(0, 8) + '...');
           }
+          logDebug('[useChainInit] Casino player missing; treating as unregistered');
         }
       } catch (playerError) {
         console.warn('[useChainInit] Failed to fetch player state:', playerError);

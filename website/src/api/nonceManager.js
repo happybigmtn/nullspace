@@ -20,6 +20,73 @@ export class NonceManager {
     this.RESUBMIT_INTERVAL_MS = 10000; // Try to resubmit transactions every 10 seconds
   }
 
+  getNonceKey() {
+    if (!this.publicKeyHex) return 'casino_nonce';
+    return `casino_nonce_${this.publicKeyHex.toLowerCase()}`;
+  }
+
+  getTxPrefix() {
+    if (!this.publicKeyHex) return this.TX_STORAGE_PREFIX;
+    return `${this.TX_STORAGE_PREFIX}${this.publicKeyHex.toLowerCase()}_`;
+  }
+
+  migrateLegacyStorage(shouldMigrate = true) {
+    const legacyNonceKey = 'casino_nonce';
+    const nonceKey = this.getNonceKey();
+    const currentKey = this.publicKeyHex?.toLowerCase();
+    const storedKey = (() => {
+      try {
+        return localStorage.getItem('casino_public_key_hex')?.toLowerCase() ?? null;
+      } catch {
+        return null;
+      }
+    })();
+    const allowMigrate = shouldMigrate && currentKey && storedKey && storedKey === currentKey;
+
+    try {
+      if (allowMigrate && localStorage.getItem(legacyNonceKey) && !localStorage.getItem(nonceKey)) {
+        localStorage.setItem(nonceKey, localStorage.getItem(legacyNonceKey));
+      }
+    } catch {
+      // ignore legacy migration errors
+    }
+
+    // Always remove legacy keys to avoid cross-account nonce drift.
+    try {
+      if (legacyNonceKey !== nonceKey) {
+        localStorage.removeItem(legacyNonceKey);
+      }
+    } catch {
+      // ignore
+    }
+
+    const legacyPrefix = this.TX_STORAGE_PREFIX;
+    const scopedPrefix = this.getTxPrefix();
+    const legacyKeys = [];
+
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(legacyPrefix)) continue;
+        if (key.startsWith(scopedPrefix)) continue;
+        const suffix = key.slice(legacyPrefix.length);
+        if (/^\d+$/.test(suffix)) {
+          legacyKeys.push(key);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    legacyKeys.forEach((key) => {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
+    });
+  }
+
   withSigningKey(createTxFn) {
     const isProd = typeof import.meta !== 'undefined' && import.meta.env?.PROD === true;
     const allowLegacyKeys = (() => {
@@ -113,8 +180,9 @@ export class NonceManager {
     const currentIdentity = this.wasm.identityHex;
     const identityKey = 'casino_identity';
     const storedIdentity = localStorage.getItem(identityKey);
+    const identityChanged = storedIdentity && storedIdentity !== currentIdentity;
 
-    if (storedIdentity && storedIdentity !== currentIdentity) {
+    if (identityChanged) {
       logDebug('Network identity changed - resetting nonce and clearing pending transactions');
       logDebug('Previous identity:', storedIdentity);
       logDebug('Current identity:', currentIdentity);
@@ -126,6 +194,8 @@ export class NonceManager {
 
     // Store the current identity
     localStorage.setItem(identityKey, currentIdentity);
+
+    this.migrateLegacyStorage(!identityChanged);
 
     // Log initial state
     const pendingTxs = this.getPendingTransactions();
@@ -249,7 +319,7 @@ export class NonceManager {
    * @returns {number} The current nonce value
    */
   getCurrentNonce() {
-    const key = 'casino_nonce';
+    const key = this.getNonceKey();
     const stored = localStorage.getItem(key);
     return stored ? parseInt(stored) : 0;
   }
@@ -260,7 +330,7 @@ export class NonceManager {
    * @private
    */
   setNonce(nonce) {
-    const key = 'casino_nonce';
+    const key = this.getNonceKey();
     localStorage.setItem(key, nonce.toString());
   }
 
@@ -269,7 +339,7 @@ export class NonceManager {
    * @private
    */
   resetNonce() {
-    const key = 'casino_nonce';
+    const key = this.getNonceKey();
     localStorage.setItem(key, '0');
   }
 
@@ -332,7 +402,7 @@ export class NonceManager {
    * @private
    */
   storeTransaction(nonce, txData) {
-    const key = `${this.TX_STORAGE_PREFIX}${nonce}`;
+    const key = `${this.getTxPrefix()}${nonce}`;
     const txRecord = {
       nonce,
       txData: Array.from(txData), // Store as array for JSON serialization
@@ -348,7 +418,7 @@ export class NonceManager {
    * @returns {Array<{nonce: number, txData: Array<number>, timestamp: number, retryCount: number}>}
    */
   getPendingTransactions() {
-    const prefix = this.TX_STORAGE_PREFIX;
+    const prefix = this.getTxPrefix();
     const transactions = [];
     const keysToCheck = [];
 
@@ -382,9 +452,7 @@ export class NonceManager {
    * @private
    */
   cleanupAllTransactions() {
-    if (!this.publicKeyHex) return;
-
-    const prefix = this.TX_STORAGE_PREFIX;
+    const prefix = this.getTxPrefix();
     const keysToRemove = [];
 
     for (let i = 0; i < localStorage.length; i++) {
@@ -409,7 +477,7 @@ export class NonceManager {
    * @private
    */
   cleanupConfirmedTransactions(confirmedNonce) {
-    const prefix = this.TX_STORAGE_PREFIX;
+    const prefix = this.getTxPrefix();
     const toRemove = [];
 
 
@@ -481,7 +549,7 @@ export class NonceManager {
         if (staleTxs.length > 0) {
           logDebug(`Removing ${staleTxs.length} confirmed pending txs below chain nonce ${chainNonce}`);
           for (const tx of staleTxs) {
-            const key = `${this.TX_STORAGE_PREFIX}${tx.nonce}`;
+            const key = `${this.getTxPrefix()}${tx.nonce}`;
             localStorage.removeItem(key);
           }
           pendingTxs = this.getPendingTransactions();
@@ -503,7 +571,7 @@ export class NonceManager {
           const result = await this.client.submitTransaction(txData);
           if (result.status === 'accepted') {
             txRecord.retryCount++;
-            const key = `${this.TX_STORAGE_PREFIX}${txRecord.nonce}`;
+            const key = `${this.getTxPrefix()}${txRecord.nonce}`;
             localStorage.setItem(key, JSON.stringify(txRecord));
           }
         } catch (error) {
@@ -511,7 +579,7 @@ export class NonceManager {
           if (nonceTooLowPattern.test(message)) {
             const expectedMatch = message.match(/expected=(\d+)/i);
             const expected = expectedMatch ? Number(expectedMatch[1]) : Number.NaN;
-            const key = `${this.TX_STORAGE_PREFIX}${txRecord.nonce}`;
+            const key = `${this.getTxPrefix()}${txRecord.nonce}`;
             localStorage.removeItem(key);
             if (Number.isFinite(expected)) {
               const localNonce = this.getCurrentNonce();
@@ -606,14 +674,14 @@ export class NonceManager {
             this.incrementNonce();
           } else {
             // Remove the stored transaction if it was rejected
-            const key = `${this.TX_STORAGE_PREFIX}${nonce}`;
+            const key = `${this.getTxPrefix()}${nonce}`;
             localStorage.removeItem(key);
           }
 
           return { ...result, nonce, txHash, txDigest };
         } catch (error) {
           // Remove any stored transaction on failure
-          const key = `${this.TX_STORAGE_PREFIX}${nonce}`;
+          const key = `${this.getTxPrefix()}${nonce}`;
           localStorage.removeItem(key);
 
           const message = error?.message ?? String(error);

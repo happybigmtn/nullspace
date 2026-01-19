@@ -254,7 +254,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       `game ready ${type}`,
       QA_SESSION_TIMEOUT_MS
     );
-    if (isOnChain) {
+    if (isOnChain && type !== GameType.CRAPS) {
       // Wait for sessionId with HTTP fallback poll if WebSocket doesn't deliver
       let lastHttpPoll = 0;
       await waitFor(
@@ -295,6 +295,28 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       );
     }
   }, [isOnChain, log, waitFor]);
+
+  const rollCrapsWithSession = useCallback(async (override?: GameState) => {
+    if (!actionsRef.current?.rollCraps) {
+      throw new Error('Missing rollCraps action');
+    }
+    await actionsRef.current.rollCraps(override);
+
+    const message = String(gameStateRef.current.message ?? '').toUpperCase();
+    const needsSession =
+      isOnChain
+      && gameStateRef.current.sessionId === null
+      && (message.includes('STARTING NEW SESSION') || message.includes('STARTING'));
+
+    if (needsSession) {
+      await waitFor(
+        () => gameStateRef.current.sessionId !== null,
+        'session ready CRAPS',
+        QA_SESSION_TIMEOUT_MS
+      );
+      await actionsRef.current.rollCraps(override);
+    }
+  }, [isOnChain, waitFor]);
 
   const setBetAmount = useCallback(() => {
     actionsRef.current?.setBetAmount?.(QA_BET_AMOUNT);
@@ -353,6 +375,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const point = gameStateRef.current.crapsPoint;
       if (point !== null && point !== undefined) return;
+      actionsRef.current?.syncSessionId?.(null);
       clearTableBets(GameType.CRAPS);
       const baseState = {
         ...gameStateRef.current,
@@ -372,7 +395,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
           local: true,
         }],
       };
-      await actionsRef.current?.rollCraps?.(passOverride);
+      await rollCrapsWithSession(passOverride);
       const prevDice = gameStateRef.current.dice ?? [];
       await waitFor(
         () => {
@@ -389,7 +412,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       if (gameStateRef.current.crapsPoint !== null) return;
     }
     throw new Error('Failed to establish craps point');
-  }, [clearTableBets, waitFor]);
+  }, [clearTableBets, rollCrapsWithSession, waitFor]);
 
   const runRoulette = useCallback(async () => {
     const results: QABetResult[] = [];
@@ -466,6 +489,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       try {
         log('info', `Starting ${label}`);
         await ensureGame(GameType.CRAPS);
+        actionsRef.current?.syncSessionId?.(null);
         clearTableBets(GameType.CRAPS);
         setBetAmount();
         if (betCase.requiresPoint) {
@@ -497,10 +521,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         const prevSig = lastTxSigRef.current;
         const prevMove = gameStateRef.current.moveNumber ?? 0;
         const prevSessionId = gameStateRef.current.sessionId ?? null;
-        if (!actionsRef.current?.rollCraps) {
-          throw new Error('Missing rollCraps action');
-        }
-        await actionsRef.current.rollCraps(crapsOverride);
+        await rollCrapsWithSession(crapsOverride);
         await waitFor(
           () => {
             const state = gameStateRef.current;
@@ -537,7 +558,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       }
     }
     return results;
-  }, [clearTableBets, ensureChips, ensureCrapsPoint, ensureGame, log, runTx, setBetAmount, waitFor]);
+  }, [clearTableBets, ensureChips, ensureCrapsPoint, ensureGame, log, rollCrapsWithSession, setBetAmount, waitFor]);
 
   const runSicBo = useCallback(async () => {
     const results: QABetResult[] = [];
