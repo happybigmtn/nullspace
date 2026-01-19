@@ -24,11 +24,12 @@
     - Programmatic: `pnpm -C tests/integration test:faucet`
   - Perceptual: None
   - Note: Implemented scripts/faucet.sh and scripts/faucet.mjs for CLI usage; integration tests in tests/integration/faucet.test.ts verify fund flow. Uses CasinoRegister + CasinoDeposit instructions.
-- [ ] Add config schema validation for gateway and services
+- [x] Add config schema validation for gateway and services
   - Specs: `specs/sprint-01-foundations.md` AC-1.2
   - Tests/backpressure:
     - Programmatic: `pnpm -C gateway test`
   - Perceptual: None
+  - Note: Tests added in `gateway/tests/unit/config-validation.test.ts` (25 tests). Validates placeholder detection, origin URL format, short secrets, error message clarity. Existing `src/config/validation.ts` already provided the validation logic.
 - [ ] Update docs for bootstrap, teardown, and troubleshooting
   - Specs: `specs/sprint-01-foundations.md` AC-1.4
   - Tests/backpressure:
