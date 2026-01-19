@@ -460,6 +460,7 @@ If the UI is stuck waiting for chain, run the staging debug flow in `docs/agents
 - Verifying recent blocks are empty.
 - Checking validator mempool/propose metrics.
 - Recovery actions (validator restart + client nonce reset).
+- Web CORS/base URL checks (ensure the web client uses `/api` or the gateway URL instead of direct `indexer.*`).
 
 ## Additional Documentation
 

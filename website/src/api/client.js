@@ -12,6 +12,19 @@ const FETCH_TIMEOUT_MS = 10000;
 const normalizeBaseUrl = (baseUrl) => {
   if (!baseUrl) return baseUrl;
   if (baseUrl.startsWith('/')) return baseUrl;
+  if (typeof window !== 'undefined') {
+    try {
+      const candidate = new URL(baseUrl);
+      const currentHost = window.location?.hostname ?? '';
+      const isIndexer = candidate.hostname.startsWith('indexer.');
+      const isRegenesis = currentHost.endsWith('regenesis.dev');
+      if (isIndexer && isRegenesis) {
+        return '/api';
+      }
+    } catch {
+      // Ignore URL parsing failures here; handled below.
+    }
+  }
   try {
     const url = new URL(baseUrl);
     if (url.protocol === 'ws:') url.protocol = 'http:';

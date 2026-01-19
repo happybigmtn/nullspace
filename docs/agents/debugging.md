@@ -25,9 +25,18 @@
    ```
    - If `mempool_pending_total > 0` but `txs_considered_total == 0`, the mempool queue is out of sync and no candidates are being proposed.
 
+3. Check browser console for CORS errors:
+   - If you see requests to `https://indexer.testnet.regenesis.dev/*` blocked by CORS from `https://testnet.regenesis.dev`,
+     the web client is pointing at the indexer directly and cannot submit transactions.
+   - Fix by routing through the gateway or same-origin `/api` proxy (see Permanent Fix below).
+
 **Permanent Fix**
 - Mempool self-healing was added in `node/src/application/mempool.rs`: if the queue is empty or stale while tracked transactions exist, rebuild the queue and retry `peek_batch`.
 - Deploy the new node image to staging (via `deploy-staging.yml`) so proposers always see candidates.
+- Web client base URL guard: `website/src/api/client.js` now auto-routes `indexer.*.regenesis.dev` to `/api` when running on `*.regenesis.dev`.
+  This avoids CORS failures and ensures `/submit` hits the gateway.
+
+If you intentionally want to use the indexer directly in the browser, you must enable CORS on the indexer host.
 
 **Recovery Steps (Immediate)**
 1. Redeploy validators with the updated image (or restart validators to clear a stuck mempool):
@@ -37,6 +46,9 @@
 2. If clients have a backlog of pending txs, clear local pending state:
    - Web console: remove `casino_tx_*` and `casino_nonce_*` from `localStorage`, or
    - Call the nonce manager recovery path (`forceSyncFromChain`) from UI tooling.
+3. If console shows CORS errors for `indexer.testnet.regenesis.dev`, verify `VITE_URL` and the web base URL:
+   - Prefer `/api` (same-origin) or `https://api.testnet.regenesis.dev` for web builds.
+   - Redeploy the website with corrected build args.
 3. Confirm recovery:
    - `tx_count` becomes >0 on `/explorer/blocks`.
    - `/account/<pubkey>` nonce increments.
