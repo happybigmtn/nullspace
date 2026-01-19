@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "test:faucet": "RUN_CROSS_SERVICE=true vitest run faucet.test.ts",
     "test:cross-service": "RUN_CROSS_SERVICE=true vitest run cross-service.test.ts",
     "test:ci": "RUN_CROSS_SERVICE=true vitest run --reporter=verbose",
     "docker:up": "docker compose -f docker-compose.cross-service.yml up -d --wait",
@@ -12,6 +13,7 @@
     "docker:logs": "docker compose -f docker-compose.cross-service.yml logs -f"
   },
   "devDependencies": {
+    "@noble/curves": "^1.8.1",
     "vitest": "^2.1.8",
     "ws": "^8.18.1",
     "@types/ws": "^8.5.13"

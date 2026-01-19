@@ -11,17 +11,19 @@
     - Programmatic: `cargo test -p nullspace-simulator`
   - Perceptual: None
   - Note: Already implemented in `simulator/src/state.rs` (SimulatorConfig) and `simulator/src/main.rs` (Args parsing + validation)
-- [ ] Add local bootstrap guardrails (missing env/config checks, port reuse handling)
+- [x] Add local bootstrap guardrails (missing env/config checks, port reuse handling)
   - Specs: `specs/sprint-01-foundations.md` AC-1.1, AC-1.5
   - Tests/backpressure:
     - Programmatic: `./scripts/agent-loop.sh`
     - Programmatic: `./scripts/health-check.sh`
   - Perceptual: None
-- [ ] Add faucet helper for funding test wallets
+  - Note: Implemented scripts/agent-loop.sh with config validation, command checks, port reuse detection; scripts/health-check.sh with endpoint/port/process checks. Both return non-zero on failure.
+- [x] Add faucet helper for funding test wallets
   - Specs: `specs/sprint-01-foundations.md` AC-1.3
   - Tests/backpressure:
-    - Programmatic: `cargo test -p tests` (or integration test harness)
+    - Programmatic: `pnpm -C tests/integration test:faucet`
   - Perceptual: None
+  - Note: Implemented scripts/faucet.sh and scripts/faucet.mjs for CLI usage; integration tests in tests/integration/faucet.test.ts verify fund flow. Uses CasinoRegister + CasinoDeposit instructions.
 - [ ] Add config schema validation for gateway and services
   - Specs: `specs/sprint-01-foundations.md` AC-1.2
   - Tests/backpressure:
