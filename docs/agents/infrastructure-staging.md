@@ -46,5 +46,5 @@ Current infrastructure notes (Jan 2026):
 - 4 validators consolidated on ns-db-1 for BFT consensus (n >= 3f+1, f = 1).
 - Validators use per-node YAML config files (`configs/staging/node{0-3}.yaml`) with individual keys, not shared env files.
 - Validators run with host networking; ports 9001-9004 are bound directly.
-- When validators share a host, use loopback aliases in `configs/staging/peers.yaml` (127.0.0.1-127.0.0.4) and set `ALLOW_PRIVATE_IPS=1` for the node containers to permit private addresses.
+- Validators share a single host; `configs/staging/peers.yaml` should use the public IP (`5.161.124.82`) with ports 9001-9004 unless `ALLOW_PRIVATE_IPS=1` is set. If you want loopback/private peers, enable `ALLOW_PRIVATE_IPS=1` and switch the peers file to `127.0.0.1-127.0.0.4`.
 - Threshold: 3/4 signatures required for consensus.
