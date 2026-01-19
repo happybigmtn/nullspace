@@ -78,6 +78,10 @@ jobs:
             exit 1
           fi
 
+          if [ -z "${{ vars.VITE_WS_URL }}" ]; then
+            echo "::warning::VITE_WS_URL is not set. WebSocket updates will fall back to VITE_URL-derived candidates."
+          fi
+
           echo "✓ All required VITE_* variables are configured"
 
       - name: Set up Docker Buildx
@@ -115,6 +119,7 @@ jobs:
             ${{ matrix.needs_build_args && format('VITE_AUTH_URL={0}', vars.VITE_AUTH_URL) || '' }}
             ${{ matrix.needs_build_args && format('VITE_AUTH_PROXY_URL={0}', vars.VITE_AUTH_PROXY_URL) || '' }}
             ${{ matrix.needs_build_args && format('VITE_IDENTITY={0}', vars.VITE_IDENTITY) || '' }}
+            ${{ matrix.needs_build_args && format('VITE_WS_URL={0}', vars.VITE_WS_URL) || '' }}
             ${{ matrix.needs_build_args && format('VITE_ALLOW_LEGACY_KEYS={0}', vars.VITE_ALLOW_LEGACY_KEYS) || '' }}
             ${{ matrix.needs_build_args && format('VITE_QA_BETS={0}', vars.VITE_QA_BETS) || '' }}
             ${{ matrix.needs_build_args && format('VITE_STRIPE_TIERS={0}', vars.VITE_STRIPE_TIERS) || '' }}

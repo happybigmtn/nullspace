@@ -204,21 +204,6 @@ export class CasinoClient {
   buildUpdatesCandidates(filterHex) {
     const candidates = [];
 
-    // Optional explicit WebSocket endpoint override
-    const explicitWs = import.meta.env.VITE_WS_URL;
-    if (explicitWs) {
-      try {
-        const url = new URL(explicitWs);
-        const secure = url.protocol === 'https:' || url.protocol === 'wss:';
-        const wsProtocol = secure ? 'wss:' : 'ws:';
-        candidates.push(`${wsProtocol}//${url.host}/updates/${filterHex}`);
-      } catch (e) {
-        console.warn('Invalid VITE_WS_URL for WebSocket:', explicitWs, e);
-      }
-    }
-
-    // FIRST: Try direct connection to VITE_URL (most reliable for WebSockets)
-    const directUrl = import.meta.env.VITE_URL;
     const toWsUrl = (rawUrl) => {
       if (!rawUrl || rawUrl.startsWith('/')) return null; // ignore relative URLs
       try {
@@ -227,13 +212,46 @@ export class CasinoClient {
         const wsProtocol = secure ? 'wss:' : 'ws:';
         return `${wsProtocol}//${url.host}/updates/${filterHex}`;
       } catch (e) {
-        console.warn('Invalid VITE_URL for WebSocket:', rawUrl, e);
+        console.warn('Invalid URL for WebSocket:', rawUrl, e);
         return null;
       }
     };
+
+    const maybeAdd = (rawUrl) => {
+      const wsUrl = toWsUrl(rawUrl);
+      if (wsUrl && !candidates.includes(wsUrl)) candidates.push(wsUrl);
+    };
+
+    const deriveIndexerUrl = (rawUrl) => {
+      try {
+        const url = new URL(rawUrl);
+        if (!url.hostname.startsWith('api.')) return null;
+        const host = `indexer.${url.hostname.slice(4)}`;
+        const secure = url.protocol === 'https:' || url.protocol === 'wss:';
+        const wsProtocol = secure ? 'wss:' : 'ws:';
+        return `${wsProtocol}//${host}/updates/${filterHex}`;
+      } catch {
+        return null;
+      }
+    };
+
+    // Optional explicit WebSocket endpoint override
+    const explicitWs = import.meta.env.VITE_WS_URL;
+    if (explicitWs) {
+      const wsUrl = toWsUrl(explicitWs);
+      if (wsUrl) {
+        candidates.push(wsUrl);
+      } else {
+        console.warn('Invalid VITE_WS_URL for WebSocket:', explicitWs);
+      }
+    }
+
+    // FIRST: Try direct connection to VITE_URL (most reliable for WebSockets)
+    const directUrl = import.meta.env.VITE_URL;
     if (directUrl) {
-      const wsUrl = toWsUrl(directUrl);
-      if (wsUrl) candidates.push(wsUrl);
+      maybeAdd(directUrl);
+      const derived = deriveIndexerUrl(directUrl);
+      if (derived && !candidates.includes(derived)) candidates.push(derived);
     } else if (
       this.baseUrl.startsWith('http://') ||
       this.baseUrl.startsWith('https://') ||
@@ -255,10 +273,22 @@ export class CasinoClient {
 
     // THIRD: Fallback to standard simulator port 8080 on the same hostname (for LAN access)
     if (typeof window !== 'undefined') {
-      const fallbackWsUrl = window.location.protocol === 'https:'
-        ? `wss://${window.location.hostname}:8080/updates/${filterHex}`
-        : `ws://${window.location.hostname}:8080/updates/${filterHex}`;
-      if (!candidates.includes(fallbackWsUrl)) candidates.push(fallbackWsUrl);
+      const host = window.location.hostname;
+      const isLocalHost =
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '::1' ||
+        host.endsWith('.local');
+      const isPrivateIp =
+        /^10\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+      if (isLocalHost || isPrivateIp) {
+        const fallbackWsUrl = window.location.protocol === 'https:'
+          ? `wss://${host}:8080/updates/${filterHex}`
+          : `ws://${host}:8080/updates/${filterHex}`;
+        if (!candidates.includes(fallbackWsUrl)) candidates.push(fallbackWsUrl);
+      }
     }
 
     return candidates;
