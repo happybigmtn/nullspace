@@ -1403,6 +1403,19 @@ fn decode_seed_internal(seed: Seed, identity: &Identity) -> Result<JsValue, JsVa
     to_object(&response)
 }
 
+/// Helper function to decode a seed without signature verification.
+fn decode_seed_unverified(seed: Seed) -> Result<JsValue, JsValue> {
+    let bytes = seed.encode().to_vec();
+
+    let response = serde_json::json!({
+        "type": "Seed",
+        "view": seed.view().get(),
+        "bytes": bytes
+    });
+
+    to_object(&response)
+}
+
 /// Decode and verify a seed.
 #[wasm_bindgen]
 pub fn decode_seed(seed: &[u8], identity: &[u8]) -> Result<JsValue, JsValue> {
@@ -2785,6 +2798,22 @@ pub fn decode_update(update: &[u8], identity: &[u8]) -> Result<JsValue, JsValue>
                     "Invalid filtered events signature or proof: {err}"
                 ))
             })?;
+            process_events(events.events_proof_ops.iter().map(|(_, op)| op))
+        }
+    }
+}
+
+/// Decode an Update without verifying signatures (useful for staging/testnet).
+#[wasm_bindgen]
+pub fn decode_update_unverified(update: &[u8]) -> Result<JsValue, JsValue> {
+    let mut buf = update;
+    let update = Update::read(&mut buf)
+        .map_err(|e| JsValue::from_str(&format!("Failed to decode update: {e:?}")))?;
+
+    match update {
+        Update::Seed(seed) => decode_seed_unverified(seed),
+        Update::Events(events) => process_events(events.events_proof_ops.iter()),
+        Update::FilteredEvents(events) => {
             process_events(events.events_proof_ops.iter().map(|(_, op)| op))
         }
     }

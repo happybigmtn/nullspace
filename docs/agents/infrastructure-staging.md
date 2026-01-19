@@ -45,5 +45,6 @@ Current infrastructure notes (Jan 2026):
 - `ns-sim-1` should run only the simulator/indexer. Disable `nullspace-node*.service` on `ns-sim-1` to avoid forked indexer data.
 - 4 validators consolidated on ns-db-1 for BFT consensus (n >= 3f+1, f = 1).
 - Validators use per-node YAML config files (`configs/staging/node{0-3}.yaml`) with individual keys, not shared env files.
-- Docker port mapping: external 9001-9004 -> internal 9001 per container.
+- Validators run with host networking; ports 9001-9004 are bound directly.
+- When validators share a host, use loopback aliases in `configs/staging/peers.yaml` (127.0.0.1-127.0.0.4) and set `ALLOW_PRIVATE_IPS=1` for the node containers to permit private addresses.
 - Threshold: 3/4 signatures required for consensus.

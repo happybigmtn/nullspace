@@ -300,6 +300,12 @@ export class WasmWrapper {
     return update;
   }
 
+  // Decode update without signature verification (staging/testnet fallback)
+  decodeUpdateUnverified(bytes) {
+    const update = this.wasm.decode_update_unverified(bytes);
+    return update;
+  }
+
   // Wrap a transaction in a Submission enum
   wrapTransactionSubmission(transactionBytes) {
     return this.wasm.wrap_transaction_submission(transactionBytes);

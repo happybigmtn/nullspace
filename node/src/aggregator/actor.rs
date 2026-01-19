@@ -20,7 +20,6 @@ use commonware_resolver::{p2p, Resolver};
 use commonware_runtime::{Clock, Handle, Metrics, Spawner, Storage};
 use commonware_storage::{
     cache,
-    journal::contiguous::fixed,
     mmr::Proof,
     ordinal::{self, Ordinal},
     qmdb::{any::unordered::variable, keyless},
@@ -361,13 +360,16 @@ impl<
                 return;
             }
         };
-        let mut results = match fixed::Journal::init(
+        let mut results = match cache::Cache::<_, Progress>::init(
             self.context.with_label("results"),
-            fixed::Config {
-                partition: format!("{}-results", self.config.partition),
+            cache::Config {
+                partition: format!("{}-results-cache", self.config.partition),
+                compression: None,
+                codec_config: (),
                 items_per_blob: self.config.persistent_items_per_blob,
                 write_buffer: self.config.write_buffer,
-                buffer_pool: self.config.buffer_pool,
+                replay_buffer: self.config.replay_buffer,
+                buffer_pool: self.config.buffer_pool.clone(),
             },
         )
         .await
@@ -427,10 +429,33 @@ impl<
 
         // Track uploads
         let mut uploads_outstanding = 0;
-        let mut cursor = cache.first().unwrap_or(1); // start at height 1
+        let cache_first = cache.first();
+        let results_first = results.first();
+        let mut cursor = match (cache_first, results_first) {
+            (Some(cache_first), Some(results_first)) => cache_first.max(results_first),
+            (Some(cache_first), None) => cache_first,
+            (None, Some(results_first)) => results_first,
+            (None, None) => 1,
+        };
         let mut boundary = cursor;
         let mut tracked_uploads = RMap::new();
-        info!(cursor, "initial summary cursor");
+        info!(cursor, cache_first, results_first, "initial summary cursor");
+        if let Some(cache_first) = cache_first {
+            if cursor > cache_first {
+                if let Err(err) = cache.prune(cursor).await {
+                    error!(?err, cursor, "failed to prune cache for summary cursor");
+                    return;
+                }
+            }
+        }
+        if let Some(results_first) = results_first {
+            if cursor > results_first {
+                if let Err(err) = results.prune(cursor).await {
+                    error!(?err, cursor, "failed to prune results for summary cursor");
+                    return;
+                }
+            }
+        }
         summary_uploads_outstanding.set(0);
         summary_upload_lag.set(0);
         summary_upload_last_attempt_ms.set(0);
@@ -529,13 +554,12 @@ impl<
                         // Size is the next item to store and the height-th value will be stored at height - 1,
                         // so comparing size() to height is equivalent to checking if the next item stored will be
                         // at height + 1 (i.e. this height has already been processed).
-                        let size = results.size();
-                        if size == height {
+                        if results.has(height) {
                             warn!(height, "already processed results");
                             return Ok(());
                         }
-                        if let Err(err) = results.append(result).await {
-                            error!(?err, height, "failed to append result");
+                        if let Err(err) = results.put(height, result).await {
+                            error!(?err, height, "failed to store result");
                             return Err(());
                         }
                         if let Err(err) = results.sync().await {
@@ -585,8 +609,7 @@ impl<
                         let _ = response.send(genesis_digest);
                         continue;
                     }
-                    let item = index - 1;
-                    if let Ok(result) = results.read(item).await {
+                    if let Ok(Some(result)) = results.get(index).await {
                         let _ = response.send(result.digest());
                         continue;
                     };
@@ -603,8 +626,7 @@ impl<
                         let _ = response.send(genesis_digest == payload);
                         continue;
                     }
-                    let item = index - 1;
-                    if let Ok(result) = results.read(item).await {
+                    if let Ok(Some(result)) = results.get(index).await {
                         let _ = response.send(result.digest() == payload);
                         continue;
                     };
@@ -730,12 +752,53 @@ impl<
             while uploads_outstanding < self.config.max_uploads_outstanding {
                 // Get next certificate
                 if !cache.has(cursor) {
-                    break;
+                    let (_, next_start) = cache.next_gap(cursor);
+                    let Some(next_start) = next_start else {
+                        break;
+                    };
+                    warn!(cursor, next_start, "summary proofs gap detected; fast-forwarding cursor");
+                    if let Err(err) = cache.prune(next_start).await {
+                        error!(?err, next_start, "failed to prune cache for summary gap");
+                        return;
+                    }
+                    if let Err(err) = results.prune(next_start).await {
+                        error!(?err, next_start, "failed to prune results for summary gap");
+                        return;
+                    }
+                    tracked_uploads = RMap::new();
+                    boundary = next_start;
+                    cursor = next_start;
+                    summary_upload_lag.set(0);
+                    continue;
+                }
+                if !results.has(cursor) {
+                    let (_, next_start) = results.next_gap(cursor);
+                    let Some(next_start) = next_start else {
+                        break;
+                    };
+                    warn!(cursor, next_start, "summary results gap detected; fast-forwarding cursor");
+                    if let Err(err) = cache.prune(next_start).await {
+                        error!(?err, next_start, "failed to prune cache for summary gap");
+                        return;
+                    }
+                    if let Err(err) = results.prune(next_start).await {
+                        error!(?err, next_start, "failed to prune results for summary gap");
+                        return;
+                    }
+                    tracked_uploads = RMap::new();
+                    boundary = next_start;
+                    cursor = next_start;
+                    summary_upload_lag.set(0);
+                    continue;
                 }
 
                 // Get result
-                let result = match results.read(cursor - 1).await {
-                    Ok(result) => result,
+                let result = match results.get(cursor).await {
+                    Ok(Some(result)) => result,
+                    Ok(None) => {
+                        error!(cursor, "result missing for cached proofs");
+                        return;
+                    }
                     Err(err) => {
                         error!(?err, cursor, "failed to fetch result");
                         return;

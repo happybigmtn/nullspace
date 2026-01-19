@@ -196,7 +196,11 @@ export class NonceManager {
       return;
     }
 
-    const serverNonce = account.nonce;
+    const serverNonce = normalizeNonce(account.nonce);
+    if (!Number.isFinite(serverNonce)) {
+      console.warn('[NonceManager] Invalid server nonce:', account.nonce);
+      return;
+    }
     const localNonce = this.getCurrentNonce();
     const pendingTxs = this.getPendingTransactions();
 
@@ -440,45 +444,88 @@ export class NonceManager {
 
     this.resubmitInProgress = true;
     try {
-      const pendingTxs = this.getPendingTransactions();
+      let chainNonce = Number.NaN;
+      if (this.publicKeyBytes) {
+        try {
+          const account = await this.client.getAccount(this.publicKeyBytes);
+          if (account && account.nonce !== null && account.nonce !== undefined) {
+            const parsed = normalizeNonce(account.nonce);
+            if (Number.isFinite(parsed)) {
+              chainNonce = parsed;
+            }
+          }
+        } catch (error) {
+          logDebug('[NonceManager] Resubmit nonce sync failed:', error?.message ?? error);
+        }
+      }
+
+      if (Number.isFinite(chainNonce)) {
+        const localNonce = this.getCurrentNonce();
+        if (chainNonce > localNonce) {
+          logDebug(`[NonceManager] Resubmit sync: local=${localNonce}, chain=${chainNonce}`);
+          this.setNonce(chainNonce);
+        }
+        if (chainNonce > 0) {
+          this.cleanupConfirmedTransactions(chainNonce - 1);
+        }
+      }
+
+      let pendingTxs = this.getPendingTransactions();
 
       if (pendingTxs.length === 0) {
         return;
       }
 
-      const currentNonce = this.getCurrentNonce();
-
-      // Check for stale transactions (nonces >= current nonce means they're from a previous session)
-      // This can happen if the server was reset but the client still has old pending transactions
-      const staleTxs = pendingTxs.filter(tx => tx.nonce >= currentNonce);
-      if (staleTxs.length > 0) {
-        logDebug(`Found ${staleTxs.length} stale pending transactions with nonces >= ${currentNonce}, clearing them`);
-        for (const tx of staleTxs) {
-          const key = `${this.TX_STORAGE_PREFIX}${tx.nonce}`;
-          localStorage.removeItem(key);
-        }
-        // Re-fetch pending transactions after cleanup
-        const validTxs = this.getPendingTransactions();
-        if (validTxs.length === 0) {
-          return;
+      if (Number.isFinite(chainNonce)) {
+        const staleTxs = pendingTxs.filter(tx => tx.nonce < chainNonce);
+        if (staleTxs.length > 0) {
+          logDebug(`Removing ${staleTxs.length} confirmed pending txs below chain nonce ${chainNonce}`);
+          for (const tx of staleTxs) {
+            const key = `${this.TX_STORAGE_PREFIX}${tx.nonce}`;
+            localStorage.removeItem(key);
+          }
+          pendingTxs = this.getPendingTransactions();
+          if (pendingTxs.length === 0) {
+            return;
+          }
         }
       }
 
-      // Try to resubmit valid pending transactions (those with nonces < currentNonce)
-      const validPendingTxs = pendingTxs.filter(tx => tx.nonce < currentNonce);
+      const currentNonce = this.getCurrentNonce();
+      const validPendingTxs = Number.isFinite(chainNonce)
+        ? pendingTxs.filter(tx => tx.nonce >= chainNonce)
+        : pendingTxs.filter(tx => tx.nonce >= currentNonce);
+
+      const nonceTooLowPattern = /nonce[_\s-]?too[_\s-]?low|expected=\d+/i;
       for (const txRecord of validPendingTxs) {
-        // Convert array back to Uint8Array
         const txData = new Uint8Array(txRecord.txData);
-
-        // Resubmit the transaction
-        const result = await this.client.submitTransaction(txData);
-
-        if (result.status === 'accepted') {
-          // Update retry count
-          txRecord.retryCount++;
-          const key = `${this.TX_STORAGE_PREFIX}${txRecord.nonce}`;
-          localStorage.setItem(key, JSON.stringify(txRecord));
-
+        try {
+          const result = await this.client.submitTransaction(txData);
+          if (result.status === 'accepted') {
+            txRecord.retryCount++;
+            const key = `${this.TX_STORAGE_PREFIX}${txRecord.nonce}`;
+            localStorage.setItem(key, JSON.stringify(txRecord));
+          }
+        } catch (error) {
+          const message = error?.message ?? String(error);
+          if (nonceTooLowPattern.test(message)) {
+            const expectedMatch = message.match(/expected=(\d+)/i);
+            const expected = expectedMatch ? Number(expectedMatch[1]) : Number.NaN;
+            const key = `${this.TX_STORAGE_PREFIX}${txRecord.nonce}`;
+            localStorage.removeItem(key);
+            if (Number.isFinite(expected)) {
+              const localNonce = this.getCurrentNonce();
+              if (expected > localNonce) {
+                this.setNonce(expected);
+              }
+              if (expected > 0) {
+                this.cleanupConfirmedTransactions(expected - 1);
+              }
+            }
+            continue;
+          }
+          console.error('Error in resubmitPendingTransactions:', message);
+          break;
         }
       }
     } catch (error) {
@@ -504,12 +551,14 @@ export class NonceManager {
       if (this.publicKeyBytes) {
         try {
           const account = await this.client.getAccount(this.publicKeyBytes);
-          if (account && typeof account.nonce === 'number') {
-            const serverNonce = account.nonce;
-            const localNonce = this.getCurrentNonce();
-            if (localNonce !== serverNonce) {
-              logDebug(`[NonceManager] Pre-submit sync: local=${localNonce}, server=${serverNonce}`);
-              this.setNonce(serverNonce);
+          if (account && account.nonce !== null && account.nonce !== undefined) {
+            const serverNonce = normalizeNonce(account.nonce);
+            if (Number.isFinite(serverNonce)) {
+              const localNonce = this.getCurrentNonce();
+              if (localNonce !== serverNonce) {
+                logDebug(`[NonceManager] Pre-submit sync: local=${localNonce}, server=${serverNonce}`);
+                this.setNonce(serverNonce);
+              }
             }
           }
         } catch (error) {
@@ -518,50 +567,70 @@ export class NonceManager {
         }
       }
 
-      const nonce = this.getNextNonce();
+      const nonceErrorPattern = /nonce[_\\s-]?too[_\\s-]?low|nonce[_\\s-]?mismatch|expected=\\d+/i;
+      const maxAttempts = 2;
 
-      try {
-        // AC-2.1: Always-visible transaction submission logging
-        console.log('[TX] Submitting', { type: txType, nonce, publicKey: this.publicKeyHex?.slice(0, 16) + '...' });
-        logDebug('[NonceManager] submit', { txType, nonce, publicKey: this.publicKeyHex });
-        // Create the transaction with the nonce
-        const txData = this.withSigningKey(() => createTxFn(nonce));
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const nonce = this.getNextNonce();
+        let txData;
 
-        // Compute a short hash of the tx data for display
-        const txHash = this.computeTxHash(txData);
-        let txDigest;
         try {
-          txDigest = this.wasm.digestTransaction(txData);
-        } catch {
-          // ignore (older WASM builds / unexpected decode issues)
-          txDigest = undefined;
-        }
+          // AC-2.1: Always-visible transaction submission logging
+          console.log('[TX] Submitting', { type: txType, nonce, publicKey: this.publicKeyHex?.slice(0, 16) + '...' });
+          logDebug('[NonceManager] submit', { txType, nonce, publicKey: this.publicKeyHex });
+          // Create the transaction with the nonce
+          txData = this.withSigningKey(() => createTxFn(nonce));
 
-        // Store the transaction before submitting
-        this.storeTransaction(nonce, txData);
+          // Compute a short hash of the tx data for display
+          const txHash = this.computeTxHash(txData);
+          let txDigest;
+          try {
+            txDigest = this.wasm.digestTransaction(txData);
+          } catch {
+            // ignore (older WASM builds / unexpected decode issues)
+            txDigest = undefined;
+          }
 
-        // Submit the transaction
-        const result = await this.client.submitTransaction(txData);
+          // Store the transaction before submitting
+          this.storeTransaction(nonce, txData);
 
-        // AC-2.1: Always-visible transaction response logging
-        console.log('[TX] Response', { type: txType, nonce, status: result.status, txHash, txDigest: txDigest?.slice(0, 16) });
+          // Submit the transaction
+          const result = await this.client.submitTransaction(txData);
 
-        if (result.status === 'accepted') {
-          logDebug('[NonceManager] accepted', { txType, nonce, publicKey: this.publicKeyHex });
-          // Increment nonce for next transaction
-          this.incrementNonce();
-        } else {
-          // Remove the stored transaction if it was rejected
+          // AC-2.1: Always-visible transaction response logging
+          console.log('[TX] Response', { type: txType, nonce, status: result.status, txHash, txDigest: txDigest?.slice(0, 16) });
+
+          if (result.status === 'accepted') {
+            logDebug('[NonceManager] accepted', { txType, nonce, publicKey: this.publicKeyHex });
+            // Increment nonce for next transaction
+            this.incrementNonce();
+          } else {
+            // Remove the stored transaction if it was rejected
+            const key = `${this.TX_STORAGE_PREFIX}${nonce}`;
+            localStorage.removeItem(key);
+          }
+
+          return { ...result, nonce, txHash, txDigest };
+        } catch (error) {
+          // Remove any stored transaction on failure
           const key = `${this.TX_STORAGE_PREFIX}${nonce}`;
           localStorage.removeItem(key);
-        }
 
-        return { ...result, nonce, txHash, txDigest };
-      } catch (error) {
-        // AC-2.1: Always-visible transaction error logging
-        console.log('[TX] Error', { type: txType, nonce, error: error.message });
-        console.error(`Error submitting ${txType} transaction with nonce ${nonce}:`, error.message);
-        throw error;
+          const message = error?.message ?? String(error);
+          const isNonceError = nonceErrorPattern.test(message);
+
+          // AC-2.1: Always-visible transaction error logging
+          console.log('[TX] Error', { type: txType, nonce, error: message });
+          console.error(`Error submitting ${txType} transaction with nonce ${nonce}:`, message);
+
+          if (isNonceError && attempt === 0 && typeof this.forceSyncFromChain === 'function') {
+            logDebug('[NonceManager] Detected nonce mismatch, syncing from chain and retrying');
+            await this.forceSyncFromChain();
+            continue;
+          }
+
+          throw error;
+        }
       }
     }).catch(error => {
       // Reset queue on error to prevent blocking
@@ -963,3 +1032,10 @@ export class NonceManager {
     );
   }
 }
+
+const normalizeNonce = (value) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string' && value.trim().length > 0) return Number(value);
+  return Number.NaN;
+};

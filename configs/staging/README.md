@@ -11,6 +11,7 @@ Use isolated keys and endpoints for staging.
 
 Notes:
 - `node.env` should include `NODE_CONFIG` and either `NODE_PEERS` or `NODE_HOSTS`.
+- If validators are consolidated on a single host, prefer loopback aliases in `peers.yaml` (127.0.0.1-127.0.0.4) and start nodes with `ALLOW_PRIVATE_IPS=1`.
 - Gateway should set `GATEWAY_ALLOWED_ORIGINS` and `GATEWAY_ORIGIN` in staging.
 - For the global craps table, set `GATEWAY_LIVE_TABLE_CRAPS=1` and `GATEWAY_LIVE_TABLE_ADMIN_KEY_FILE`.
 - To report global player counts, set `GATEWAY_INSTANCE_ID` and (optionally) `GATEWAY_LIVE_TABLE_PRESENCE_TOKEN`.

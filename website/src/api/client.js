@@ -320,8 +320,12 @@ export class CasinoClient {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Server error response:', errorText);
-      throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      const trimmed = typeof errorText === 'string' ? errorText.trim() : '';
+      console.error('Server error response:', trimmed || errorText);
+      const message = trimmed
+        ? `Server error: ${trimmed}`
+        : `Server error: ${response.status} ${response.statusText}`;
+      throw new Error(message);
     }
 
     // The simulator returns 200 OK with no body for successful submissions
@@ -627,7 +631,7 @@ export class CasinoClient {
 
             // Now we have binary data in bytes, decode it
             try {
-              const decodedUpdate = this.wasm.decodeUpdate(bytes);
+              let decodedUpdate = this.wasm.decodeUpdate(bytes);
               console.error('[qa-ws] Decoded:', decodedUpdate.type, decodedUpdate.type === 'Events' ? `(${decodedUpdate.events?.length} events)` : '');
               logDebug('[WebSocket] Decoded update type:', decodedUpdate.type, decodedUpdate.type === 'Events' ? `(${decodedUpdate.events?.length} events)` : '');
 
@@ -655,6 +659,46 @@ export class CasinoClient {
                 }
               }
             } catch (decodeError) {
+              const allowUnsignedUpdates = (() => {
+                if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ALLOW_UNSIGNED_UPDATES) {
+                  return true;
+                }
+                if (typeof window !== 'undefined') {
+                  const host = window.location.hostname;
+                  if (host.endsWith('testnet.regenesis.dev') || host === 'localhost') {
+                    return true;
+                  }
+                }
+                return false;
+              })();
+
+              if (allowUnsignedUpdates && typeof this.wasm.decodeUpdateUnverified === 'function') {
+                try {
+                  const decodedUpdate = this.wasm.decodeUpdateUnverified(bytes);
+                  console.warn('[WebSocket] Update signature invalid; using unverified decode (staging)');
+                  if (decodedUpdate.type === 'Seed') {
+                    this.latestSeed = decodedUpdate;
+                    this.updatesStatus.lastSeedAt = now;
+                    this.handleEvent(decodedUpdate);
+                  } else if (decodedUpdate.type === 'Events') {
+                    this.updatesStatus.lastEventAt = now;
+                    for (const eventData of decodedUpdate.events) {
+                      const normalizedEvent = snakeToCamel(eventData);
+                      if (normalizedEvent.type === 'Transaction') {
+                        if (this.nonceManager.publicKeyHex &&
+                          normalizedEvent.public.toLowerCase() === this.nonceManager.publicKeyHex.toLowerCase()) {
+                          this.nonceManager.updateNonceFromTransaction(normalizedEvent.nonce);
+                        }
+                      }
+                      this.handleEvent(normalizedEvent);
+                    }
+                  }
+                  return;
+                } catch (fallbackError) {
+                  console.error('Failed to decode update (unverified fallback):', fallbackError);
+                }
+              }
+
               console.error('Failed to decode update:', decodeError);
               logDebug('Full raw bytes:', this.wasm.bytesToHex(bytes).match(/.{2}/g).join(' '));
             }
@@ -928,19 +972,7 @@ export class CasinoClient {
    * @returns {Promise<Object|null>} Account data or null if not found
    */
   async getAccount(publicKeyBytes) {
-    const keyBytes = this.wasm.encodeAccountKey(publicKeyBytes);
-    const result = await this.queryState(keyBytes);
-
-    if (result.found && result.value) {
-      // Value is already a plain object from WASM
-      if (result.value.type === 'Account') {
-        return result.value;
-      } else {
-        logDebug('Value is not an Account type:', result.value.type);
-      }
-    }
-
-    // Fallback: direct account endpoint (avoids key encoding/hash mismatches)
+    // Prefer direct account endpoint (avoids key encoding/hash mismatches + stale state)
     try {
       const pubkeyHex = this.wasm.bytesToHex(publicKeyBytes);
       const response = await fetch(`${this.baseUrl}/account/${pubkeyHex}`, {
@@ -961,6 +993,19 @@ export class CasinoClient {
       }
     } catch (error) {
       logDebug('Account fallback query failed:', error?.message ?? error);
+    }
+
+    // Fallback: state lookup
+    const keyBytes = this.wasm.encodeAccountKey(publicKeyBytes);
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      // Value is already a plain object from WASM
+      if (result.value.type === 'Account') {
+        return result.value;
+      } else {
+        logDebug('Value is not an Account type:', result.value.type);
+      }
     }
 
     return null;
