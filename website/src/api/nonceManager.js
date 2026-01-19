@@ -251,17 +251,21 @@ export class NonceManager {
     }
 
     if (!account) {
-      // Account not found on chain - reset state to avoid submitting with stale nonce
-      // This can happen after chain reset or for genuinely new accounts
+      // Account not found on chain. Avoid resetting nonce if we have pending txs,
+      // since a newly-submitted tx won't appear on-chain until it's executed.
       const localNonce = this.getCurrentNonce();
       const pendingTxs = this.getPendingTransactions();
 
-      if (localNonce > 0 || pendingTxs.length > 0) {
+      if (pendingTxs.length === 0 && localNonce > 0) {
         logDebug(
           `Account not found on chain - resetting state (localNonce=${localNonce}, pendingTxs=${pendingTxs.length})`
         );
         this.resetNonce();
         this.cleanupAllTransactions();
+      } else if (pendingTxs.length > 0) {
+        logDebug(
+          `Account not found on chain - preserving local nonce (localNonce=${localNonce}, pendingTxs=${pendingTxs.length})`
+        );
       }
       return;
     }
@@ -301,12 +305,20 @@ export class NonceManager {
     // Chain is source of truth - always sync to server nonce
     if (serverNonce !== localNonce) {
       if (localNonce > serverNonce) {
-        // Local nonce ahead of server likely indicates chain reset
-        // Reset to server nonce to avoid "nonce mismatch" rejections
-        logDebug(`Chain reset detected: local nonce (${localNonce}) > server nonce (${serverNonce})`);
-        logDebug('Resetting to server nonce and clearing pending transactions');
-        this.setNonce(serverNonce);
-        this.cleanupAllTransactions();
+        // If we have pending txs, keep the local nonce to avoid regressing.
+        const pendingTxs = this.getPendingTransactions();
+        if (pendingTxs.length === 0) {
+          // Local nonce ahead of server likely indicates chain reset
+          // Reset to server nonce to avoid "nonce mismatch" rejections
+          logDebug(`Chain reset detected: local nonce (${localNonce}) > server nonce (${serverNonce})`);
+          logDebug('Resetting to server nonce and clearing pending transactions');
+          this.setNonce(serverNonce);
+          this.cleanupAllTransactions();
+        } else {
+          logDebug(
+            `Server nonce behind local; keeping local nonce (local=${localNonce}, server=${serverNonce}, pending=${pendingTxs.length})`
+          );
+        }
       } else {
         logDebug(`Advancing local nonce from ${localNonce} to ${serverNonce}`);
         this.setNonce(serverNonce);
@@ -624,8 +636,20 @@ export class NonceManager {
             if (Number.isFinite(serverNonce)) {
               const localNonce = this.getCurrentNonce();
               if (localNonce !== serverNonce) {
-                logDebug(`[NonceManager] Pre-submit sync: local=${localNonce}, server=${serverNonce}`);
-                this.setNonce(serverNonce);
+                if (serverNonce > localNonce) {
+                  logDebug(`[NonceManager] Pre-submit sync: local=${localNonce}, server=${serverNonce}`);
+                  this.setNonce(serverNonce);
+                } else {
+                  const pendingTxs = this.getPendingTransactions();
+                  if (pendingTxs.length === 0) {
+                    logDebug(`[NonceManager] Pre-submit reset (no pending): local=${localNonce}, server=${serverNonce}`);
+                    this.setNonce(serverNonce);
+                  } else {
+                    logDebug(
+                      `[NonceManager] Pre-submit skip regression: local=${localNonce}, server=${serverNonce}, pending=${pendingTxs.length}`
+                    );
+                  }
+                }
               }
             }
           }

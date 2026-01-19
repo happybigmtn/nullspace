@@ -279,7 +279,7 @@ nullspace/
   - `RATE_LIMIT_SUBMIT_PER_MIN`, `RATE_LIMIT_SUBMIT_BURST`
   - `ALLOW_HTTP_NO_ORIGIN=1` and `ALLOW_WS_NO_ORIGIN=1` for CLI health checks
 - Staging validators (ns-db-1) run on a single host with ports 9001-9004; if `ALLOW_PRIVATE_IPS` is not set, `configs/staging/peers.yaml` must use the public IP (`5.161.124.82`) instead of loopback/private addresses. If you want loopback/private peers, set `ALLOW_PRIVATE_IPS=1` for the node containers.
-- Testnet UI forces a nonce resync on init (testnet/localhost) and treats missing `CasinoPlayer` as unregistered, triggering a re-register (with graceful handling of "already registered"). Deterministic QA keys are only used when QA mode is explicitly enabled (e.g., `?qa=1` or `VITE_QA_DEFAULT_PRIV`) to avoid shared nonce collisions.
+- Testnet UI forces a nonce resync on init (testnet/localhost) and treats missing `CasinoPlayer` as unregistered, triggering a re-register (with graceful handling of "already registered"). Nonce sync avoids regressing the local nonce while pending txs exist (indexer lag), and `forceSyncFromChain` is the recovery path for true nonce drift. Deterministic QA keys are only used when QA mode is explicitly enabled (e.g., `?qa=1` or `VITE_QA_DEFAULT_PRIV`) to avoid shared nonce collisions.
 
 ### Gateway Configuration
 
