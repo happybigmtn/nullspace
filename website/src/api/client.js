@@ -665,28 +665,34 @@ export class CasinoClient {
               console.error('[qa-ws] Decoded:', decodedUpdate.type, decodedUpdate.type === 'Events' ? `(${decodedUpdate.events?.length} events)` : '');
               logDebug('[WebSocket] Decoded update type:', decodedUpdate.type, decodedUpdate.type === 'Events' ? `(${decodedUpdate.events?.length} events)` : '');
 
-              // Check if it's a Seed or Events/FilteredEvents update
-              if (decodedUpdate.type === 'Seed') {
-                this.latestSeed = decodedUpdate;
-                this.updatesStatus.lastSeedAt = now;
-                this.handleEvent(decodedUpdate);
-              } else if (decodedUpdate.type === 'Events') {
+              const processEvents = (events) => {
+                if (!events) return;
                 this.updatesStatus.lastEventAt = now;
-                // Process each event from the array - treat FilteredEvents the same as Events
-                for (const eventData of decodedUpdate.events) {
+                for (const eventData of events) {
                   console.error('[qa-ws] Event:', eventData.type, JSON.stringify(eventData).slice(0, 150));
                   logDebug('[WebSocket] Event type:', eventData.type, 'data:', eventData);
                   // Normalize snake_case to camelCase
                   const normalizedEvent = snakeToCamel(eventData);
                   // Check if this is a transaction from our account
                   if (normalizedEvent.type === 'Transaction') {
-                    if (this.nonceManager.publicKeyHex &&
-                      normalizedEvent.public.toLowerCase() === this.nonceManager.publicKeyHex.toLowerCase()) {
+                    if (
+                      this.nonceManager.publicKeyHex &&
+                      normalizedEvent.public.toLowerCase() === this.nonceManager.publicKeyHex.toLowerCase()
+                    ) {
                       this.nonceManager.updateNonceFromTransaction(normalizedEvent.nonce);
                     }
                   }
                   this.handleEvent(normalizedEvent);
                 }
+              };
+
+              // Check if it's a Seed or Events/FilteredEvents update
+              if (decodedUpdate.type === 'Seed') {
+                this.latestSeed = decodedUpdate;
+                this.updatesStatus.lastSeedAt = now;
+                this.handleEvent(decodedUpdate);
+              } else if (decodedUpdate.type === 'Events' || decodedUpdate.type === 'FilteredEvents') {
+                processEvents(decodedUpdate.events);
               }
             } catch (decodeError) {
               const allowUnsignedUpdates = (() => {
@@ -706,22 +712,29 @@ export class CasinoClient {
                 try {
                   const decodedUpdate = this.wasm.decodeUpdateUnverified(bytes);
                   console.warn('[WebSocket] Update signature invalid; using unverified decode (staging)');
-                  if (decodedUpdate.type === 'Seed') {
-                    this.latestSeed = decodedUpdate;
-                    this.updatesStatus.lastSeedAt = now;
-                    this.handleEvent(decodedUpdate);
-                  } else if (decodedUpdate.type === 'Events') {
+                  const processEvents = (events) => {
+                    if (!events) return;
                     this.updatesStatus.lastEventAt = now;
-                    for (const eventData of decodedUpdate.events) {
+                    for (const eventData of events) {
                       const normalizedEvent = snakeToCamel(eventData);
                       if (normalizedEvent.type === 'Transaction') {
-                        if (this.nonceManager.publicKeyHex &&
-                          normalizedEvent.public.toLowerCase() === this.nonceManager.publicKeyHex.toLowerCase()) {
+                        if (
+                          this.nonceManager.publicKeyHex &&
+                          normalizedEvent.public.toLowerCase() === this.nonceManager.publicKeyHex.toLowerCase()
+                        ) {
                           this.nonceManager.updateNonceFromTransaction(normalizedEvent.nonce);
                         }
                       }
                       this.handleEvent(normalizedEvent);
                     }
+                  };
+
+                  if (decodedUpdate.type === 'Seed') {
+                    this.latestSeed = decodedUpdate;
+                    this.updatesStatus.lastSeedAt = now;
+                    this.handleEvent(decodedUpdate);
+                  } else if (decodedUpdate.type === 'Events' || decodedUpdate.type === 'FilteredEvents') {
+                    processEvents(decodedUpdate.events);
                   }
                   return;
                 } catch (fallbackError) {
