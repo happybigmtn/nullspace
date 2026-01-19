@@ -13,6 +13,7 @@ A fully on-chain casino platform with global table architecture, supporting tens
 - [Resource Sizing](#resource-sizing)
 - [Limits Reference](#limits-reference)
 - [Security](#security)
+- [Troubleshooting](#troubleshooting)
 - [Additional Documentation](#additional-documentation)
 
 ## Overview
@@ -450,6 +451,15 @@ Report vulnerabilities privately:
 - Prefer file/secret-backed keys in production (env keys only for non-prod)
 - Rotate service tokens at least every 90 days, after personnel changes, and immediately after any suspected leak
 - Keep a rotation log and overlap new/old tokens for <24 hours before revoking
+
+## Troubleshooting
+
+### "Waiting for Chain" / "Offline - Check Connection"
+
+If the UI is stuck waiting for chain, run the staging debug flow in `docs/agents/debugging.md` (Chain Offline section). It covers:
+- Verifying recent blocks are empty.
+- Checking validator mempool/propose metrics.
+- Recovery actions (validator restart + client nonce reset).
 
 ## Additional Documentation
 

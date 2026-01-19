@@ -2,8 +2,8 @@ use commonware_cryptography::ed25519::PublicKey;
 use commonware_runtime::Metrics;
 use nullspace_types::execution::Transaction;
 use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
-use std::sync::atomic::AtomicU64;
 use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::AtomicU64;
 
 #[derive(Clone)]
 struct MempoolEntry {
@@ -117,6 +117,22 @@ impl Mempool {
             accounts,
             rejected_total,
             trimmed_total,
+        }
+    }
+
+    fn rebuild_queue(&mut self) {
+        self.queue.clear();
+        self.queue_positions.clear();
+        for public in self.tracked.keys() {
+            self.queue_positions.insert(public.clone(), self.queue.len());
+            self.queue.push(public.clone());
+        }
+        self.queue_cursor = 0;
+    }
+
+    fn ensure_queue(&mut self) {
+        if self.queue.is_empty() && !self.tracked.is_empty() {
+            self.rebuild_queue();
         }
     }
 
@@ -283,6 +299,7 @@ impl Mempool {
     #[allow(dead_code)]
     pub fn next(&mut self) -> Option<Transaction> {
         loop {
+            self.ensure_queue();
             // Fast-path for empty mempool.
             if self.queue.is_empty() {
                 self.unique.set(self.total_transactions as i64);
@@ -340,34 +357,48 @@ impl Mempool {
     /// Peek at the lowest-nonce transaction for each account (non-destructive).
     /// Returns up to `max_count` transactions without removing them from the mempool.
     /// Transactions are returned in round-robin order across accounts.
-    pub fn peek_batch(&self, max_count: usize) -> Vec<Transaction> {
-        let mut result = Vec::with_capacity(max_count);
-        if self.queue.is_empty() || max_count == 0 {
-            return result;
+    pub fn peek_batch(&mut self, max_count: usize) -> Vec<Transaction> {
+        if max_count == 0 {
+            return Vec::new();
         }
 
-        let mut cursor = self.queue_cursor;
-        let mut accounts_visited = 0;
-        let total_accounts = self.queue.len();
-
-        // Visit each account at most once
-        while result.len() < max_count && accounts_visited < total_accounts {
-            if cursor >= self.queue.len() {
-                cursor = 0;
+        let mut attempt = 0;
+        loop {
+            self.ensure_queue();
+            let mut result = Vec::with_capacity(max_count);
+            if self.queue.is_empty() {
+                return result;
             }
 
-            let public = &self.queue[cursor];
-            if let Some(tracked) = self.tracked.get(public) {
-                if let Some((_, entry)) = tracked.first_key_value() {
-                    result.push(entry.tx.clone());
+            let mut cursor = self.queue_cursor;
+            let mut accounts_visited = 0;
+            let total_accounts = self.queue.len();
+
+            // Visit each account at most once
+            while result.len() < max_count && accounts_visited < total_accounts {
+                if cursor >= self.queue.len() {
+                    cursor = 0;
                 }
+
+                let public = &self.queue[cursor];
+                if let Some(tracked) = self.tracked.get(public) {
+                    if let Some((_, entry)) = tracked.first_key_value() {
+                        result.push(entry.tx.clone());
+                    }
+                }
+
+                cursor = (cursor + 1) % self.queue.len();
+                accounts_visited += 1;
             }
 
-            cursor = (cursor + 1) % self.queue.len();
-            accounts_visited += 1;
-        }
+            if !result.is_empty() || self.tracked.is_empty() || attempt > 0 {
+                return result;
+            }
 
-        result
+            // If we saw only stale queue entries, rebuild and retry once.
+            self.rebuild_queue();
+            attempt += 1;
+        }
     }
 
     pub fn stats(&self) -> (usize, usize) {

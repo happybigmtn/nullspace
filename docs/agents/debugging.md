@@ -6,6 +6,42 @@
 - Mempool shows pending admin txs (`future_nonce_total` > 0), yet blocks show `tx_count: 0` and config keys like `/state/<global-table-config-hash>` return 404.
 - Suspected causes: protocol mismatch between node image and client/instruction encoding, or transactions dropped before inclusion.
 
+## Chain Offline / "Waiting for Chain" (Staging)
+
+**Symptoms**
+- Web UI banner shows `WAITING FOR CHAIN` / `OFFLINE - CHECK CONNECTION`.
+- Bets submit but never resolve; sessions stay at `0`.
+- Indexer `/explorer/blocks` shows `tx_count: 0` for recent blocks even though clients are submitting.
+
+**Primary Diagnosis**
+1. Check blocks:
+   ```bash
+   curl -sS https://indexer.testnet.regenesis.dev/explorer/blocks?limit=1
+   ```
+   If `tx_count` is `0`, transactions are not being included.
+2. Check validator mempool + propose metrics (node0 metrics on ns-db-1):
+   ```bash
+   curl -sS http://127.0.0.1:9100/metrics | egrep 'mempool_pending_total|txs_considered_total|proposed_empty_blocks_with_candidates'
+   ```
+   - If `mempool_pending_total > 0` but `txs_considered_total == 0`, the mempool queue is out of sync and no candidates are being proposed.
+
+**Permanent Fix**
+- Mempool self-healing was added in `node/src/application/mempool.rs`: if the queue is empty or stale while tracked transactions exist, rebuild the queue and retry `peek_batch`.
+- Deploy the new node image to staging (via `deploy-staging.yml`) so proposers always see candidates.
+
+**Recovery Steps (Immediate)**
+1. Redeploy validators with the updated image (or restart validators to clear a stuck mempool):
+   ```bash
+   ssh -i ~/.ssh/id_ed25519_hetzner root@5.161.124.82 "docker restart nullspace-node-0 nullspace-node-1 nullspace-node-2 nullspace-node-3"
+   ```
+2. If clients have a backlog of pending txs, clear local pending state:
+   - Web console: remove `casino_tx_*` and `casino_nonce_*` from `localStorage`, or
+   - Call the nonce manager recovery path (`forceSyncFromChain`) from UI tooling.
+3. Confirm recovery:
+   - `tx_count` becomes >0 on `/explorer/blocks`.
+   - `/account/<pubkey>` nonce increments.
+   - UI no longer shows `WAITING FOR CHAIN`.
+
 ## Staging BLS Signature Bypass
 
 Symptom: state queries return 404 on indexer; validator state shows nonce=N but indexer shows nonce=0; simulator logs show "Summary verification failed err=InvalidSignature" followed by 400 responses.
