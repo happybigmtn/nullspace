@@ -3,6 +3,7 @@ import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import { GameState, GameType } from '../../types';
 import { GameType as ChainGameType } from '@nullspace/types/casino';
 import { CHAIN_TO_FRONTEND_GAME_TYPE } from '../../services/games';
+import { getChainReadyMessage } from './chainMessages';
 
 type UseChainTimeoutsArgs = {
   chainResponseTimeoutMs: number;
@@ -111,6 +112,20 @@ export const useChainTimeouts = ({
                 }));
               }
               parseGameState(sessionState.stateBlob, frontendGameType);
+              const readyMessage = getChainReadyMessage(frontendGameType);
+              setGameState(prev => {
+                const normalized = String(prev.message ?? '').toUpperCase();
+                const shouldUpdateMessage = normalized.includes('WAITING FOR CHAIN');
+                const shouldUpdateStage = prev.stage === 'BETTING';
+                if (!shouldUpdateMessage && !shouldUpdateStage) {
+                  return prev;
+                }
+                return {
+                  ...prev,
+                  stage: shouldUpdateStage ? 'PLAYING' : prev.stage,
+                  message: readyMessage,
+                };
+              });
               clearChainResponseTimeout();
               isPendingRef.current = false;
               pendingMoveCountRef.current = 0;

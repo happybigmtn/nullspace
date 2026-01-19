@@ -6,6 +6,7 @@ import type { CasinoClient } from '../../../api/client';
 import { GameState, GameType } from '../../../types';
 import { CHAIN_TO_FRONTEND_GAME_TYPE } from '../../../services/games';
 import { logDebug } from '../../../utils/logger';
+import { getChainReadyMessage } from '../chainMessages';
 
 type HandleGameStartedArgs = {
   chainService: CasinoChainService;
@@ -95,6 +96,16 @@ export const createGameStartedHandler = ({
     if (event.initialState && event.initialState.length > 0) {
       parseGameState(event.initialState, frontendGameType);
 
+      const initialMessage = getChainReadyMessage(frontendGameType);
+      setGameState(prev => {
+        const normalized = String(prev.message ?? '').toUpperCase();
+        const shouldUpdate =
+          prev.stage === 'BETTING' || normalized.includes('WAITING FOR CHAIN');
+        return shouldUpdate
+          ? { ...prev, stage: 'PLAYING', message: initialMessage }
+          : prev;
+      });
+
       if (frontendGameType === GameType.CASINO_WAR && chainService && currentSessionIdRef.current) {
         const stage = event.initialState[2];
         if (stage === 0) {
@@ -120,14 +131,7 @@ export const createGameStartedHandler = ({
         }
       }
     } else {
-      const initialMessage =
-        frontendGameType === GameType.CRAPS
-          ? 'PLACE BETS & ROLL'
-          : frontendGameType === GameType.ROULETTE
-            ? 'PLACE BETS & SPIN'
-            : frontendGameType === GameType.SIC_BO
-              ? 'PLACE BETS & ROLL'
-              : 'GAME STARTED';
+      const initialMessage = getChainReadyMessage(frontendGameType);
       setGameState(prev => ({
         ...prev,
         stage: 'PLAYING',

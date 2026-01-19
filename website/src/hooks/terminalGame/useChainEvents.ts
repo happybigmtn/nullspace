@@ -11,6 +11,7 @@ import { createGameMovedHandler } from './chainEvents/handleGameMoved';
 import { createGameCompletedHandler } from './chainEvents/handleGameCompleted';
 import { CHAIN_TO_FRONTEND_GAME_TYPE } from '../../services/games';
 import { getCasinoKeyIdForStorage } from '../../security/keyVault';
+import { getChainReadyMessage } from './chainMessages';
 
 type CrapsPendingRollLog = {
   sessionId: bigint;
@@ -404,13 +405,25 @@ export const useChainEvents = ({
               sessionBetRaw !== null
               && Number.isFinite(sessionBetRaw)
               && (sessionBetRaw > 0 || !isTableGame);
-            setGameState((prev) => ({
-              ...prev,
-              type: frontendType,
-              sessionId: Number(sessionId),
-              bet: shouldSyncBet ? Number(sessionBetRaw) : prev.bet,
-              superMode: session.superMode ?? prev.superMode ?? null,
-            }));
+            setGameState((prev) => {
+              const normalized = String(prev.message ?? '').toUpperCase();
+              const shouldUpdateMessage = normalized.includes('WAITING FOR CHAIN');
+              const shouldUpdateStage = prev.stage === 'BETTING';
+              const readyMessage = getChainReadyMessage(frontendType);
+              return {
+                ...prev,
+                type: frontendType,
+                sessionId: Number(sessionId),
+                bet: shouldSyncBet ? Number(sessionBetRaw) : prev.bet,
+                superMode: session.superMode ?? prev.superMode ?? null,
+                ...(shouldUpdateMessage || shouldUpdateStage
+                  ? {
+                      stage: shouldUpdateStage ? 'PLAYING' : prev.stage,
+                      message: readyMessage,
+                    }
+                  : {}),
+              };
+            });
           } else if (!session) {
             // Session was deleted (game completed on chain) - transition to RESULT
             // This handles the case where WebSocket CasinoGameCompleted event wasn't received
