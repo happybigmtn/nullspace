@@ -18,6 +18,7 @@ export class NonceManager {
     // Configuration constants
     this.TX_STORAGE_PREFIX = 'casino_tx_';
     this.RESUBMIT_INTERVAL_MS = 10000; // Try to resubmit transactions every 10 seconds
+    this.PENDING_TX_STALE_MS = 2 * 60 * 1000; // Clear pending txs if no chain progress for 2 minutes
   }
 
   getNonceKey() {
@@ -256,7 +257,14 @@ export class NonceManager {
       const localNonce = this.getCurrentNonce();
       const pendingTxs = this.getPendingTransactions();
 
-      if (pendingTxs.length === 0 && localNonce > 0) {
+      const pendingStale = this.isPendingStale(pendingTxs);
+      if (pendingStale) {
+        logDebug(
+          `Account not found on chain - pending txs stale (${pendingTxs.length}), resetting state`
+        );
+        this.resetNonce();
+        this.cleanupAllTransactions();
+      } else if (pendingTxs.length === 0 && localNonce > 0) {
         logDebug(
           `Account not found on chain - resetting state (localNonce=${localNonce}, pendingTxs=${pendingTxs.length})`
         );
@@ -277,6 +285,7 @@ export class NonceManager {
     }
     const localNonce = this.getCurrentNonce();
     const pendingTxs = this.getPendingTransactions();
+    const pendingStale = this.isPendingStale(pendingTxs);
 
     // Check for gap between server nonce and first pending transaction
     if (pendingTxs.length > 0) {
@@ -294,6 +303,15 @@ export class NonceManager {
 
         return; // Exit early since we've reset everything
       }
+    }
+
+    if (pendingStale) {
+      logDebug(
+        `Pending txs stale (${pendingTxs.length}) - resetting to server nonce ${serverNonce}`
+      );
+      this.setNonce(serverNonce);
+      this.cleanupAllTransactions();
+      return;
     }
 
     // Always clean up confirmed transactions
@@ -556,6 +574,20 @@ export class NonceManager {
         return;
       }
 
+      const pendingStale = this.isPendingStale(pendingTxs);
+      if (pendingStale) {
+        logDebug(
+          `Pending txs stale during resubmit (${pendingTxs.length}) - clearing and syncing to chain`
+        );
+        if (Number.isFinite(chainNonce)) {
+          this.setNonce(chainNonce);
+        } else {
+          this.resetNonce();
+        }
+        this.cleanupAllTransactions();
+        return;
+      }
+
       if (Number.isFinite(chainNonce)) {
         const staleTxs = pendingTxs.filter(tx => tx.nonce < chainNonce);
         if (staleTxs.length > 0) {
@@ -635,12 +667,20 @@ export class NonceManager {
             const serverNonce = normalizeNonce(account.nonce);
             if (Number.isFinite(serverNonce)) {
               const localNonce = this.getCurrentNonce();
+              const pendingTxs = this.getPendingTransactions();
+              const pendingStale = this.isPendingStale(pendingTxs);
+              if (pendingStale) {
+                logDebug(
+                  `[NonceManager] Pending txs stale before submit (${pendingTxs.length}) - resetting to server nonce ${serverNonce}`
+                );
+                this.setNonce(serverNonce);
+                this.cleanupAllTransactions();
+              }
               if (localNonce !== serverNonce) {
                 if (serverNonce > localNonce) {
                   logDebug(`[NonceManager] Pre-submit sync: local=${localNonce}, server=${serverNonce}`);
                   this.setNonce(serverNonce);
                 } else {
-                  const pendingTxs = this.getPendingTransactions();
                   if (pendingTxs.length === 0) {
                     logDebug(`[NonceManager] Pre-submit reset (no pending): local=${localNonce}, server=${serverNonce}`);
                     this.setNonce(serverNonce);
@@ -745,6 +785,21 @@ export class NonceManager {
     }
     // Convert to hex and take first 8 chars
     return Math.abs(hash).toString(16).toUpperCase().padStart(8, '0').slice(0, 8);
+  }
+
+  isPendingStale(pendingTxs) {
+    if (!pendingTxs || pendingTxs.length === 0) {
+      return false;
+    }
+    const now = Date.now();
+    let oldest = now;
+    for (const tx of pendingTxs) {
+      const ts = typeof tx.timestamp === 'number' ? tx.timestamp : 0;
+      if (ts < oldest) {
+        oldest = ts;
+      }
+    }
+    return now - oldest > this.PENDING_TX_STALE_MS;
   }
 
   /**
