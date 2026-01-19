@@ -5,11 +5,12 @@
 **Scope**: Sprint breakdown for full Nullspace platform delivery.
 
 ## Sprint 01 - Foundations and Local Dev
-- [ ] Add deterministic seed/time-scaling config parsing for simulator and node
+- [x] Add deterministic seed/time-scaling config parsing for simulator and node
   - Specs: `specs/sprint-01-foundations.md` AC-1.1, AC-1.2
   - Tests/backpressure:
     - Programmatic: `cargo test -p nullspace-simulator`
   - Perceptual: None
+  - Note: Already implemented in `simulator/src/state.rs` (SimulatorConfig) and `simulator/src/main.rs` (Args parsing + validation)
 - [ ] Add local bootstrap guardrails (missing env/config checks, port reuse handling)
   - Specs: `specs/sprint-01-foundations.md` AC-1.1, AC-1.5
   - Tests/backpressure:
