@@ -367,6 +367,17 @@ impl Mempool {
             self.ensure_queue();
             let mut result = Vec::with_capacity(max_count);
             if self.queue.is_empty() {
+                if !self.tracked.is_empty() {
+                    // Fallback: queue is stale; iterate tracked directly.
+                    for tracked in self.tracked.values() {
+                        if let Some((_, entry)) = tracked.first_key_value() {
+                            result.push(entry.tx.clone());
+                            if result.len() >= max_count {
+                                break;
+                            }
+                        }
+                    }
+                }
                 return result;
             }
 
