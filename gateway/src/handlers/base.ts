@@ -60,6 +60,8 @@ export interface HandlerContext {
   nonceManager: NonceManager;
   backendUrl: string;
   origin?: string;
+  /** Correlation ID for distributed tracing (propagated to backend as x-request-id) */
+  requestId?: string;
 }
 
 /**
@@ -88,7 +90,7 @@ export abstract class GameHandler {
     bet: bigint,
     gameSessionId: bigint
   ): Promise<HandleResult> {
-    const { session, submitClient, nonceManager, backendUrl } = ctx;
+    const { session, submitClient, nonceManager, backendUrl, requestId } = ctx;
 
     // Check if already in a game
     if (session.activeGameId !== null) {
@@ -115,7 +117,7 @@ export abstract class GameHandler {
       const tx = buildTransaction(nonce, instruction, session.privateKey);
       const submission = wrapSubmission(tx);
 
-      const result = await submitClient.submit(submission);
+      const result = await submitClient.submit(submission, { requestId });
 
       if (result.accepted) {
         session.activeGameId = gameSessionId;
@@ -183,7 +185,7 @@ export abstract class GameHandler {
           const retryNonce = nonceManager.getCurrentNonce(session.publicKeyHex);
           const retryTx = buildTransaction(retryNonce, instruction, session.privateKey);
           const retrySubmission = wrapSubmission(retryTx);
-          const retryResult = await submitClient.submit(retrySubmission);
+          const retryResult = await submitClient.submit(retrySubmission, { requestId });
           if (retryResult.accepted) {
             session.activeGameId = gameSessionId;
             session.gameType = this.gameType;
@@ -254,7 +256,7 @@ export abstract class GameHandler {
     ctx: HandlerContext,
     payload: Uint8Array
   ): Promise<HandleResult> {
-    const { session, submitClient, nonceManager, backendUrl } = ctx;
+    const { session, submitClient, nonceManager, backendUrl, requestId } = ctx;
 
     // Check if in a game
     if (session.activeGameId === null) {
@@ -325,7 +327,7 @@ export abstract class GameHandler {
       const tx = buildTransaction(nonce, instruction, session.privateKey);
       const submission = wrapSubmission(tx);
 
-      const result = await submitClient.submit(submission);
+      const result = await submitClient.submit(submission, { requestId });
 
       if (result.accepted) {
         nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
@@ -398,7 +400,7 @@ export abstract class GameHandler {
           const retryNonce = nonceManager.getCurrentNonce(session.publicKeyHex);
           const retryTx = buildTransaction(retryNonce, instruction, session.privateKey);
           const retrySubmission = wrapSubmission(retryTx);
-          const retryResult = await submitClient.submit(retrySubmission);
+          const retryResult = await submitClient.submit(retrySubmission, { requestId });
           if (retryResult.accepted) {
             nonceManager.setCurrentNonce(session.publicKeyHex, retryNonce + 1n);
 

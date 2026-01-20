@@ -30,16 +30,18 @@
     - Programmatic: `pnpm -C gateway test`
   - Perceptual: None
   - Note: Tests added in `gateway/tests/unit/config-validation.test.ts` (25 tests). Validates placeholder detection, origin URL format, short secrets, error message clarity. Existing `src/config/validation.ts` already provided the validation logic.
-- [ ] Update docs for bootstrap, teardown, and troubleshooting
+- [x] Update docs for bootstrap, teardown, and troubleshooting
   - Specs: `specs/sprint-01-foundations.md` AC-1.4
   - Tests/backpressure:
     - Programmatic: N/A (manual doc verification)
   - Perceptual: None
-- [ ] Add correlation id propagation across gateway -> engine -> indexer logs
+  - Note: Created `docs/agents/local-development.md` with comprehensive bootstrap, teardown, and troubleshooting documentation. Updated `AGENTS.md` to reference the new guide.
+- [x] Add correlation id propagation across gateway -> engine -> indexer logs
   - Specs: `specs/sprint-01-foundations.md` AC-1.6
   - Tests/backpressure:
-    - Programmatic: integration test asserting shared request id
+    - Programmatic: `pnpm -C tests/integration test:correlation-id`
   - Perceptual: None
+  - Note: Implemented x-request-id header propagation from gateway to backend. Gateway generates traceId for each WebSocket message and passes it to SubmitClient, which adds it as x-request-id header. Backend (simulator) already had request_id middleware that echoes the header. Logger updated to support structured logging with requestId context. Integration tests verify header propagation across /healthz, /submit, and /account endpoints.
 
 ## Sprint 02 - Core Table Engine and RNG (Single Game)
 - [ ] Implement round scheduler state machine with deterministic clock

@@ -23,6 +23,7 @@ Testing / typecheck (when needed):
 
 More detailed guides:
 
+- **Local development**: `docs/agents/local-development.md` (bootstrap, teardown, troubleshooting)
 - Browser automation: `docs/agents/browser-automation.md`
 - Staging infrastructure: `docs/agents/infrastructure-staging.md`
 - Debugging context: `docs/agents/debugging.md`

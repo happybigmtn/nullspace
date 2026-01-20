@@ -238,7 +238,7 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
     ? { traceId: clientTraceParent.split('-')[1] || generateTraceId().traceId }
     : generateTraceId();
 
-  logDebug(`[Gateway] Received message: ${msgType} (traceId: ${traceId})`, JSON.stringify(msg).slice(0, 200));
+  logDebug(`[Gateway] Received message: ${msgType}`, JSON.stringify(msg).slice(0, 200), { requestId: traceId });
 
   if (!msgType) {
     sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Missing message type', traceId);
@@ -379,22 +379,24 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
       return;
     }
 
-    // Build handler context
+    // Build handler context with correlation ID for distributed tracing
     const ctx: HandlerContext = {
       session,
       submitClient,
       nonceManager,
       backendUrl: BACKEND_URL,
       origin: GATEWAY_ORIGIN,
+      requestId: traceId,
     };
 
     // Execute handler
-    logDebug(`[Gateway] Executing handler for ${validatedType} (traceId: ${traceId})...`);
+    logDebug(`[Gateway] Executing handler for ${validatedType}...`, { requestId: traceId });
     const result = await handler.handleMessage(ctx, validatedMsg);
     logDebug(
-      `[Gateway] Handler result (traceId: ${traceId}):`,
+      `[Gateway] Handler result:`,
       result.success ? 'success' : 'failed',
       result.error?.message ?? '',
+      { requestId: traceId },
     );
 
     addSpanAttributes(span, {

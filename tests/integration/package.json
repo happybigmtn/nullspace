@@ -6,6 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "test:faucet": "RUN_CROSS_SERVICE=true vitest run faucet.test.ts",
+    "test:correlation-id": "RUN_CROSS_SERVICE=true vitest run correlation-id.test.ts",
     "test:cross-service": "RUN_CROSS_SERVICE=true vitest run cross-service.test.ts",
     "test:ci": "RUN_CROSS_SERVICE=true vitest run --reporter=verbose",
     "docker:up": "docker compose -f docker-compose.cross-service.yml up -d --wait",

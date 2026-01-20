@@ -16,6 +16,10 @@ export interface SubmitClientOptions {
   maxSubmissionBytes?: number;
 }
 
+export interface SubmitOptions {
+  requestId?: string;
+}
+
 export class SubmitClient {
   private baseUrl: string;
   private submitTimeoutMs: number;
@@ -40,8 +44,10 @@ export class SubmitClient {
 
   /**
    * Submit a transaction to the backend
+   * @param submission - The transaction bytes to submit
+   * @param options - Optional submit options including requestId for correlation
    */
-  async submit(submission: Uint8Array): Promise<SubmitResult> {
+  async submit(submission: Uint8Array, options?: SubmitOptions): Promise<SubmitResult> {
     if (
       this.maxSubmissionBytes !== null &&
       submission.length > this.maxSubmissionBytes
@@ -54,13 +60,19 @@ export class SubmitClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.submitTimeoutMs);
 
+    // Build headers with optional correlation ID
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/octet-stream',
+      'Origin': this.origin,
+    };
+    if (options?.requestId) {
+      headers['x-request-id'] = options.requestId;
+    }
+
     try {
       const response = await fetch(`${this.baseUrl}/submit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Origin': this.origin,
-        },
+        headers,
         body: Buffer.from(submission),
         signal: controller.signal,
       });
@@ -68,7 +80,11 @@ export class SubmitClient {
       clearTimeout(timeoutId);
 
       if (response.ok) {
-        logDebug('[SubmitClient] Transaction accepted');
+        if (options?.requestId) {
+          logDebug('[SubmitClient] Transaction accepted', { requestId: options.requestId });
+        } else {
+          logDebug('[SubmitClient] Transaction accepted');
+        }
         return { accepted: true };
       }
 
@@ -81,7 +97,11 @@ export class SubmitClient {
         // Ignore parse errors
       }
 
-      logWarn(`[SubmitClient] Transaction rejected: ${error}`);
+      if (options?.requestId) {
+        logWarn(`[SubmitClient] Transaction rejected: ${error}`, { requestId: options.requestId });
+      } else {
+        logWarn(`[SubmitClient] Transaction rejected: ${error}`);
+      }
       return { accepted: false, error };
     } catch (err) {
       clearTimeout(timeoutId);
