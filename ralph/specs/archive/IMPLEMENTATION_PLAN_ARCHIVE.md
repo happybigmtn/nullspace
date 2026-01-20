@@ -107,3 +107,13 @@ Completed work items moved from `IMPLEMENTATION_PLAN.md`.
 - `scripts/faucet.sh` (CLI wrapper, health check, error handling)
 - `scripts/faucet.mjs` (register + deposit flow)
 - `tests/integration/faucet.test.ts` (funding integration tests)
+
+### Sprint 01: Config schema validation ✅
+
+- [x] Production config validation rejects placeholder credentials
+- [x] Origin list validation enforces valid http/https URLs
+- [x] Unit tests cover placeholder detection, short secrets, and error messaging
+
+**Files Reviewed**:
+- `gateway/src/config/validation.ts` (validation rules)
+- `gateway/tests/unit/config-validation.test.ts` (unit test coverage)

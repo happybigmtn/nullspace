@@ -5,12 +5,6 @@
 **Scope**: Sprint breakdown for full Nullspace platform delivery.
 
 ## Sprint 01 - Foundations and Local Dev
-- [x] Add config schema validation for gateway and services
-  - Specs: `specs/sprint-01-foundations.md` AC-1.2
-  - Tests/backpressure:
-    - Programmatic: `pnpm -C gateway test`
-  - Perceptual: None
-  - Note: Tests added in `gateway/tests/unit/config-validation.test.ts` (25 tests). Validates placeholder detection, origin URL format, short secrets, error message clarity. Existing `src/config/validation.ts` already provided the validation logic.
 - [x] Update docs for bootstrap, teardown, and troubleshooting
   - Specs: `specs/sprint-01-foundations.md` AC-1.4
   - Tests/backpressure:
