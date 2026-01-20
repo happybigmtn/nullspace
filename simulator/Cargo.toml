@@ -50,6 +50,7 @@ reqwest = { workspace = true }
 
 [dev-dependencies]
 nullspace-execution = { workspace = true, features = ["mocks"] }
+tempfile = "3.15"
 
 [features]
 default = []

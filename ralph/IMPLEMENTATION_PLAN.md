@@ -103,11 +103,12 @@
     - Programmatic: integration tests for stored rounds
   - Perceptual: None
   - **Completed**: Added `IndexedRound`, `IndexedBet`, and `IndexedPayout` types to `explorer.rs`. Updated `record_event` to track `GlobalTableRoundOpened`, `GlobalTableLocked`, `GlobalTableOutcome`, `GlobalTableFinalized`, `GlobalTableBetAccepted`, and `GlobalTablePlayerSettled` events. Added round/bet/payout maps to `ExplorerState` with LRU retention. Added `ExplorerMetrics` counters for round lifecycle. Integration test (`test_explorer_round_indexing`) validates full round lifecycle indexing.
-- [ ] Add snapshot replay and log catch-up on indexer startup
+- [x] Add snapshot replay and log catch-up on indexer startup
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.2
   - Tests/backpressure:
     - Programmatic: restart integration test
   - Perceptual: None
+  - **Completed**: Core functionality already existed in `explorer_persistence.rs` with `load_into_sqlite` and `load_into_postgres` functions that load persisted blocks in height order via `apply_block_indexing`. Added `test_indexer_restart_recovery` integration test that validates: (1) blocks are persisted during indexing, (2) on restart the indexer reloads all persisted blocks, (3) state totals match pre-restart values (blocks, transactions, accounts). Test exercises full lifecycle with 3 accounts and 3 blocks.
 - [ ] Implement explorer HTTP endpoints for rounds, bets, leaderboards
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.3
   - Tests/backpressure:

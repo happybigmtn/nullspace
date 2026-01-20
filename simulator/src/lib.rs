@@ -2080,4 +2080,245 @@ mod tests {
             }
         });
     }
+
+    /// Test that indexer can rebuild state from persistence on restart (AC-4.2).
+    ///
+    /// This test validates:
+    /// - Blocks are persisted to SQLite during indexing
+    /// - On restart, the indexer reloads all persisted blocks
+    /// - State totals match pre-restart values (blocks, transactions, accounts)
+    #[test]
+    fn test_indexer_restart_recovery() {
+        let executor = cw_tokio::Runner::new(cw_tokio::Config::default());
+        executor.start(|context| async move {
+            use tempfile::tempdir;
+
+            // Create a temporary directory for SQLite persistence
+            let temp_dir = tempdir().expect("create temp dir");
+            let db_path = temp_dir.path().join("explorer.db");
+
+            // Initialize databases
+            let (network_secret, network_identity) = create_network_keypair();
+            let (mut state, mut events) = create_adbs(&context).await;
+
+            // Create accounts and execute several blocks
+            let accounts: Vec<_> = (0..3).map(create_account_keypair).collect();
+
+            // -------------------------------------------------------------------------
+            // Phase 1: Create simulator with persistence and index blocks
+            // -------------------------------------------------------------------------
+            let config1 = SimulatorConfig {
+                explorer_persistence_path: Some(db_path.clone()),
+                explorer_max_blocks: Some(1000),
+                ..Default::default()
+            };
+            let simulator1 = Arc::new(Simulator::new_with_config(network_identity, config1, None));
+
+            // Block 1: Register all accounts
+            let txs1: Vec<_> = accounts
+                .iter()
+                .enumerate()
+                .map(|(i, (private, _))| {
+                    Transaction::sign(
+                        private,
+                        0,
+                        Instruction::CasinoRegister {
+                            name: format!("Player{}", i),
+                        },
+                    )
+                })
+                .collect();
+
+            let (_, summary1) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                1,
+                txs1,
+            )
+            .await;
+
+            // Submit to simulator (triggers both indexing and persistence)
+            let (_, events_digests1) = summary1.verify(&network_identity).unwrap();
+            simulator1
+                .submit_events(summary1.clone(), events_digests1)
+                .await;
+
+            // Block 2: Deposit chips
+            let txs2: Vec<_> = accounts
+                .iter()
+                .map(|(private, _)| {
+                    Transaction::sign(private, 1, Instruction::CasinoDeposit { amount: 5_000 })
+                })
+                .collect();
+
+            let (_, summary2) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                2,
+                txs2,
+            )
+            .await;
+
+            let (_, events_digests2) = summary2.verify(&network_identity).unwrap();
+            simulator1
+                .submit_events(summary2.clone(), events_digests2)
+                .await;
+
+            // Block 3: More deposits (to exercise recovery with multiple blocks)
+            let txs3: Vec<_> = accounts
+                .iter()
+                .map(|(private, _)| {
+                    Transaction::sign(private, 2, Instruction::CasinoDeposit { amount: 2_500 })
+                })
+                .collect();
+
+            let (_, summary3) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                3,
+                txs3,
+            )
+            .await;
+
+            let (_, events_digests3) = summary3.verify(&network_identity).unwrap();
+            simulator1
+                .submit_events(summary3.clone(), events_digests3)
+                .await;
+
+            // Wait for persistence to flush (async background task)
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+            // -------------------------------------------------------------------------
+            // Phase 2: Capture pre-restart state totals
+            // -------------------------------------------------------------------------
+            let (
+                pre_block_count,
+                pre_tx_count,
+                pre_account_count,
+                pre_latest_height,
+            ) = {
+                let explorer = simulator1.explorer.read().await;
+                (
+                    explorer.indexed_blocks.len(),
+                    explorer.txs_by_hash.len(),
+                    explorer.accounts.len(),
+                    explorer
+                        .indexed_blocks
+                        .last_key_value()
+                        .map(|(h, _)| *h)
+                        .unwrap_or(0),
+                )
+            };
+
+            assert_eq!(pre_block_count, 3, "Should have indexed 3 blocks before restart");
+            assert_eq!(pre_tx_count, 9, "Should have indexed 9 transactions (3 per block)");
+            assert_eq!(pre_account_count, 3, "Should have indexed 3 accounts");
+            assert_eq!(pre_latest_height, 3, "Latest height should be 3");
+
+            // -------------------------------------------------------------------------
+            // Phase 3: Drop simulator and create new one from persistence
+            // -------------------------------------------------------------------------
+            drop(simulator1);
+
+            // Create a fresh simulator that loads from the same persistence path
+            let config2 = SimulatorConfig {
+                explorer_persistence_path: Some(db_path.clone()),
+                explorer_max_blocks: Some(1000),
+                ..Default::default()
+            };
+            let simulator2 = Arc::new(Simulator::new_with_config(network_identity, config2, None));
+
+            // -------------------------------------------------------------------------
+            // Phase 4: Verify post-restart state matches pre-restart
+            // -------------------------------------------------------------------------
+            let (
+                post_block_count,
+                post_tx_count,
+                post_account_count,
+                post_latest_height,
+            ) = {
+                let explorer = simulator2.explorer.read().await;
+                (
+                    explorer.indexed_blocks.len(),
+                    explorer.txs_by_hash.len(),
+                    explorer.accounts.len(),
+                    explorer
+                        .indexed_blocks
+                        .last_key_value()
+                        .map(|(h, _)| *h)
+                        .unwrap_or(0),
+                )
+            };
+
+            assert_eq!(
+                post_block_count, pre_block_count,
+                "Block count should match after restart"
+            );
+            assert_eq!(
+                post_tx_count, pre_tx_count,
+                "Transaction count should match after restart"
+            );
+            assert_eq!(
+                post_account_count, pre_account_count,
+                "Account count should match after restart"
+            );
+            assert_eq!(
+                post_latest_height, pre_latest_height,
+                "Latest height should match after restart"
+            );
+
+            // -------------------------------------------------------------------------
+            // Phase 5: Verify specific data integrity
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator2.explorer.read().await;
+
+                // Verify block 1 exists
+                assert!(
+                    explorer.indexed_blocks.contains_key(&1),
+                    "Block 1 should exist after restart"
+                );
+
+                // Verify block 2 exists
+                assert!(
+                    explorer.indexed_blocks.contains_key(&2),
+                    "Block 2 should exist after restart"
+                );
+
+                // Verify block 3 exists
+                assert!(
+                    explorer.indexed_blocks.contains_key(&3),
+                    "Block 3 should exist after restart"
+                );
+
+                // Verify each account was restored
+                for (_, public) in &accounts {
+                    assert!(
+                        explorer.accounts.contains_key(public),
+                        "Account should exist after restart"
+                    );
+                }
+
+                // Verify transactions by height were restored
+                assert!(
+                    explorer.txs_by_height.contains_key(&1),
+                    "Txs for height 1 should exist"
+                );
+                assert!(
+                    explorer.txs_by_height.contains_key(&2),
+                    "Txs for height 2 should exist"
+                );
+                assert!(
+                    explorer.txs_by_height.contains_key(&3),
+                    "Txs for height 3 should exist"
+                );
+            }
+        });
+    }
 }
