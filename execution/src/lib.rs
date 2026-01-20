@@ -49,6 +49,8 @@
 
 pub mod casino;
 pub mod rng_pipeline;
+pub mod round_query;
+pub mod round_replay;
 pub mod round_scheduler;
 pub mod state_transition;
 
@@ -69,6 +71,15 @@ pub use round_scheduler::{PhaseConfig, RoundScheduler, TransitionResult, view_to
 pub use rng_pipeline::{
     CommitRevealError, CommitRevealPair, HashChain, COMMIT_REVEAL_LEN,
     compute_commit, generate_commit_reveal, verify_commit_reveal, verify_commit_reveal_slices,
+};
+pub use round_replay::{
+    ReplayError, RoundSnapshot, filter_round_events, initial_snapshot,
+    replay_round_from_events,
+};
+pub use round_query::{
+    QueryError, RoundStatus, RoundTotals, PlayerBetRecord, PlayerHistory,
+    query_round, query_round_status, query_round_totals,
+    query_player_history, query_player_history_range, query_player_rounds,
 };
 
 #[cfg(any(test, feature = "mocks"))]

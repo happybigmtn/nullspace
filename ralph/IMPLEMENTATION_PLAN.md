@@ -7,16 +7,18 @@
 ## Sprint 01 - Foundations and Local Dev
 
 ## Sprint 02 - Core Table Engine and RNG (Single Game)
-- [ ] Add append-only event log writer and snapshot loader
+- [x] Add append-only event log writer and snapshot loader
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.4
   - Tests/backpressure:
     - Programmatic: replay tests in `cargo test -p execution`
   - Perceptual: None
-- [ ] Expose round/totals/player history query interfaces
+  - **Completed**: Added `round_replay` module with `RoundSnapshot`, `replay_round_from_events`, and 9 unit tests validating deterministic replay at round boundaries
+- [x] Expose round/totals/player history query interfaces
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.5
   - Tests/backpressure:
     - Programmatic: integration tests for query API
   - Perceptual: None
+  - **Completed**: Added `round_query` module with `RoundStatus`, `RoundTotals`, `PlayerHistory`, `PlayerBetRecord` types and query functions (`query_round_status`, `query_round_totals`, `query_player_history`, `query_player_history_range`, `query_player_rounds`, `query_round`). Integration test validates query API after full round settlement lifecycle (15 total tests).
 - [ ] Add end-to-end simulator scenario for bet placement and payouts
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.6
   - Tests/backpressure:

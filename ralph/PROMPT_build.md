@@ -42,5 +42,11 @@ When a task or spec is fully complete:
 2. **Completed specs**: Move from `specs/*.md` to `specs/archive/` and update `specs/archive/README.md`
 3. Keep `IMPLEMENTATION_PLAN.md` focused on current blocking issues and pending work only
 
+### Completion Signal (Critical)
+- Do **NOT** output `<promise>COMPLETE</promise>` unless ALL tasks in `IMPLEMENTATION_PLAN.md` are checked `[x]`
+- After completing your ONE task, the iteration ends naturally—just stop
+- The loop script handles restarting for the next task automatically
+- Only output `<promise>COMPLETE</promise>` when zero unchecked `[ ]` items remain
+
 ### Commit Policy
 - Do **not** commit/push unless the user explicitly requests it.
