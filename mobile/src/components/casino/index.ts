@@ -14,3 +14,6 @@ export type { LiquidRippleRef, LiquidRippleProps, ChipPileWithRippleProps } from
 // DS-055: 3D parallax tilt for cards
 export { TiltableCard, withParallaxTilt } from './TiltableCard';
 export type { TiltableCardProps } from './TiltableCard';
+// AC-8.2/AC-PQ.2: Touch-optimized bet controls for mobile
+export { TouchBetControls, TOUCH_TARGETS } from './TouchBetControls';
+export type { } from './TouchBetControls';

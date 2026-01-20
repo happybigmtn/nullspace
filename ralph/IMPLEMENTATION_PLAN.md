@@ -427,11 +427,20 @@
     - Accessibility: button role, labels, hints
     - "Restored" badge for session restoration
   - Added 47 unit tests covering status derivation, persistence logic, unlock/disconnect flows, and AC-8.1 compliance
-- [ ] Build table view and bet controls optimized for touch
+- [x] Build table view and bet controls optimized for touch
   - Specs: `specs/sprint-08-mobile-client.md` AC-8.2, AC-PQ.2
   - Tests/backpressure:
     - Programmatic: mobile UI tests
   - Perceptual: AC-PQ.2
+  - **Completed**: Added `TouchBetControls` component (`mobile/src/components/casino/TouchBetControls.tsx`) with:
+    - Explicit touch target constants: MIN=44pt, BUTTON=48pt, CHIP=56pt, FAB=56pt
+    - Bottom-aligned layout for one-hand thumb reachability (67% easy reach zone)
+    - Responsive scaling for small/medium/large screen breakpoints (320/375/428px)
+    - Integration with ChipSelector and ChipPile for complete betting UX
+    - Accessibility: roles, labels, hints, state announcements
+    - iOS/Android safe area insets for gesture navigation compatibility
+    - Added `vitest` test runner to mobile package with 48 tests (45 TouchBetControls + 3 index)
+    - Tests validate touch target sizes, accessibility requirements, and AC-PQ.2 compliance
 - [ ] Add WebSocket reconnect strategy and offline detection
   - Specs: `specs/sprint-08-mobile-client.md` AC-8.3
   - Tests/backpressure:
