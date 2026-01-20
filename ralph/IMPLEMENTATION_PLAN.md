@@ -45,11 +45,19 @@
     - Programmatic: `pnpm -C gateway test`
   - Perceptual: None
   - **Completed**: Added `InboundMessageSchema` covering all client-to-server message types (ping, get_balance, submit_raw, faucet_claim, plus all game messages). Updated `handleMessage` to validate ALL inbound messages upfront. Added 58 unit tests for schema validation covering valid messages, invalid payloads, malformed data, and security edge cases (SQL injection attempts, XSS, prototype pollution).
-- [ ] Implement fanout with backpressure controls
+- [x] Implement fanout with backpressure controls
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.3
   - Tests/backpressure:
     - Programmatic: load test harness for simulated clients
   - Perceptual: None
+  - **Completed**: Added `BroadcastManager` class (`src/broadcast/manager.ts`) with:
+    - Per-client bounded send queues (default 100 messages, configurable)
+    - Tail-drop backpressure policy (drops oldest when queue full)
+    - Topic-based pub/sub for efficient routing
+    - Concurrent flush with configurable parallelism
+    - Metrics for queue depth, dropped messages, and delivery rates
+    - Load test validates 1,000 clients with 100% delivery rate (97,561 msg/sec)
+    - Tests: `pnpm -C gateway test:fanout:1k` (11 tests passing)
 - [ ] Add per-wallet/IP rate limiting with explicit error responses
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.4
   - Tests/backpressure:
