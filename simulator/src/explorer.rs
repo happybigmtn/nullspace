@@ -77,6 +77,7 @@ pub struct IndexedGameEvent {
 /// Indexed bet within a global table round
 #[derive(Clone, Debug, Serialize)]
 pub struct IndexedBet {
+    pub game_type: String,
     pub player: String,
     pub round_id: u64,
     pub bet_type: u8,
@@ -88,6 +89,7 @@ pub struct IndexedBet {
 /// Indexed payout from global table settlement
 #[derive(Clone, Debug, Serialize)]
 pub struct IndexedPayout {
+    pub game_type: String,
     pub player: String,
     pub round_id: u64,
     pub payout: i64,
@@ -567,6 +569,7 @@ fn record_event(
             // Index each bet
             for bet in bets {
                 let indexed_bet = IndexedBet {
+                    game_type: game_type_str.clone(),
                     player: player_hex.clone(),
                     round_id: *round_id,
                     bet_type: bet.bet_type,
@@ -615,6 +618,7 @@ fn record_event(
 
             // Index the payout
             let indexed_payout = IndexedPayout {
+                game_type: round_key.0.clone(),
                 player: player_hex,
                 round_id: *round_id,
                 payout: *payout,

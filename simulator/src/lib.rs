@@ -2862,6 +2862,29 @@ mod tests {
                 let with_large_limit: Vec<_> = rounds.iter().take(1000).collect();
                 assert_eq!(with_large_limit.len(), rounds.len(), "Large limit should return all");
             }
+
+            // -------------------------------------------------------------------------
+            // Test 12: IndexedBet and IndexedPayout include game_type (AC-6.4)
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                let key = ("Craps".to_string(), 1u64);
+
+                // Verify all bets have game_type set correctly
+                let bets = explorer.bets_by_round.get(&key).unwrap();
+                for bet in bets {
+                    assert_eq!(bet.game_type, "Craps", "IndexedBet should have correct game_type");
+                    assert_eq!(bet.round_id, 1, "IndexedBet should have correct round_id");
+                }
+
+                // Verify all payouts have game_type set correctly
+                let payouts = explorer.payouts_by_round.get(&key).unwrap();
+                for payout in payouts {
+                    assert_eq!(payout.game_type, "Craps", "IndexedPayout should have correct game_type");
+                    assert_eq!(payout.round_id, 1, "IndexedPayout should have correct round_id");
+                }
+            }
         });
     }
 
@@ -2891,6 +2914,7 @@ mod tests {
         };
         let bets1 = vec![
             IndexedBet {
+                game_type: "Craps".to_string(),
                 player: "player_a".to_string(),
                 round_id: 1,
                 bet_type: 0,
@@ -2899,6 +2923,7 @@ mod tests {
                 block_height: 100,
             },
             IndexedBet {
+                game_type: "Craps".to_string(),
                 player: "player_a".to_string(),
                 round_id: 1,
                 bet_type: 0,
@@ -2907,6 +2932,7 @@ mod tests {
                 block_height: 100,
             },
             IndexedBet {
+                game_type: "Craps".to_string(),
                 player: "player_b".to_string(),
                 round_id: 1,
                 bet_type: 0,
@@ -2917,12 +2943,14 @@ mod tests {
         ];
         let payouts1 = vec![
             IndexedPayout {
+                game_type: "Craps".to_string(),
                 player: "player_a".to_string(),
                 round_id: 1,
                 payout: 500,
                 block_height: 103,
             },
             IndexedPayout {
+                game_type: "Craps".to_string(),
                 player: "player_b".to_string(),
                 round_id: 1,
                 payout: 300,
@@ -2963,6 +2991,7 @@ mod tests {
         };
         let bets2 = vec![
             IndexedBet {
+                game_type: "Craps".to_string(),
                 player: "player_a".to_string(),
                 round_id: 2,
                 bet_type: 0,
@@ -2971,6 +3000,7 @@ mod tests {
                 block_height: 200,
             },
             IndexedBet {
+                game_type: "Craps".to_string(),
                 player: "player_a".to_string(),
                 round_id: 2,
                 bet_type: 0,
@@ -2980,6 +3010,7 @@ mod tests {
             },
         ];
         let payouts2 = vec![IndexedPayout {
+            game_type: "Craps".to_string(),
             player: "player_a".to_string(),
             round_id: 2,
             payout: 700,
@@ -3019,6 +3050,7 @@ mod tests {
         };
         let bets3 = vec![
             IndexedBet {
+                game_type: "Blackjack".to_string(),
                 player: "player_b".to_string(),
                 round_id: 1,
                 bet_type: 0,
@@ -3027,6 +3059,7 @@ mod tests {
                 block_height: 300,
             },
             IndexedBet {
+                game_type: "Blackjack".to_string(),
                 player: "player_c".to_string(),
                 round_id: 1,
                 bet_type: 0,
@@ -3035,6 +3068,7 @@ mod tests {
                 block_height: 300,
             },
             IndexedBet {
+                game_type: "Blackjack".to_string(),
                 player: "player_c".to_string(),
                 round_id: 1,
                 bet_type: 0,
@@ -3043,6 +3077,7 @@ mod tests {
                 block_height: 300,
             },
             IndexedBet {
+                game_type: "Blackjack".to_string(),
                 player: "player_c".to_string(),
                 round_id: 1,
                 bet_type: 0,
@@ -3053,12 +3088,14 @@ mod tests {
         ];
         let payouts3 = vec![
             IndexedPayout {
+                game_type: "Blackjack".to_string(),
                 player: "player_b".to_string(),
                 round_id: 1,
                 payout: 600,
                 block_height: 303,
             },
             IndexedPayout {
+                game_type: "Blackjack".to_string(),
                 player: "player_c".to_string(),
                 round_id: 1,
                 payout: 400,

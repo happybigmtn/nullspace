@@ -291,11 +291,16 @@
     - Gateway handlers (`gateway/src/index.ts`): Added handlers for `subscribe_game`, `unsubscribe_game`, `list_subscriptions` messages with game-specific topic routing. Integrated cleanup on disconnect and shutdown.
     - Tests: 25 unit tests in `gateway/tests/unit/game-subscriptions.test.ts` covering schema validation, ID conversion, topic generation, topic subscription/unsubscription, topic-based publishing, and game ID routing integration.
     - Tests: `pnpm -C gateway test` (235 tests passing)
-- [ ] Update indexer schema and APIs to include game identifiers
+- [x] Update indexer schema and APIs to include game identifiers
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.4
   - Tests/backpressure:
     - Programmatic: API tests for per-game queries
   - Perceptual: None
+  - **Completed**: Added `game_type` field to `IndexedBet` and `IndexedPayout` structs in `simulator/src/explorer.rs`:
+    - Updated event recording for `GlobalTableBetAccepted` and `GlobalTablePlayerSettled` to populate `game_type`
+    - Updated test fixture data in `simulator/src/lib.rs` to include `game_type` for all test bets and payouts
+    - Added Test 12 to `test_explorer_round_endpoints` verifying `game_type` is correctly set on all indexed bets and payouts
+    - All 9 explorer/aggregation tests passing including per-game query filtering
 - [ ] Update web client for multi-game UI and routing
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.5
   - Tests/backpressure:
