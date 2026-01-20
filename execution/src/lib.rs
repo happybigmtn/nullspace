@@ -48,6 +48,7 @@
 //! ```
 
 pub mod casino;
+pub mod round_scheduler;
 pub mod state_transition;
 
 #[cfg(any(test, feature = "mocks"))]
@@ -63,6 +64,7 @@ mod state;
 pub use layer::Layer;
 pub use state::{nonce, Adb, Noncer, PrepareError, State, Status};
 pub use casino::{GameError, GameResult, GameRng, init_game, process_game_move};
+pub use round_scheduler::{PhaseConfig, RoundScheduler, TransitionResult, view_to_ms, ms_to_view, MS_PER_VIEW};
 
 #[cfg(any(test, feature = "mocks"))]
 pub use state::Memory;
