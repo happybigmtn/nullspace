@@ -881,3 +881,399 @@ mod tests {
         }
     }
 }
+
+// ============================================================================
+// Property Tests (proptest-based fuzz testing)
+// ============================================================================
+//
+// These tests use proptest for property-based testing (structured fuzzing)
+// of codec parsing to catch edge cases and boundary conditions.
+
+#[cfg(test)]
+mod proptest_fuzz {
+    use super::*;
+    use bytes::BytesMut;
+    use proptest::prelude::*;
+
+    // ========================================================================
+    // BitWriter/BitReader Property Tests
+    // ========================================================================
+
+    proptest! {
+        /// Property: Any sequence of bit writes should roundtrip correctly.
+        /// Tests all bit counts 1-8 with arbitrary values.
+        #[test]
+        fn prop_bits_roundtrip(
+            values in prop::collection::vec((1u8..=8u8, any::<u8>()), 1..50)
+        ) {
+            let mut writer = BitWriter::new();
+            let mut expected = Vec::with_capacity(values.len());
+
+            for (bits, value) in &values {
+                let mask = if *bits == 8 { 0xFF } else { (1u8 << bits) - 1 };
+                let masked_value = value & mask;
+                writer.write_bits(*value, *bits);
+                expected.push((masked_value, *bits));
+            }
+
+            let bytes = writer.finish();
+            let mut reader = BitReader::new(&bytes);
+
+            for (exp_val, bits) in expected {
+                let read_val = reader.read_bits(bits);
+                prop_assert_eq!(read_val, Some(exp_val), "bits={}", bits);
+            }
+        }
+
+        /// Property: ULEB128 encoding should roundtrip for any u64.
+        #[test]
+        fn prop_uleb128_roundtrip(value: u64) {
+            let mut writer = BitWriter::new();
+            writer.write_uleb128(value);
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            prop_assert_eq!(reader.read_uleb128(), Some(value));
+        }
+
+        /// Property: ULEB128 encoding size should be bounded.
+        /// Max size is 10 bytes for u64 (64 bits / 7 bits per byte = 10 bytes).
+        #[test]
+        fn prop_uleb128_size_bounded(value: u64) {
+            let mut writer = BitWriter::new();
+            writer.write_uleb128(value);
+            let bytes = writer.finish();
+            prop_assert!(bytes.len() <= 10, "ULEB128 exceeded 10 bytes");
+        }
+
+        /// Property: Small values should encode efficiently in ULEB128.
+        #[test]
+        fn prop_uleb128_small_values_compact(value in 0u64..128) {
+            let mut writer = BitWriter::new();
+            writer.write_uleb128(value);
+            let bytes = writer.finish();
+            prop_assert_eq!(bytes.len(), 1, "Values < 128 should encode in 1 byte");
+        }
+
+        /// Property: u16 roundtrip should preserve value.
+        #[test]
+        fn prop_u16_roundtrip(value: u16) {
+            let mut writer = BitWriter::new();
+            writer.write_u16(value);
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            prop_assert_eq!(reader.read_u16(), Some(value));
+        }
+
+        /// Property: u32 roundtrip should preserve value.
+        #[test]
+        fn prop_u32_roundtrip(value: u32) {
+            let mut writer = BitWriter::new();
+            writer.write_u32(value);
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            prop_assert_eq!(reader.read_u32(), Some(value));
+        }
+
+        /// Property: Reading more bits than available should return None.
+        #[test]
+        fn prop_read_past_end_returns_none(
+            data in prop::collection::vec(any::<u8>(), 0..10),
+            bits_to_read in 1u8..=8u8
+        ) {
+            let mut reader = BitReader::new(&data);
+            let total_bits = data.len() * 8;
+
+            // Consume all available bits
+            let mut bits_consumed = 0usize;
+            while bits_consumed + bits_to_read as usize <= total_bits {
+                let result = reader.read_bits(bits_to_read);
+                prop_assert!(result.is_some());
+                bits_consumed += bits_to_read as usize;
+            }
+
+            // Next read should fail if we can't fit another full read
+            if bits_consumed + bits_to_read as usize > total_bits {
+                prop_assert_eq!(reader.read_bits(bits_to_read), None);
+            }
+        }
+
+        /// Property: Envelope version check should only pass for v2.
+        #[test]
+        fn prop_envelope_version_check(opcode in 0u8..32) {
+            let mut writer = BitWriter::new();
+            writer.write_envelope(opcode);
+            let bytes = writer.finish();
+
+            let reader = BitReader::new(&bytes);
+            prop_assert!(reader.is_v2());
+
+            let mut reader2 = BitReader::new(&bytes);
+            let envelope = reader2.read_envelope();
+            prop_assert_eq!(envelope, Some((V2_PROTOCOL_VERSION, opcode)));
+        }
+    }
+
+    // ========================================================================
+    // BetDescriptorV2 Property Tests
+    // ========================================================================
+
+    proptest! {
+        /// Property: Roulette bet descriptors should roundtrip.
+        #[test]
+        fn prop_bet_roulette_roundtrip(
+            bet_type in 0u8..16,  // 4 bits
+            target in 0u8..64,    // 6 bits
+            amount in 1u64..1_000_000_000
+        ) {
+            let bet = BetDescriptorV2::new(bet_type, Some(target), amount);
+
+            let mut writer = BitWriter::new();
+            bet.encode_roulette(&mut writer);
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptorV2::decode_roulette(&mut reader);
+
+            prop_assert!(decoded.is_some());
+            let decoded = decoded.unwrap();
+            prop_assert_eq!(decoded.bet_type, bet_type);
+            prop_assert_eq!(decoded.target, Some(target));
+            prop_assert_eq!(decoded.amount, amount);
+        }
+
+        /// Property: Sic Bo bet descriptors with target should roundtrip.
+        #[test]
+        fn prop_bet_sicbo_with_target_roundtrip(
+            bet_type in 0u8..16,  // 4 bits
+            target in 0u8..64,    // 6 bits
+            amount in 1u64..1_000_000_000
+        ) {
+            let bet = BetDescriptorV2::new(bet_type, Some(target), amount);
+
+            let mut writer = BitWriter::new();
+            bet.encode_sic_bo(&mut writer, true);
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptorV2::decode_sic_bo(&mut reader, true);
+
+            prop_assert!(decoded.is_some());
+            let decoded = decoded.unwrap();
+            prop_assert_eq!(decoded.bet_type, bet_type);
+            prop_assert_eq!(decoded.target, Some(target));
+            prop_assert_eq!(decoded.amount, amount);
+        }
+
+        /// Property: Sic Bo bet descriptors without target should roundtrip.
+        #[test]
+        fn prop_bet_sicbo_no_target_roundtrip(
+            bet_type in 0u8..16,  // 4 bits
+            amount in 1u64..1_000_000_000
+        ) {
+            let bet = BetDescriptorV2::new(bet_type, None, amount);
+
+            let mut writer = BitWriter::new();
+            bet.encode_sic_bo(&mut writer, false);
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptorV2::decode_sic_bo(&mut reader, false);
+
+            prop_assert!(decoded.is_some());
+            let decoded = decoded.unwrap();
+            prop_assert_eq!(decoded.bet_type, bet_type);
+            prop_assert_eq!(decoded.target, None);
+            prop_assert_eq!(decoded.amount, amount);
+        }
+
+        /// Property: Baccarat bet descriptors should roundtrip.
+        #[test]
+        fn prop_bet_baccarat_roundtrip(
+            bet_type in 0u8..16,  // 4 bits
+            amount in 1u64..1_000_000_000
+        ) {
+            let bet = BetDescriptorV2::new(bet_type, None, amount);
+
+            let mut writer = BitWriter::new();
+            bet.encode_baccarat(&mut writer);
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptorV2::decode_baccarat(&mut reader);
+
+            prop_assert!(decoded.is_some());
+            let decoded = decoded.unwrap();
+            prop_assert_eq!(decoded.bet_type, bet_type);
+            prop_assert_eq!(decoded.target, None);
+            prop_assert_eq!(decoded.amount, amount);
+        }
+
+        /// Property: Craps bet descriptors with target should roundtrip.
+        #[test]
+        fn prop_bet_craps_with_target_roundtrip(
+            bet_type in 0u8..32,  // 5 bits
+            target in 0u8..16,    // 4 bits
+            amount in 1u64..1_000_000_000
+        ) {
+            let bet = BetDescriptorV2::new(bet_type, Some(target), amount);
+
+            let mut writer = BitWriter::new();
+            bet.encode_craps(&mut writer, true);
+            let bytes = writer.finish();
+
+            let mut reader = BitReader::new(&bytes);
+            let decoded = BetDescriptorV2::decode_craps(&mut reader, true);
+
+            prop_assert!(decoded.is_some());
+            let decoded = decoded.unwrap();
+            prop_assert_eq!(decoded.bet_type, bet_type);
+            prop_assert_eq!(decoded.target, Some(target));
+            prop_assert_eq!(decoded.amount, amount);
+        }
+    }
+
+    // ========================================================================
+    // Malformed Input Fuzz Tests
+    // ========================================================================
+
+    proptest! {
+        /// Property: Arbitrary bytes should not crash BitReader.
+        /// Reader should return None or valid values, never panic.
+        #[test]
+        fn prop_bitreader_no_panic_on_arbitrary_bytes(
+            data in prop::collection::vec(any::<u8>(), 0..256)
+        ) {
+            let mut reader = BitReader::new(&data);
+
+            // Try various read operations - should not panic
+            let _ = reader.read_bits(4);
+            let _ = reader.read_bits(8);
+            let _ = reader.read_byte();
+            let _ = reader.read_u16();
+            let _ = reader.read_u32();
+            let _ = reader.read_uleb128();
+            let _ = reader.read_envelope();
+            let _ = reader.is_v2();
+            let _ = reader.remaining_bytes();
+            let _ = reader.is_empty();
+        }
+
+        /// Property: Malformed ULEB128 should be handled gracefully.
+        /// Specifically test continuation bytes that never terminate.
+        #[test]
+        fn prop_uleb128_malformed_continuation(
+            data in prop::collection::vec(0x80u8..=0xFFu8, 1..20)
+        ) {
+            let mut reader = BitReader::new(&data);
+            // All bytes have continuation bit set, should eventually return None
+            // due to overflow protection
+            let result = reader.read_uleb128();
+            // Result should be None (overflow) or Some if we hit end of buffer
+            // Either way, should not panic
+            let _ = result;
+        }
+
+        /// Property: Decoding bet descriptor from random bytes should not panic.
+        #[test]
+        fn prop_bet_decode_no_panic(
+            data in prop::collection::vec(any::<u8>(), 0..32)
+        ) {
+            // Roulette decode
+            {
+                let mut reader = BitReader::new(&data);
+                let _ = BetDescriptorV2::decode_roulette(&mut reader);
+            }
+
+            // Sic Bo with target
+            {
+                let mut reader = BitReader::new(&data);
+                let _ = BetDescriptorV2::decode_sic_bo(&mut reader, true);
+            }
+
+            // Sic Bo without target
+            {
+                let mut reader = BitReader::new(&data);
+                let _ = BetDescriptorV2::decode_sic_bo(&mut reader, false);
+            }
+
+            // Baccarat
+            {
+                let mut reader = BitReader::new(&data);
+                let _ = BetDescriptorV2::decode_baccarat(&mut reader);
+            }
+
+            // Craps with target
+            {
+                let mut reader = BitReader::new(&data);
+                let _ = BetDescriptorV2::decode_craps(&mut reader, true);
+            }
+        }
+
+        /// Property: Empty data should be handled gracefully.
+        #[test]
+        fn prop_empty_data_handled(bits in 1u8..=8u8) {
+            let empty: &[u8] = &[];
+            let mut reader = BitReader::new(empty);
+
+            prop_assert_eq!(reader.read_bits(bits), None);
+            prop_assert_eq!(reader.read_byte(), None);
+            prop_assert_eq!(reader.read_u16(), None);
+            prop_assert_eq!(reader.read_u32(), None);
+            prop_assert_eq!(reader.read_uleb128(), None);
+            prop_assert_eq!(reader.read_envelope(), None);
+            prop_assert!(!reader.is_v2());
+            prop_assert!(reader.is_empty());
+        }
+    }
+
+    // ========================================================================
+    // String Parsing Fuzz Tests
+    // ========================================================================
+
+    proptest! {
+        /// Property: String parsing should not panic on arbitrary bytes.
+        #[test]
+        fn prop_string_parse_no_panic(
+            data in prop::collection::vec(any::<u8>(), 0..512),
+            max_len in 1usize..256
+        ) {
+            let mut reader = data.as_slice();
+            let result = read_string(&mut reader, max_len);
+            // Should either succeed with valid string or fail gracefully
+            if let Ok(s) = result {
+                prop_assert!(s.len() <= max_len);
+            }
+        }
+
+        /// Property: Valid UTF-8 strings should roundtrip.
+        #[test]
+        fn prop_string_valid_roundtrip(
+            s in "[a-zA-Z0-9 ]{0,100}"
+        ) {
+            let mut buf = BytesMut::new();
+            write_string(&s, &mut buf);
+
+            let mut reader = buf.as_ref();
+            let result = read_string(&mut reader, 200);
+
+            prop_assert!(result.is_ok());
+            prop_assert_eq!(result.unwrap(), s);
+        }
+
+        /// Property: String encode size should match actual encoding.
+        #[test]
+        fn prop_string_encode_size_accurate(
+            s in "[a-zA-Z0-9]{0,100}"
+        ) {
+            let expected_size = string_encode_size(&s);
+
+            let mut buf = BytesMut::new();
+            write_string(&s, &mut buf);
+
+            prop_assert_eq!(buf.len(), expected_size);
+        }
+    }
+}

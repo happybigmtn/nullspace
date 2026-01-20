@@ -511,11 +511,28 @@
     - Drill logs include "DRILL RESULT: PASSED/FAILED" for automated verification
     - Supports both SQLite and PostgreSQL backends via environment variables
     - Non-destructive by default (DRILL_PERFORM_RESTORE=1 for actual restore)
-- [ ] Add fuzz/property tests for gateway parsing and execution rules
+- [x] Add fuzz/property tests for gateway parsing and execution rules
   - Specs: `specs/sprint-09-production-readiness.md` AC-9.4
   - Tests/backpressure:
     - Programmatic: `cargo test` / `pnpm test` includes fuzz targets
   - Perceptual: None
+  - **Completed**: Added property-based fuzz tests using proptest (Rust) and fast-check (TypeScript):
+    - Rust (`types/src/casino/codec.rs`): 20 proptest property tests covering:
+      - BitWriter/BitReader roundtrip for arbitrary bit sequences
+      - ULEB128 encoding roundtrip and size bounds
+      - u16/u32 roundtrip
+      - BetDescriptorV2 roundtrip for roulette, sic bo, baccarat, craps
+      - Malformed input handling (no panics on arbitrary bytes)
+      - String parsing safety
+    - TypeScript (`gateway/tests/unit/message-parsing-fuzz.test.ts`): 43 fast-check property tests covering:
+      - Schema validation safety (no crashes on arbitrary input)
+      - Game ID conversion correctness
+      - Valid message roundtrip for all game types
+      - Invalid message rejection
+      - Edge cases (large amounts, many bets, special characters)
+      - Type coercion safety
+      - Injection attack prevention (SQL injection, XSS, prototype pollution)
+    - Tests: `cargo test -p nullspace-types proptest_fuzz` (20 tests), `pnpm -C gateway test` (278 tests including 43 fuzz tests)
 - [ ] Add staging pipeline smoke tests and regression gates
   - Specs: `specs/sprint-09-production-readiness.md` AC-9.5
   - Tests/backpressure:
