@@ -26,6 +26,47 @@ cd "$ROOT_DIR"
 
 log() { printf "\033[1;36m[agent-up]\033[0m %s\n" "$*"; }
 
+port_in_use() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn "sport = :$port" | awk 'NR>1 {print $4}' | grep -q ":$port$"
+    return $?
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$port" -sTCP:LISTEN -Pn >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+require_port_free() {
+  local port="$1"
+  local name="$2"
+  if port_in_use "$port"; then
+    log "Port ${port} (${name}) already in use. Stop the service or choose a different port."
+    exit 1
+  fi
+}
+
+if ! command -v ss >/dev/null 2>&1 && ! command -v lsof >/dev/null 2>&1; then
+  log "Warning: ss/lsof not available; skipping port reuse checks"
+fi
+
+# Fail fast on port reuse
+if [ "$SKIP_LOCALNET" != "1" ]; then
+  require_port_free 8080 "simulator"
+  require_port_free 3210 "convex"
+fi
+if [ "$SKIP_GATEWAY" != "1" ]; then
+  require_port_free 9010 "gateway"
+fi
+if [ "$SKIP_AUTH" != "1" ]; then
+  require_port_free 4000 "auth"
+fi
+if [ "$SKIP_WEBSITE" != "1" ]; then
+  require_port_free "$WEB_PORT" "website"
+fi
+
 # 1) Create throwaway website/.env.local from template
 if [ ! -f website/.env.local ]; then
   log "Seeding website/.env.local"

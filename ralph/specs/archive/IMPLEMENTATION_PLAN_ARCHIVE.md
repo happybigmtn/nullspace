@@ -85,3 +85,14 @@ Completed work items moved from `IMPLEMENTATION_PLAN.md`.
 - `simulator/src/state.rs` (SimulatorConfig fields)
 - `simulator/src/main.rs` (CLI args + validation tests)
 - `node/src/lib.rs` (config fields + validation wiring)
+
+### Sprint 01: Local bootstrap guardrails ✅
+
+- [x] Agent bootstrap validates configs and env prerequisites before start
+- [x] Health check script returns non-zero on failed endpoints or stale metrics
+- [x] Agent bootstrap fails fast when expected ports are already in use
+
+**Files Reviewed/Updated**:
+- `scripts/agent-up.sh` (port reuse checks, bootstrap prerequisites)
+- `scripts/agent-loop.sh` (local stack orchestration)
+- `scripts/health-check.sh` (endpoint + metric checks)

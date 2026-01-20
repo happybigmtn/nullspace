@@ -5,13 +5,6 @@
 **Scope**: Sprint breakdown for full Nullspace platform delivery.
 
 ## Sprint 01 - Foundations and Local Dev
-- [x] Add local bootstrap guardrails (missing env/config checks, port reuse handling)
-  - Specs: `specs/sprint-01-foundations.md` AC-1.1, AC-1.5
-  - Tests/backpressure:
-    - Programmatic: `./scripts/agent-loop.sh`
-    - Programmatic: `./scripts/health-check.sh`
-  - Perceptual: None
-  - Note: Implemented scripts/agent-loop.sh with config validation, command checks, port reuse detection; scripts/health-check.sh with endpoint/port/process checks. Both return non-zero on failure.
 - [x] Add faucet helper for funding test wallets
   - Specs: `specs/sprint-01-foundations.md` AC-1.3
   - Tests/backpressure:
