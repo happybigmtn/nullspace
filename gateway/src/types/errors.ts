@@ -23,6 +23,9 @@ export const ErrorCodes = {
   GAME_IN_PROGRESS: 'GAME_IN_PROGRESS',         // Can't start new game
   REGISTRATION_FAILED: 'REGISTRATION_FAILED',   // Failed to register player
 
+  // Rate limiting errors
+  RATE_LIMITED: 'RATE_LIMITED',                 // Message rate limit exceeded
+
   // Feature deferment errors (M0b)
   FEATURE_DISABLED: 'FEATURE_DISABLED',         // Feature is disabled/deferred
   LIVE_MODE_DISABLED: 'LIVE_MODE_DISABLED',     // Live table mode disabled

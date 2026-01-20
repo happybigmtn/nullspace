@@ -1,5 +1,5 @@
-import { logDebug } from '../logger.js';
-import { trackRateLimitHit } from '../metrics/index.js';
+import { logDebug, logWarn } from '../logger.js';
+import { trackRateLimitHit, trackRateLimitReset } from '../metrics/index.js';
 
 /**
  * Connection Limiter
@@ -150,5 +150,192 @@ export class ConnectionLimiter {
    */
   getTotalConnections(): number {
     return this.totalConnections;
+  }
+}
+
+/**
+ * Message Rate Limiter
+ *
+ * Enforces per-session message rate limits to prevent abuse and ensure fair
+ * resource sharing. Uses a fixed-window rate limiting algorithm with explicit
+ * error responses per AC-3.4.
+ *
+ * Configuration via environment variables:
+ * - GATEWAY_SESSION_RATE_LIMIT_POINTS: Max messages per window (default: 100)
+ * - GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS: Window duration in ms (default: 60000 = 1 minute)
+ * - GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS: Block duration after exceeding limit (default: 60000 = 1 minute)
+ */
+
+export interface MessageRateLimiterConfig {
+  /** Maximum messages per window */
+  maxMessages: number;
+  /** Window duration in milliseconds */
+  windowMs: number;
+  /** Block duration in milliseconds after exceeding limit */
+  blockMs: number;
+}
+
+export interface RateLimitState {
+  /** Message count in current window */
+  count: number;
+  /** When the current window started */
+  windowStart: number;
+  /** When the block expires (0 if not blocked) */
+  blockedUntil: number;
+}
+
+export interface MessageRateLimitResult {
+  /** Whether the message is allowed */
+  allowed: boolean;
+  /** Seconds until rate limit resets (for error response) */
+  retryAfterSeconds?: number;
+  /** Human-readable reason for rejection */
+  reason?: string;
+  /** Error code for client */
+  code?: string;
+}
+
+export class MessageRateLimiter {
+  private states: Map<string, RateLimitState> = new Map();
+  private config: MessageRateLimiterConfig;
+  private cleanupTimer: ReturnType<typeof setInterval>;
+
+  constructor(config: Partial<MessageRateLimiterConfig> = {}) {
+    this.config = {
+      maxMessages: config.maxMessages ?? 100,
+      windowMs: config.windowMs ?? 60_000,
+      blockMs: config.blockMs ?? 60_000,
+    };
+
+    // Periodic cleanup of expired states (every 5 minutes)
+    this.cleanupTimer = setInterval(() => this.cleanup(), 5 * 60_000);
+    this.cleanupTimer.unref?.();
+  }
+
+  /**
+   * Check if a message from the given session is allowed
+   * @param sessionId - Unique session identifier (wallet/connection scoped)
+   * @param clientIp - Client IP for logging/metrics (optional)
+   */
+  checkMessage(sessionId: string, clientIp?: string): MessageRateLimitResult {
+    const now = Date.now();
+    let state = this.states.get(sessionId);
+
+    // Initialize state if not exists
+    if (!state) {
+      state = {
+        count: 0,
+        windowStart: now,
+        blockedUntil: 0,
+      };
+      this.states.set(sessionId, state);
+    }
+
+    // Check if blocked
+    if (state.blockedUntil > now) {
+      const retryAfterSeconds = Math.ceil((state.blockedUntil - now) / 1000);
+      trackRateLimitHit('session_rate_limit', clientIp);
+      logDebug(`[RateLimiter] Session ${sessionId} blocked for ${retryAfterSeconds}s`);
+      return {
+        allowed: false,
+        retryAfterSeconds,
+        reason: `Rate limit exceeded. Retry after ${retryAfterSeconds} seconds.`,
+        code: 'RATE_LIMITED',
+      };
+    }
+
+    // Check if window has expired - reset if so
+    if (now - state.windowStart >= this.config.windowMs) {
+      trackRateLimitReset('session_rate_limit');
+      state.count = 0;
+      state.windowStart = now;
+    }
+
+    // Increment count
+    state.count++;
+
+    // Check if over limit
+    if (state.count > this.config.maxMessages) {
+      // Block the session
+      state.blockedUntil = now + this.config.blockMs;
+      const retryAfterSeconds = Math.ceil(this.config.blockMs / 1000);
+      trackRateLimitHit('session_rate_limit', clientIp);
+      logWarn(
+        `[RateLimiter] Session ${sessionId} exceeded rate limit ` +
+        `(${state.count}/${this.config.maxMessages} in ${this.config.windowMs}ms), ` +
+        `blocked for ${retryAfterSeconds}s`
+      );
+      return {
+        allowed: false,
+        retryAfterSeconds,
+        reason: `Rate limit exceeded. Retry after ${retryAfterSeconds} seconds.`,
+        code: 'RATE_LIMITED',
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Remove rate limit state for a session (call on disconnect)
+   */
+  removeSession(sessionId: string): void {
+    this.states.delete(sessionId);
+  }
+
+  /**
+   * Get current rate limit state for a session (for debugging/monitoring)
+   */
+  getState(sessionId: string): RateLimitState | undefined {
+    return this.states.get(sessionId);
+  }
+
+  /**
+   * Get statistics about current rate limiting
+   */
+  getStats(): {
+    trackedSessions: number;
+    blockedSessions: number;
+    config: MessageRateLimiterConfig;
+  } {
+    const now = Date.now();
+    let blockedCount = 0;
+    for (const state of this.states.values()) {
+      if (state.blockedUntil > now) {
+        blockedCount++;
+      }
+    }
+    return {
+      trackedSessions: this.states.size,
+      blockedSessions: blockedCount,
+      config: { ...this.config },
+    };
+  }
+
+  /**
+   * Clean up expired states (sessions that have been idle)
+   */
+  private cleanup(): void {
+    const now = Date.now();
+    const expirationMs = this.config.windowMs + this.config.blockMs + 60_000; // Extra minute buffer
+
+    for (const [sessionId, state] of this.states.entries()) {
+      // Remove if window is expired and not blocked
+      if (
+        now - state.windowStart > expirationMs &&
+        state.blockedUntil < now
+      ) {
+        this.states.delete(sessionId);
+      }
+    }
+
+    logDebug(`[RateLimiter] Cleanup: ${this.states.size} sessions tracked`);
+  }
+
+  /**
+   * Shutdown the rate limiter (cleanup timer)
+   */
+  shutdown(): void {
+    clearInterval(this.cleanupTimer);
   }
 }

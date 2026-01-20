@@ -58,11 +58,18 @@
     - Metrics for queue depth, dropped messages, and delivery rates
     - Load test validates 1,000 clients with 100% delivery rate (97,561 msg/sec)
     - Tests: `pnpm -C gateway test:fanout:1k` (11 tests passing)
-- [ ] Add per-wallet/IP rate limiting with explicit error responses
+- [x] Add per-wallet/IP rate limiting with explicit error responses
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.4
   - Tests/backpressure:
     - Programmatic: gateway integration tests
   - Perceptual: None
+  - **Completed**: Added `MessageRateLimiter` class with:
+    - Per-session message rate limiting (configurable via GATEWAY_SESSION_RATE_LIMIT_POINTS, GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS, GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS)
+    - Explicit `RATE_LIMITED` error code with retryAfter seconds in response
+    - Ping messages exempt from rate limiting (keepalive)
+    - Session cleanup on disconnect
+    - Added 16 unit tests + integration test for rate limit exceed behavior
+    - Tests: `pnpm -C gateway test` (142 tests passing)
 - [ ] Implement engine forwarding with retries and idempotency keys
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.5
   - Tests/backpressure:

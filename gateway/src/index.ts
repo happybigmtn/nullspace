@@ -8,7 +8,7 @@ import './telemetry.js';
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createHandlerRegistry, type HandlerContext } from './handlers/index.js';
-import { SessionManager, NonceManager, ConnectionLimiter } from './session/index.js';
+import { SessionManager, NonceManager, ConnectionLimiter, MessageRateLimiter } from './session/index.js';
 import { SubmitClient } from './backend/index.js';
 import { ErrorCodes, createError } from './types/errors.js';
 import {
@@ -112,6 +112,10 @@ const HEALTH_TIMEOUT_MS = parsePositiveInt('GATEWAY_HEALTHCHECK_TIMEOUT_MS', 5_0
 const ACCOUNT_TIMEOUT_MS = parsePositiveInt('GATEWAY_ACCOUNT_TIMEOUT_MS', 5_000);
 const SUBMIT_MAX_BYTES = parsePositiveInt('GATEWAY_SUBMIT_MAX_BYTES', 8 * 1024 * 1024);
 const MAX_MESSAGE_SIZE = parsePositiveInt('GATEWAY_MAX_MESSAGE_SIZE', 64 * 1024); // 64KB default
+// Message rate limiting configuration (AC-3.4)
+const SESSION_RATE_LIMIT_POINTS = parsePositiveInt('GATEWAY_SESSION_RATE_LIMIT_POINTS', 100);
+const SESSION_RATE_LIMIT_WINDOW_MS = parsePositiveInt('GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS', 60_000);
+const SESSION_RATE_LIMIT_BLOCK_MS = parsePositiveInt('GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS', 60_000);
 const NONCE_PERSIST_INTERVAL_MS = parsePositiveInt(
   'GATEWAY_NONCE_PERSIST_INTERVAL_MS',
   15_000,
@@ -187,6 +191,12 @@ const sessionManager = new SessionManager(submitClient, BACKEND_URL, nonceManage
 const connectionLimiter = new ConnectionLimiter({
   maxConnectionsPerIp: MAX_CONNECTIONS_PER_IP,
   maxTotalSessions: MAX_TOTAL_SESSIONS,
+});
+// AC-3.4: Per-session message rate limiting
+const messageRateLimiter = new MessageRateLimiter({
+  maxMessages: SESSION_RATE_LIMIT_POINTS,
+  windowMs: SESSION_RATE_LIMIT_WINDOW_MS,
+  blockMs: SESSION_RATE_LIMIT_BLOCK_MS,
 });
 const handlers = createHandlerRegistry();
 
@@ -265,6 +275,23 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
   if (msgType === 'ping') {
     send(ws, { type: 'pong', timestamp: Date.now() });
     return;
+  }
+
+  // AC-3.4: Check per-session message rate limit
+  // Rate limiting applies to all messages except ping (keepalive)
+  const session = sessionManager.getSession(ws);
+  if (session) {
+    const rateLimitResult = messageRateLimiter.checkMessage(session.id);
+    if (!rateLimitResult.allowed) {
+      logDebug(`[Gateway] Rate limited session ${session.id}: ${rateLimitResult.reason}`);
+      send(ws, {
+        type: 'error',
+        code: ErrorCodes.RATE_LIMITED,
+        message: rateLimitResult.reason ?? 'Rate limit exceeded',
+        retryAfter: rateLimitResult.retryAfterSeconds,
+      }, traceId);
+      return;
+    }
   }
 
   // Optional: client-signed raw submission (bypass gateway signing)
@@ -668,6 +695,8 @@ wss.on('connection', async (ws: WebSocket, req) => {
       if (destroyed) {
         trackSession('destroyed');
       }
+      // AC-3.4: Clean up rate limit state for disconnected session
+      messageRateLimiter.removeSession(session.id);
       connectionLimiter.unregisterConnection(clientIp, connectionId);
       trackConnection('disconnect', clientIp);
     });
@@ -797,4 +826,5 @@ logInfo(`[Gateway] Backend URL: ${BACKEND_URL}`);
 logInfo(`[Gateway] Gateway Origin: ${GATEWAY_ORIGIN}`);
 logInfo(`[Gateway] Connection limits: ${MAX_CONNECTIONS_PER_IP} per IP, ${MAX_TOTAL_SESSIONS} total`);
 logInfo(`[Gateway] Max message size: ${MAX_MESSAGE_SIZE} bytes`);
+logInfo(`[Gateway] Message rate limit: ${SESSION_RATE_LIMIT_POINTS} msgs/${SESSION_RATE_LIMIT_WINDOW_MS}ms, block ${SESSION_RATE_LIMIT_BLOCK_MS}ms`);
 logInfo(`[Gateway] Registered handlers for ${handlers.size} game types`);
