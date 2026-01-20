@@ -227,11 +227,19 @@
     - `useRoundResultDisplay` hook (`website/src/hooks/useRoundResultDisplay.ts`): Integrates `useRoundOutcome` with existing `ResultDisplay` for animated reveals. Auto-shows result on settlement, calculates celebration intensity.
     - Updated `vitest.config.ts` to include `src/hooks/__tests__/**/*.test.{ts,tsx,js,jsx}`
     - 96 new unit tests (54 component + 42 hook) covering dice display, point display, totals breakdown, settlement results, accessibility (role, aria-live, aria-label), helper functions, and AC-5.4 compliance.
-- [ ] Add fairness verification panel for commit/reveal values
+- [x] Add fairness verification panel for commit/reveal values
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.5
   - Tests/backpressure:
     - Programmatic: `pnpm -C website test`
   - Perceptual: None
+  - **Completed**: Added `FairnessVerificationPanel` component (`website/src/components/casino/FairnessVerificationPanel.tsx`) with:
+    - Collapsible panel showing RNG commit/reveal values with copy buttons
+    - Client-side SHA256 verification using WebCrypto API (`website/src/utils/fairnessVerification.ts`)
+    - Timing-safe comparison for security
+    - Visual verification status (idle/verifying/verified/failed)
+    - Explanation text describing commit-reveal scheme
+    - Accessibility: aria-labels, aria-expanded, role="region"
+    - Tests: 43 unit tests covering component rendering, utility functions, and AC-5.5 compliance
 - [ ] Ensure keyboard accessibility and visible focus states on bet controls
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.6
   - Tests/backpressure:
