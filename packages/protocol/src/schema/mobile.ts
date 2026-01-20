@@ -81,6 +81,34 @@ export const PresenceMessageSchema = BaseMessageSchema.extend({
   activeGames: z.number().int().nonnegative().optional(),
 }).passthrough();
 
+// AC-6.3: Game subscription response messages
+export const SubscriptionConfirmedMessageSchema = BaseMessageSchema.extend({
+  type: z.literal('subscription_confirmed'),
+  /** Game type that was subscribed to */
+  gameType: z.number().int().min(0).max(9),
+  /** Game name (string version) */
+  gameName: z.string(),
+  /** Subscription topic for debugging */
+  topic: z.string().optional(),
+}).passthrough();
+
+export const SubscriptionRemovedMessageSchema = BaseMessageSchema.extend({
+  type: z.literal('subscription_removed'),
+  /** Game type that was unsubscribed from */
+  gameType: z.number().int().min(0).max(9),
+  /** Game name (string version) */
+  gameName: z.string(),
+}).passthrough();
+
+export const SubscriptionsListMessageSchema = BaseMessageSchema.extend({
+  type: z.literal('subscriptions_list'),
+  /** Array of subscribed game types */
+  subscriptions: z.array(z.object({
+    gameType: z.number().int().min(0).max(9),
+    gameName: z.string(),
+  })),
+}).passthrough();
+
 export const GameStartedMessageSchema = BaseMessageSchema.extend({
   type: z.literal('game_started'),
   gameType: z.number().optional(),
@@ -323,6 +351,10 @@ export const GameMessageSchema = z.discriminatedUnion('type', [
   BalanceMessageSchema,
   ClockSyncMessageSchema,
   PresenceMessageSchema,
+  // AC-6.3: Subscription response messages
+  SubscriptionConfirmedMessageSchema,
+  SubscriptionRemovedMessageSchema,
+  SubscriptionsListMessageSchema,
   GameStartedMessageSchema,
   GameMoveMessageSchema,
   MoveAcceptedMessageSchema,
@@ -339,6 +371,10 @@ export type SessionReadyMessage = z.infer<typeof SessionReadyMessageSchema>;
 export type BalanceMessage = z.infer<typeof BalanceMessageSchema>;
 export type ClockSyncMessage = z.infer<typeof ClockSyncMessageSchema>;
 export type PresenceMessage = z.infer<typeof PresenceMessageSchema>;
+// AC-6.3: Subscription message types
+export type SubscriptionConfirmedMessage = z.infer<typeof SubscriptionConfirmedMessageSchema>;
+export type SubscriptionRemovedMessage = z.infer<typeof SubscriptionRemovedMessageSchema>;
+export type SubscriptionsListMessage = z.infer<typeof SubscriptionsListMessageSchema>;
 export type GameStartedMessage = z.infer<typeof GameStartedMessageSchema>;
 export type GameMoveMessage = z.infer<typeof GameMoveMessageSchema>;
 export type MoveAcceptedMessage = z.infer<typeof MoveAcceptedMessageSchema>;
@@ -628,6 +664,32 @@ export const SubmitRawRequestSchema = z.object({
   submission: z.string().min(1),
 });
 
+// --- Game Subscription Messages (AC-6.3) ---
+// GameId can be a GameType enum value (0-9) or a string game name
+export const GameIdSchema = z.union([
+  z.number().int().min(0).max(9),
+  z.enum([
+    'blackjack', 'roulette', 'craps', 'hilo', 'baccarat',
+    'sicbo', 'casinowar', 'videopoker', 'threecard', 'ultimateholdem',
+  ]),
+]);
+
+export const SubscribeGameRequestSchema = z.object({
+  type: z.literal('subscribe_game'),
+  /** Game to subscribe to (GameType enum or string name) */
+  gameId: GameIdSchema,
+});
+
+export const UnsubscribeGameRequestSchema = z.object({
+  type: z.literal('unsubscribe_game'),
+  /** Game to unsubscribe from (GameType enum or string name) */
+  gameId: GameIdSchema,
+});
+
+export const ListSubscriptionsRequestSchema = z.object({
+  type: z.literal('list_subscriptions'),
+});
+
 // --- Outbound Message Union ---
 export const OutboundMessageSchema = z.discriminatedUnion('type', [
   // Blackjack
@@ -740,6 +802,11 @@ export type FaucetClaimRequest = z.infer<typeof FaucetClaimRequestSchema>;
 export type PingRequest = z.infer<typeof PingRequestSchema>;
 export type GetBalanceRequest = z.infer<typeof GetBalanceRequestSchema>;
 export type SubmitRawRequest = z.infer<typeof SubmitRawRequestSchema>;
+// AC-6.3: Game subscription types
+export type GameId = z.infer<typeof GameIdSchema>;
+export type SubscribeGameRequest = z.infer<typeof SubscribeGameRequestSchema>;
+export type UnsubscribeGameRequest = z.infer<typeof UnsubscribeGameRequestSchema>;
+export type ListSubscriptionsRequest = z.infer<typeof ListSubscriptionsRequestSchema>;
 export type OutboundMessage = z.infer<typeof OutboundMessageSchema>;
 
 // --- Complete Inbound Message Schema ---
@@ -750,6 +817,10 @@ export const InboundMessageSchema = z.discriminatedUnion('type', [
   GetBalanceRequestSchema,
   SubmitRawRequestSchema,
   FaucetClaimRequestSchema,
+  // Game subscription messages (AC-6.3)
+  SubscribeGameRequestSchema,
+  UnsubscribeGameRequestSchema,
+  ListSubscriptionsRequestSchema,
   // Blackjack
   BlackjackDealRequestSchema,
   BlackjackHitRequestSchema,
@@ -858,6 +929,69 @@ export const OUTBOUND_MESSAGE_GAME_TYPES = {
 
 export function getOutboundMessageGameType(type: OutboundMessage['type']): GameType | null {
   return OUTBOUND_MESSAGE_GAME_TYPES[type] ?? null;
+}
+
+// =============================================================================
+// GAME ID CONVERSION (AC-6.3)
+// =============================================================================
+
+/** Map string game names to GameType enum values */
+const GAME_NAME_TO_TYPE: Record<string, GameType> = {
+  blackjack: GameType.Blackjack,
+  roulette: GameType.Roulette,
+  craps: GameType.Craps,
+  hilo: GameType.HiLo,
+  baccarat: GameType.Baccarat,
+  sicbo: GameType.SicBo,
+  casinowar: GameType.CasinoWar,
+  videopoker: GameType.VideoPoker,
+  threecard: GameType.ThreeCard,
+  ultimateholdem: GameType.UltimateHoldem,
+};
+
+/** Map GameType enum values to string names */
+const GAME_TYPE_TO_NAME: Record<GameType, string> = {
+  [GameType.Blackjack]: 'blackjack',
+  [GameType.Roulette]: 'roulette',
+  [GameType.Craps]: 'craps',
+  [GameType.HiLo]: 'hilo',
+  [GameType.Baccarat]: 'baccarat',
+  [GameType.SicBo]: 'sicbo',
+  [GameType.CasinoWar]: 'casinowar',
+  [GameType.VideoPoker]: 'videopoker',
+  [GameType.ThreeCard]: 'threecard',
+  [GameType.UltimateHoldem]: 'ultimateholdem',
+};
+
+/**
+ * Convert a gameId (number or string) to a GameType enum value.
+ * Returns null if the gameId is invalid.
+ */
+export function gameIdToGameType(gameId: GameId): GameType | null {
+  if (typeof gameId === 'number') {
+    // Direct GameType enum value (0-9)
+    if (gameId >= 0 && gameId <= 9) {
+      return gameId as GameType;
+    }
+    return null;
+  }
+  // String game name
+  return GAME_NAME_TO_TYPE[gameId.toLowerCase()] ?? null;
+}
+
+/**
+ * Convert a GameType enum value to a string game name.
+ */
+export function gameTypeToName(gameType: GameType): string {
+  return GAME_TYPE_TO_NAME[gameType] ?? 'unknown';
+}
+
+/**
+ * Get the subscription topic for a game type.
+ * Used by BroadcastManager for topic-based routing.
+ */
+export function getGameSubscriptionTopic(gameType: GameType): string {
+  return `game:${GAME_TYPE_TO_NAME[gameType]}`;
 }
 
 /**

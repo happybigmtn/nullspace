@@ -280,11 +280,17 @@
     - Active/inactive game filtering
     - 14 unit tests covering registry operations, config roundtrips, and variant handling
     - Tests: `cargo test -p nullspace-execution registry::` (14 tests passing)
-- [ ] Update gateway routing to include game id in subscriptions and bet intents
+- [x] Update gateway routing to include game id in subscriptions and bet intents
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.3
   - Tests/backpressure:
     - Programmatic: `pnpm -C gateway test`
   - Perceptual: None
+  - **Completed**: Added game subscription protocol to gateway:
+    - Protocol schemas (`packages/protocol/src/schema/mobile.ts`): Added `GameIdSchema` (accepts 0-9 or game names), `SubscribeGameRequestSchema`, `UnsubscribeGameRequestSchema`, `ListSubscriptionsRequestSchema`, and response schemas. Added `gameIdToGameType`, `gameTypeToName`, `getGameSubscriptionTopic` helper functions.
+    - BroadcastManager (`gateway/src/broadcast/manager.ts`): Added `getSubscriptions(ws)` method for tracking client subscriptions.
+    - Gateway handlers (`gateway/src/index.ts`): Added handlers for `subscribe_game`, `unsubscribe_game`, `list_subscriptions` messages with game-specific topic routing. Integrated cleanup on disconnect and shutdown.
+    - Tests: 25 unit tests in `gateway/tests/unit/game-subscriptions.test.ts` covering schema validation, ID conversion, topic generation, topic subscription/unsubscription, topic-based publishing, and game ID routing integration.
+    - Tests: `pnpm -C gateway test` (235 tests passing)
 - [ ] Update indexer schema and APIs to include game identifiers
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.4
   - Tests/backpressure:

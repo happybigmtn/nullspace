@@ -172,6 +172,15 @@ export class BroadcastManager extends EventEmitter {
   }
 
   /**
+   * Get the topics a client is subscribed to (AC-6.3)
+   */
+  getSubscriptions(ws: WebSocket): string[] {
+    const state = this.subscribers.get(ws);
+    if (!state) return [];
+    return Array.from(state.topics);
+  }
+
+  /**
    * Get the number of subscribers
    */
   get subscriberCount(): number {

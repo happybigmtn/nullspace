@@ -11,6 +11,7 @@ import { createHandlerRegistry, type HandlerContext } from './handlers/index.js'
 import { SessionManager, NonceManager, ConnectionLimiter, MessageRateLimiter } from './session/index.js';
 import { SubmitClient } from './backend/index.js';
 import { PresenceManager } from './presence/index.js';
+import { BroadcastManager } from './broadcast/manager.js';
 import { ErrorCodes, createError } from './types/errors.js';
 import {
   InboundMessageSchema,
@@ -18,8 +19,13 @@ import {
   type InboundMessage,
   type OutboundMessage,
   getOutboundMessageGameType,
+  // AC-6.3: Game subscription helpers
+  gameIdToGameType,
+  gameTypeToName,
+  getGameSubscriptionTopic,
 } from '@nullspace/protocol/mobile';
 import { CURRENT_PROTOCOL_VERSION, MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION } from '@nullspace/protocol';
+import { GameType } from '@nullspace/types';
 import { trackGatewayFaucet, trackGatewayResponse, trackGatewaySession } from './ops.js';
 import { logDebug, logError, logInfo, logWarn } from './logger.js';
 import { validateProductionConfigOrThrow, validateDevelopmentConfig } from './config/validation.js';
@@ -211,6 +217,10 @@ const presenceManager = new PresenceManager({
   enablePeriodicBroadcasts: CLOCK_SYNC_INTERVAL_MS > 0 || PRESENCE_INTERVAL_MS > 0,
 });
 
+// AC-6.3: Game subscription broadcast manager for topic-based routing
+const broadcastManager = new BroadcastManager();
+broadcastManager.start();
+
 // NOTE: Live-table mode disabled per specs/gateway-live-mode-deferment.md (AC-1.1)
 // Live craps table features are deferred to reduce runtime complexity.
 // Standard session-based craps remains fully functional.
@@ -303,6 +313,78 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
       }, traceId);
       return;
     }
+  }
+
+  // AC-6.3: Handle game subscription messages
+  if (msgType === 'subscribe_game') {
+    const session = sessionManager.getSession(ws);
+    if (!session) {
+      sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session', traceId);
+      return;
+    }
+    const gameType = gameIdToGameType(msg.gameId);
+    if (gameType === null) {
+      sendError(ws, ErrorCodes.INVALID_GAME_TYPE, `Invalid game ID: ${msg.gameId}`, traceId);
+      return;
+    }
+    const topic = getGameSubscriptionTopic(gameType);
+    broadcastManager.subscribeToTopic(ws, topic);
+    logDebug(`[Gateway] Session ${session.id} subscribed to ${topic}`, { requestId: traceId });
+    send(ws, {
+      type: 'subscription_confirmed',
+      gameType,
+      gameName: gameTypeToName(gameType),
+      topic,
+    }, traceId);
+    return;
+  }
+
+  if (msgType === 'unsubscribe_game') {
+    const session = sessionManager.getSession(ws);
+    if (!session) {
+      sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session', traceId);
+      return;
+    }
+    const gameType = gameIdToGameType(msg.gameId);
+    if (gameType === null) {
+      sendError(ws, ErrorCodes.INVALID_GAME_TYPE, `Invalid game ID: ${msg.gameId}`, traceId);
+      return;
+    }
+    const topic = getGameSubscriptionTopic(gameType);
+    broadcastManager.unsubscribeFromTopic(ws, topic);
+    logDebug(`[Gateway] Session ${session.id} unsubscribed from ${topic}`, { requestId: traceId });
+    send(ws, {
+      type: 'subscription_removed',
+      gameType,
+      gameName: gameTypeToName(gameType),
+    }, traceId);
+    return;
+  }
+
+  if (msgType === 'list_subscriptions') {
+    const session = sessionManager.getSession(ws);
+    if (!session) {
+      sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session', traceId);
+      return;
+    }
+    // Get subscribed topics and convert to game types
+    const topics = broadcastManager.getSubscriptions(ws);
+    const subscriptions = topics
+      .filter((topic) => topic.startsWith('game:'))
+      .map((topic) => {
+        const gameName = topic.slice(5); // Remove 'game:' prefix
+        // Find the matching GameType
+        const gameType = Object.values(GameType).find(
+          (gt) => typeof gt === 'number' && gameTypeToName(gt as GameType) === gameName
+        ) as GameType | undefined;
+        return gameType !== undefined ? { gameType, gameName } : null;
+      })
+      .filter((s): s is { gameType: GameType; gameName: string } => s !== null);
+    send(ws, {
+      type: 'subscriptions_list',
+      subscriptions,
+    }, traceId);
+    return;
   }
 
   // Optional: client-signed raw submission (bypass gateway signing)
@@ -716,6 +798,8 @@ wss.on('connection', async (ws: WebSocket, req) => {
       messageRateLimiter.removeSession(session.id);
       // AC-3.6: Remove session from presence tracking
       presenceManager.removeSession(ws);
+      // AC-6.3: Remove all game subscriptions
+      broadcastManager.unsubscribe(ws);
       connectionLimiter.unregisterConnection(clientIp, connectionId);
       trackConnection('disconnect', clientIp);
     });
@@ -776,6 +860,9 @@ const drainAndShutdown = async (label: string): Promise<void> => {
 
   // AC-3.6: Stop presence manager
   presenceManager.stop();
+
+  // AC-6.3: Stop broadcast manager
+  broadcastManager.stop();
 
   // Count initial state
   const initialSessions = sessionManager.getSessionCount();
