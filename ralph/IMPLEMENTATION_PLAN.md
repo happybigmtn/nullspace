@@ -452,11 +452,17 @@
     - Combined status states: connected, connecting, reconnecting, offline, failed, disconnected
     - Exponential backoff (1s→30s max) inherited from useWebSocket, network-aware to avoid wasteful retries during outages
     - Tests: 43 integration tests covering network drop scenarios, status derivation, exponential backoff, countdown timer, AC-8.3 compliance
-- [ ] Add read-only mode with banner messaging
+- [x] Add read-only mode with banner messaging
   - Specs: `specs/sprint-08-mobile-client.md` AC-8.4
   - Tests/backpressure:
     - Programmatic: mobile UI tests for offline state
   - Perceptual: None
+  - **Completed**: Added read-only mode infrastructure for limited connectivity:
+    - `useReadOnlyMode` hook (`mobile/src/hooks/useReadOnlyMode.ts`): Derives read-only state from `useWebSocketReconnect`, provides `isReadOnly`, `canSubmit`, `reason`, human-readable messages, transition tracking for animations, and reconnect actions
+    - `ReadOnlyBanner` component (`mobile/src/components/ui/ReadOnlyBanner.tsx`): Persistent banner with color-coded status indicators, pulse ring animation during reconnecting, shake animation on failure, retry/reconnect action buttons, accessibility (alert role, live region, labels)
+    - Read-only reasons: 'offline', 'reconnecting', 'failed', 'connecting' (null when connected)
+    - Short messages for banner: "Offline - Read Only", "Reconnecting...", "Connection Failed", "Connecting..."
+    - Tests: 78 unit tests (41 useReadOnlyMode + 37 ReadOnlyBanner) covering state derivation, message generation, transition tracking, action handlers, accessibility, animation states, and AC-8.4 compliance
 
 ## Sprint 09 - Production Readiness
 - [ ] Add load test harness for gateway and engine

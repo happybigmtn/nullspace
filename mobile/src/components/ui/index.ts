@@ -50,3 +50,6 @@ export type { StaggerContainerProps, StaggerListProps, StaggerDirection } from '
 export { AmbientParticles } from './AmbientParticles';
 // AC-8.1: Wallet connection status display
 export { WalletStatusDisplay } from './WalletStatusDisplay';
+// AC-8.4: Read-only mode banner
+export { ReadOnlyBanner } from './ReadOnlyBanner';
+export type { ReadOnlyBannerProps } from './ReadOnlyBanner';

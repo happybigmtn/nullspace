@@ -53,3 +53,10 @@ export type {
   ReconnectState,
   ReconnectActions,
 } from './useWebSocketReconnect';
+// Read-only mode (AC-8.4)
+export { useReadOnlyMode, READ_ONLY_MODE_CONSTANTS } from './useReadOnlyMode';
+export type {
+  ReadOnlyReason,
+  ReadOnlyModeState,
+  ReadOnlyModeActions,
+} from './useReadOnlyMode';
