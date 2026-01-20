@@ -1808,3 +1808,590 @@ impl EncodeSize for AuditLogState {
             + self.last_entry_id.encode_size()
     }
 }
+
+// ============================================================================
+// Responsible Gaming Types for AC-7.4: Daily/Weekly/Monthly Caps
+// ============================================================================
+
+/// Seconds per day (86400)
+pub const SECS_PER_DAY: u64 = 24 * 60 * 60;
+/// Seconds per week (604800)
+pub const SECS_PER_WEEK: u64 = 7 * SECS_PER_DAY;
+/// Seconds per month (30 days = 2592000)
+pub const SECS_PER_MONTH: u64 = 30 * SECS_PER_DAY;
+
+/// Default daily wagering cap (in chips)
+pub const DEFAULT_DAILY_WAGER_CAP: u64 = 100_000;
+/// Default weekly wagering cap (in chips)
+pub const DEFAULT_WEEKLY_WAGER_CAP: u64 = 500_000;
+/// Default monthly wagering cap (in chips)
+pub const DEFAULT_MONTHLY_WAGER_CAP: u64 = 1_500_000;
+/// Default daily loss cap (in chips)
+pub const DEFAULT_DAILY_LOSS_CAP: u64 = 50_000;
+/// Default weekly loss cap (in chips)
+pub const DEFAULT_WEEKLY_LOSS_CAP: u64 = 200_000;
+/// Default monthly loss cap (in chips)
+pub const DEFAULT_MONTHLY_LOSS_CAP: u64 = 500_000;
+/// Minimum cooldown period after self-exclusion ends (24 hours)
+pub const MIN_COOLDOWN_SECS: u64 = SECS_PER_DAY;
+
+/// System-wide responsible gaming configuration (default limits).
+/// These are the enforced limits unless a player has set their own stricter limits.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResponsibleGamingConfig {
+    /// Maximum amount a player can wager per day (0 = unlimited)
+    pub default_daily_wager_cap: u64,
+    /// Maximum amount a player can wager per week (0 = unlimited)
+    pub default_weekly_wager_cap: u64,
+    /// Maximum amount a player can wager per month (0 = unlimited)
+    pub default_monthly_wager_cap: u64,
+    /// Maximum net loss per day (0 = unlimited)
+    pub default_daily_loss_cap: u64,
+    /// Maximum net loss per week (0 = unlimited)
+    pub default_weekly_loss_cap: u64,
+    /// Maximum net loss per month (0 = unlimited)
+    pub default_monthly_loss_cap: u64,
+    /// Minimum self-exclusion period (seconds)
+    pub min_self_exclusion_period: u64,
+    /// Maximum self-exclusion period (seconds)
+    pub max_self_exclusion_period: u64,
+    /// Cooldown period after self-exclusion ends (seconds)
+    pub cooldown_after_exclusion: u64,
+    /// Whether limits are enforced (can be disabled for testing)
+    pub limits_enabled: bool,
+}
+
+impl Default for ResponsibleGamingConfig {
+    fn default() -> Self {
+        Self {
+            default_daily_wager_cap: DEFAULT_DAILY_WAGER_CAP,
+            default_weekly_wager_cap: DEFAULT_WEEKLY_WAGER_CAP,
+            default_monthly_wager_cap: DEFAULT_MONTHLY_WAGER_CAP,
+            default_daily_loss_cap: DEFAULT_DAILY_LOSS_CAP,
+            default_weekly_loss_cap: DEFAULT_WEEKLY_LOSS_CAP,
+            default_monthly_loss_cap: DEFAULT_MONTHLY_LOSS_CAP,
+            min_self_exclusion_period: SECS_PER_DAY,           // 1 day minimum
+            max_self_exclusion_period: 365 * SECS_PER_DAY,     // 1 year maximum
+            cooldown_after_exclusion: MIN_COOLDOWN_SECS,
+            limits_enabled: true,
+        }
+    }
+}
+
+impl Write for ResponsibleGamingConfig {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.default_daily_wager_cap.write(writer);
+        self.default_weekly_wager_cap.write(writer);
+        self.default_monthly_wager_cap.write(writer);
+        self.default_daily_loss_cap.write(writer);
+        self.default_weekly_loss_cap.write(writer);
+        self.default_monthly_loss_cap.write(writer);
+        self.min_self_exclusion_period.write(writer);
+        self.max_self_exclusion_period.write(writer);
+        self.cooldown_after_exclusion.write(writer);
+        self.limits_enabled.write(writer);
+    }
+}
+
+impl Read for ResponsibleGamingConfig {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            default_daily_wager_cap: u64::read(reader)?,
+            default_weekly_wager_cap: u64::read(reader)?,
+            default_monthly_wager_cap: u64::read(reader)?,
+            default_daily_loss_cap: u64::read(reader)?,
+            default_weekly_loss_cap: u64::read(reader)?,
+            default_monthly_loss_cap: u64::read(reader)?,
+            min_self_exclusion_period: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                SECS_PER_DAY
+            },
+            max_self_exclusion_period: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                365 * SECS_PER_DAY
+            },
+            cooldown_after_exclusion: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                MIN_COOLDOWN_SECS
+            },
+            limits_enabled: if reader.remaining() >= bool::SIZE {
+                bool::read(reader)?
+            } else {
+                true
+            },
+        })
+    }
+}
+
+impl EncodeSize for ResponsibleGamingConfig {
+    fn encode_size(&self) -> usize {
+        self.default_daily_wager_cap.encode_size()
+            + self.default_weekly_wager_cap.encode_size()
+            + self.default_monthly_wager_cap.encode_size()
+            + self.default_daily_loss_cap.encode_size()
+            + self.default_weekly_loss_cap.encode_size()
+            + self.default_monthly_loss_cap.encode_size()
+            + self.min_self_exclusion_period.encode_size()
+            + self.max_self_exclusion_period.encode_size()
+            + self.cooldown_after_exclusion.encode_size()
+            + self.limits_enabled.encode_size()
+    }
+}
+
+/// Per-player responsible gaming limits and tracking state.
+/// Tracks wagering/loss totals and enforces player-specific caps.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlayerGamingLimits {
+    // Player-specific caps (0 = use system default, player can only set LOWER than default)
+    /// Player's daily wager cap (0 = use system default)
+    pub daily_wager_cap: u64,
+    /// Player's weekly wager cap (0 = use system default)
+    pub weekly_wager_cap: u64,
+    /// Player's monthly wager cap (0 = use system default)
+    pub monthly_wager_cap: u64,
+    /// Player's daily loss cap (0 = use system default)
+    pub daily_loss_cap: u64,
+    /// Player's weekly loss cap (0 = use system default)
+    pub weekly_loss_cap: u64,
+    /// Player's monthly loss cap (0 = use system default)
+    pub monthly_loss_cap: u64,
+
+    // Rolling period tracking
+    /// Current day start timestamp (UTC midnight)
+    pub day_start_ts: u64,
+    /// Current week start timestamp (UTC Monday midnight)
+    pub week_start_ts: u64,
+    /// Current month start timestamp (UTC 1st midnight)
+    pub month_start_ts: u64,
+
+    // Wagering totals for current periods
+    /// Total wagered in current day
+    pub daily_wagered: u64,
+    /// Total wagered in current week
+    pub weekly_wagered: u64,
+    /// Total wagered in current month
+    pub monthly_wagered: u64,
+
+    // Net loss totals for current periods (positive = loss, negative = profit)
+    /// Net loss in current day
+    pub daily_net_loss: i64,
+    /// Net loss in current week
+    pub weekly_net_loss: i64,
+    /// Net loss in current month
+    pub monthly_net_loss: i64,
+
+    // Self-exclusion
+    /// Self-exclusion end timestamp (0 = not excluded)
+    pub self_exclusion_until: u64,
+    /// Cooldown end timestamp after exclusion (0 = no cooldown)
+    pub cooldown_until: u64,
+
+    /// Last activity timestamp
+    pub last_activity_ts: u64,
+}
+
+impl Default for PlayerGamingLimits {
+    fn default() -> Self {
+        Self {
+            daily_wager_cap: 0,
+            weekly_wager_cap: 0,
+            monthly_wager_cap: 0,
+            daily_loss_cap: 0,
+            weekly_loss_cap: 0,
+            monthly_loss_cap: 0,
+            day_start_ts: 0,
+            week_start_ts: 0,
+            month_start_ts: 0,
+            daily_wagered: 0,
+            weekly_wagered: 0,
+            monthly_wagered: 0,
+            daily_net_loss: 0,
+            weekly_net_loss: 0,
+            monthly_net_loss: 0,
+            self_exclusion_until: 0,
+            cooldown_until: 0,
+            last_activity_ts: 0,
+        }
+    }
+}
+
+impl PlayerGamingLimits {
+    /// Get the effective daily wager cap (player's cap or system default, whichever is lower)
+    pub fn effective_daily_wager_cap(&self, config: &ResponsibleGamingConfig) -> u64 {
+        if self.daily_wager_cap == 0 {
+            config.default_daily_wager_cap
+        } else if config.default_daily_wager_cap == 0 {
+            self.daily_wager_cap
+        } else {
+            self.daily_wager_cap.min(config.default_daily_wager_cap)
+        }
+    }
+
+    /// Get the effective weekly wager cap
+    pub fn effective_weekly_wager_cap(&self, config: &ResponsibleGamingConfig) -> u64 {
+        if self.weekly_wager_cap == 0 {
+            config.default_weekly_wager_cap
+        } else if config.default_weekly_wager_cap == 0 {
+            self.weekly_wager_cap
+        } else {
+            self.weekly_wager_cap.min(config.default_weekly_wager_cap)
+        }
+    }
+
+    /// Get the effective monthly wager cap
+    pub fn effective_monthly_wager_cap(&self, config: &ResponsibleGamingConfig) -> u64 {
+        if self.monthly_wager_cap == 0 {
+            config.default_monthly_wager_cap
+        } else if config.default_monthly_wager_cap == 0 {
+            self.monthly_wager_cap
+        } else {
+            self.monthly_wager_cap.min(config.default_monthly_wager_cap)
+        }
+    }
+
+    /// Get the effective daily loss cap
+    pub fn effective_daily_loss_cap(&self, config: &ResponsibleGamingConfig) -> u64 {
+        if self.daily_loss_cap == 0 {
+            config.default_daily_loss_cap
+        } else if config.default_daily_loss_cap == 0 {
+            self.daily_loss_cap
+        } else {
+            self.daily_loss_cap.min(config.default_daily_loss_cap)
+        }
+    }
+
+    /// Get the effective weekly loss cap
+    pub fn effective_weekly_loss_cap(&self, config: &ResponsibleGamingConfig) -> u64 {
+        if self.weekly_loss_cap == 0 {
+            config.default_weekly_loss_cap
+        } else if config.default_weekly_loss_cap == 0 {
+            self.weekly_loss_cap
+        } else {
+            self.weekly_loss_cap.min(config.default_weekly_loss_cap)
+        }
+    }
+
+    /// Get the effective monthly loss cap
+    pub fn effective_monthly_loss_cap(&self, config: &ResponsibleGamingConfig) -> u64 {
+        if self.monthly_loss_cap == 0 {
+            config.default_monthly_loss_cap
+        } else if config.default_monthly_loss_cap == 0 {
+            self.monthly_loss_cap
+        } else {
+            self.monthly_loss_cap.min(config.default_monthly_loss_cap)
+        }
+    }
+
+    /// Reset period totals if the period has rolled over.
+    /// Call this before checking limits.
+    pub fn maybe_reset_periods(&mut self, now_ts: u64) {
+        // Reset daily totals if a new day started
+        let day_boundary = self.day_start_ts.saturating_add(SECS_PER_DAY);
+        if now_ts >= day_boundary {
+            self.daily_wagered = 0;
+            self.daily_net_loss = 0;
+            // Align to midnight (floor to day boundary)
+            self.day_start_ts = (now_ts / SECS_PER_DAY) * SECS_PER_DAY;
+        }
+
+        // Reset weekly totals if a new week started
+        let week_boundary = self.week_start_ts.saturating_add(SECS_PER_WEEK);
+        if now_ts >= week_boundary {
+            self.weekly_wagered = 0;
+            self.weekly_net_loss = 0;
+            // Align to week boundary
+            self.week_start_ts = (now_ts / SECS_PER_WEEK) * SECS_PER_WEEK;
+        }
+
+        // Reset monthly totals if a new month started
+        let month_boundary = self.month_start_ts.saturating_add(SECS_PER_MONTH);
+        if now_ts >= month_boundary {
+            self.monthly_wagered = 0;
+            self.monthly_net_loss = 0;
+            // Align to month boundary (30-day periods)
+            self.month_start_ts = (now_ts / SECS_PER_MONTH) * SECS_PER_MONTH;
+        }
+    }
+
+    /// Check if the player is currently self-excluded
+    pub fn is_self_excluded(&self, now_ts: u64) -> bool {
+        self.self_exclusion_until > 0 && now_ts < self.self_exclusion_until
+    }
+
+    /// Check if the player is in cooldown after self-exclusion
+    pub fn is_in_cooldown(&self, now_ts: u64) -> bool {
+        self.cooldown_until > 0 && now_ts < self.cooldown_until
+    }
+
+    /// Check responsible gaming limits for a proposed bet.
+    /// Returns Ok(()) if allowed, Err with specific error if rejected.
+    pub fn check_limits(
+        &self,
+        config: &ResponsibleGamingConfig,
+        bet_amount: u64,
+        now_ts: u64,
+    ) -> Result<(), ResponsibleGamingError> {
+        // Check if limits are enabled
+        if !config.limits_enabled {
+            return Ok(());
+        }
+
+        // Check self-exclusion
+        if self.is_self_excluded(now_ts) {
+            return Err(ResponsibleGamingError::SelfExcluded {
+                until_ts: self.self_exclusion_until,
+            });
+        }
+
+        // Check cooldown
+        if self.is_in_cooldown(now_ts) {
+            return Err(ResponsibleGamingError::InCooldown {
+                until_ts: self.cooldown_until,
+            });
+        }
+
+        // Check daily wager cap
+        let daily_cap = self.effective_daily_wager_cap(config);
+        if daily_cap > 0 {
+            let new_daily = self.daily_wagered.saturating_add(bet_amount);
+            if new_daily > daily_cap {
+                return Err(ResponsibleGamingError::DailyWagerCapExceeded {
+                    current: self.daily_wagered,
+                    cap: daily_cap,
+                    bet_amount,
+                });
+            }
+        }
+
+        // Check weekly wager cap
+        let weekly_cap = self.effective_weekly_wager_cap(config);
+        if weekly_cap > 0 {
+            let new_weekly = self.weekly_wagered.saturating_add(bet_amount);
+            if new_weekly > weekly_cap {
+                return Err(ResponsibleGamingError::WeeklyWagerCapExceeded {
+                    current: self.weekly_wagered,
+                    cap: weekly_cap,
+                    bet_amount,
+                });
+            }
+        }
+
+        // Check monthly wager cap
+        let monthly_cap = self.effective_monthly_wager_cap(config);
+        if monthly_cap > 0 {
+            let new_monthly = self.monthly_wagered.saturating_add(bet_amount);
+            if new_monthly > monthly_cap {
+                return Err(ResponsibleGamingError::MonthlyWagerCapExceeded {
+                    current: self.monthly_wagered,
+                    cap: monthly_cap,
+                    bet_amount,
+                });
+            }
+        }
+
+        // Note: Loss caps are checked at settlement time, not bet time,
+        // since we don't know the outcome yet. However, if the player is
+        // already over their loss cap, we reject new bets.
+        let daily_loss_cap = self.effective_daily_loss_cap(config);
+        if daily_loss_cap > 0 && self.daily_net_loss > 0 {
+            if self.daily_net_loss as u64 >= daily_loss_cap {
+                return Err(ResponsibleGamingError::DailyLossCapReached {
+                    current_loss: self.daily_net_loss,
+                    cap: daily_loss_cap,
+                });
+            }
+        }
+
+        let weekly_loss_cap = self.effective_weekly_loss_cap(config);
+        if weekly_loss_cap > 0 && self.weekly_net_loss > 0 {
+            if self.weekly_net_loss as u64 >= weekly_loss_cap {
+                return Err(ResponsibleGamingError::WeeklyLossCapReached {
+                    current_loss: self.weekly_net_loss,
+                    cap: weekly_loss_cap,
+                });
+            }
+        }
+
+        let monthly_loss_cap = self.effective_monthly_loss_cap(config);
+        if monthly_loss_cap > 0 && self.monthly_net_loss > 0 {
+            if self.monthly_net_loss as u64 >= monthly_loss_cap {
+                return Err(ResponsibleGamingError::MonthlyLossCapReached {
+                    current_loss: self.monthly_net_loss,
+                    cap: monthly_loss_cap,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Record a bet being placed (wager tracking)
+    pub fn record_wager(&mut self, amount: u64, now_ts: u64) {
+        self.maybe_reset_periods(now_ts);
+        self.daily_wagered = self.daily_wagered.saturating_add(amount);
+        self.weekly_wagered = self.weekly_wagered.saturating_add(amount);
+        self.monthly_wagered = self.monthly_wagered.saturating_add(amount);
+        self.last_activity_ts = now_ts;
+    }
+
+    /// Record bet settlement result (loss tracking).
+    /// `net_result` is positive for player win, negative for player loss.
+    pub fn record_settlement(&mut self, net_result: i64, now_ts: u64) {
+        self.maybe_reset_periods(now_ts);
+        // net_loss is positive when player loses, so we subtract net_result
+        self.daily_net_loss = self.daily_net_loss.saturating_sub(net_result);
+        self.weekly_net_loss = self.weekly_net_loss.saturating_sub(net_result);
+        self.monthly_net_loss = self.monthly_net_loss.saturating_sub(net_result);
+        self.last_activity_ts = now_ts;
+    }
+
+    /// Set self-exclusion period
+    pub fn set_self_exclusion(&mut self, duration_secs: u64, now_ts: u64, config: &ResponsibleGamingConfig) {
+        let clamped = duration_secs
+            .max(config.min_self_exclusion_period)
+            .min(config.max_self_exclusion_period);
+        self.self_exclusion_until = now_ts.saturating_add(clamped);
+        self.cooldown_until = self.self_exclusion_until.saturating_add(config.cooldown_after_exclusion);
+    }
+
+    /// Calculate remaining daily wager allowance
+    pub fn remaining_daily_wager(&self, config: &ResponsibleGamingConfig) -> u64 {
+        let cap = self.effective_daily_wager_cap(config);
+        if cap == 0 {
+            u64::MAX
+        } else {
+            cap.saturating_sub(self.daily_wagered)
+        }
+    }
+
+    /// Calculate remaining weekly wager allowance
+    pub fn remaining_weekly_wager(&self, config: &ResponsibleGamingConfig) -> u64 {
+        let cap = self.effective_weekly_wager_cap(config);
+        if cap == 0 {
+            u64::MAX
+        } else {
+            cap.saturating_sub(self.weekly_wagered)
+        }
+    }
+
+    /// Calculate remaining monthly wager allowance
+    pub fn remaining_monthly_wager(&self, config: &ResponsibleGamingConfig) -> u64 {
+        let cap = self.effective_monthly_wager_cap(config);
+        if cap == 0 {
+            u64::MAX
+        } else {
+            cap.saturating_sub(self.monthly_wagered)
+        }
+    }
+}
+
+/// Errors returned when responsible gaming limit checks fail
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ResponsibleGamingError {
+    /// Player is self-excluded
+    SelfExcluded { until_ts: u64 },
+    /// Player is in cooldown after self-exclusion ended
+    InCooldown { until_ts: u64 },
+    /// Daily wager cap would be exceeded
+    DailyWagerCapExceeded { current: u64, cap: u64, bet_amount: u64 },
+    /// Weekly wager cap would be exceeded
+    WeeklyWagerCapExceeded { current: u64, cap: u64, bet_amount: u64 },
+    /// Monthly wager cap would be exceeded
+    MonthlyWagerCapExceeded { current: u64, cap: u64, bet_amount: u64 },
+    /// Daily loss cap has been reached
+    DailyLossCapReached { current_loss: i64, cap: u64 },
+    /// Weekly loss cap has been reached
+    WeeklyLossCapReached { current_loss: i64, cap: u64 },
+    /// Monthly loss cap has been reached
+    MonthlyLossCapReached { current_loss: i64, cap: u64 },
+}
+
+impl Write for PlayerGamingLimits {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.daily_wager_cap.write(writer);
+        self.weekly_wager_cap.write(writer);
+        self.monthly_wager_cap.write(writer);
+        self.daily_loss_cap.write(writer);
+        self.weekly_loss_cap.write(writer);
+        self.monthly_loss_cap.write(writer);
+        self.day_start_ts.write(writer);
+        self.week_start_ts.write(writer);
+        self.month_start_ts.write(writer);
+        self.daily_wagered.write(writer);
+        self.weekly_wagered.write(writer);
+        self.monthly_wagered.write(writer);
+        self.daily_net_loss.write(writer);
+        self.weekly_net_loss.write(writer);
+        self.monthly_net_loss.write(writer);
+        self.self_exclusion_until.write(writer);
+        self.cooldown_until.write(writer);
+        self.last_activity_ts.write(writer);
+    }
+}
+
+impl Read for PlayerGamingLimits {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            daily_wager_cap: u64::read(reader)?,
+            weekly_wager_cap: u64::read(reader)?,
+            monthly_wager_cap: u64::read(reader)?,
+            daily_loss_cap: u64::read(reader)?,
+            weekly_loss_cap: u64::read(reader)?,
+            monthly_loss_cap: u64::read(reader)?,
+            day_start_ts: u64::read(reader)?,
+            week_start_ts: u64::read(reader)?,
+            month_start_ts: u64::read(reader)?,
+            daily_wagered: u64::read(reader)?,
+            weekly_wagered: u64::read(reader)?,
+            monthly_wagered: u64::read(reader)?,
+            daily_net_loss: i64::read(reader)?,
+            weekly_net_loss: i64::read(reader)?,
+            monthly_net_loss: i64::read(reader)?,
+            self_exclusion_until: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            cooldown_until: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            last_activity_ts: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+        })
+    }
+}
+
+impl EncodeSize for PlayerGamingLimits {
+    fn encode_size(&self) -> usize {
+        self.daily_wager_cap.encode_size()
+            + self.weekly_wager_cap.encode_size()
+            + self.monthly_wager_cap.encode_size()
+            + self.daily_loss_cap.encode_size()
+            + self.weekly_loss_cap.encode_size()
+            + self.monthly_loss_cap.encode_size()
+            + self.day_start_ts.encode_size()
+            + self.week_start_ts.encode_size()
+            + self.month_start_ts.encode_size()
+            + self.daily_wagered.encode_size()
+            + self.weekly_wagered.encode_size()
+            + self.monthly_wagered.encode_size()
+            + self.daily_net_loss.encode_size()
+            + self.weekly_net_loss.encode_size()
+            + self.monthly_net_loss.encode_size()
+            + self.self_exclusion_until.encode_size()
+            + self.cooldown_until.encode_size()
+            + self.last_activity_ts.encode_size()
+    }
+}

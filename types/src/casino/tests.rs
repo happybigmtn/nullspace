@@ -358,3 +358,564 @@ fn test_player_exposure_roundtrip() {
 
     assert_eq!(exposure, decoded);
 }
+
+// ============================================================================
+// Responsible Gaming Tests - AC-7.4: Daily/Weekly/Monthly Caps
+// ============================================================================
+
+#[test]
+fn test_responsible_gaming_config_default() {
+    let config = ResponsibleGamingConfig::default();
+    assert_eq!(config.default_daily_wager_cap, DEFAULT_DAILY_WAGER_CAP);
+    assert_eq!(config.default_weekly_wager_cap, DEFAULT_WEEKLY_WAGER_CAP);
+    assert_eq!(config.default_monthly_wager_cap, DEFAULT_MONTHLY_WAGER_CAP);
+    assert_eq!(config.default_daily_loss_cap, DEFAULT_DAILY_LOSS_CAP);
+    assert_eq!(config.default_weekly_loss_cap, DEFAULT_WEEKLY_LOSS_CAP);
+    assert_eq!(config.default_monthly_loss_cap, DEFAULT_MONTHLY_LOSS_CAP);
+    assert_eq!(config.min_self_exclusion_period, SECS_PER_DAY);
+    assert_eq!(config.max_self_exclusion_period, 365 * SECS_PER_DAY);
+    assert_eq!(config.cooldown_after_exclusion, MIN_COOLDOWN_SECS);
+    assert!(config.limits_enabled);
+}
+
+#[test]
+fn test_responsible_gaming_config_roundtrip() {
+    let config = ResponsibleGamingConfig {
+        default_daily_wager_cap: 50_000,
+        default_weekly_wager_cap: 200_000,
+        default_monthly_wager_cap: 600_000,
+        default_daily_loss_cap: 25_000,
+        default_weekly_loss_cap: 100_000,
+        default_monthly_loss_cap: 250_000,
+        min_self_exclusion_period: 12 * 60 * 60,
+        max_self_exclusion_period: 180 * SECS_PER_DAY,
+        cooldown_after_exclusion: 48 * 60 * 60,
+        limits_enabled: true,
+    };
+
+    let encoded = config.encode();
+    let decoded = ResponsibleGamingConfig::read(&mut &encoded[..]).unwrap();
+    assert_eq!(config, decoded);
+}
+
+#[test]
+fn test_player_gaming_limits_default() {
+    let limits = PlayerGamingLimits::default();
+    assert_eq!(limits.daily_wager_cap, 0);
+    assert_eq!(limits.weekly_wager_cap, 0);
+    assert_eq!(limits.monthly_wager_cap, 0);
+    assert_eq!(limits.daily_loss_cap, 0);
+    assert_eq!(limits.weekly_loss_cap, 0);
+    assert_eq!(limits.monthly_loss_cap, 0);
+    assert_eq!(limits.daily_wagered, 0);
+    assert_eq!(limits.weekly_wagered, 0);
+    assert_eq!(limits.monthly_wagered, 0);
+    assert_eq!(limits.daily_net_loss, 0);
+    assert_eq!(limits.weekly_net_loss, 0);
+    assert_eq!(limits.monthly_net_loss, 0);
+    assert_eq!(limits.self_exclusion_until, 0);
+    assert_eq!(limits.cooldown_until, 0);
+}
+
+#[test]
+fn test_player_gaming_limits_roundtrip() {
+    let limits = PlayerGamingLimits {
+        daily_wager_cap: 10_000,
+        weekly_wager_cap: 50_000,
+        monthly_wager_cap: 150_000,
+        daily_loss_cap: 5_000,
+        weekly_loss_cap: 20_000,
+        monthly_loss_cap: 50_000,
+        day_start_ts: 1700000000,
+        week_start_ts: 1699900000,
+        month_start_ts: 1699000000,
+        daily_wagered: 5_000,
+        weekly_wagered: 25_000,
+        monthly_wagered: 75_000,
+        daily_net_loss: 2_000,
+        weekly_net_loss: 10_000,
+        monthly_net_loss: 25_000,
+        self_exclusion_until: 1701000000,
+        cooldown_until: 1701086400,
+        last_activity_ts: 1700050000,
+    };
+
+    let encoded = limits.encode();
+    let decoded = PlayerGamingLimits::read(&mut &encoded[..]).unwrap();
+    assert_eq!(limits, decoded);
+}
+
+#[test]
+fn test_effective_caps_use_system_default_when_player_unset() {
+    let config = ResponsibleGamingConfig::default();
+    let limits = PlayerGamingLimits::default();
+
+    // Player caps are 0, so system defaults should be used
+    assert_eq!(limits.effective_daily_wager_cap(&config), DEFAULT_DAILY_WAGER_CAP);
+    assert_eq!(limits.effective_weekly_wager_cap(&config), DEFAULT_WEEKLY_WAGER_CAP);
+    assert_eq!(limits.effective_monthly_wager_cap(&config), DEFAULT_MONTHLY_WAGER_CAP);
+    assert_eq!(limits.effective_daily_loss_cap(&config), DEFAULT_DAILY_LOSS_CAP);
+    assert_eq!(limits.effective_weekly_loss_cap(&config), DEFAULT_WEEKLY_LOSS_CAP);
+    assert_eq!(limits.effective_monthly_loss_cap(&config), DEFAULT_MONTHLY_LOSS_CAP);
+}
+
+#[test]
+fn test_effective_caps_use_player_cap_when_stricter() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+
+    // Set player caps lower than system defaults
+    limits.daily_wager_cap = 10_000;
+    limits.weekly_wager_cap = 40_000;
+    limits.monthly_wager_cap = 100_000;
+
+    assert_eq!(limits.effective_daily_wager_cap(&config), 10_000);
+    assert_eq!(limits.effective_weekly_wager_cap(&config), 40_000);
+    assert_eq!(limits.effective_monthly_wager_cap(&config), 100_000);
+}
+
+#[test]
+fn test_effective_caps_use_system_cap_when_stricter() {
+    let mut config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+
+    // Set system cap very low
+    config.default_daily_wager_cap = 5_000;
+    // Set player cap higher (won't be used)
+    limits.daily_wager_cap = 20_000;
+
+    // System cap is stricter, so it should be used
+    assert_eq!(limits.effective_daily_wager_cap(&config), 5_000);
+}
+
+#[test]
+fn test_period_reset_daily() {
+    let mut limits = PlayerGamingLimits::default();
+    let base_ts = SECS_PER_DAY * 100; // Some arbitrary day
+
+    // Set initial values
+    limits.day_start_ts = base_ts;
+    limits.daily_wagered = 50_000;
+    limits.daily_net_loss = 10_000;
+
+    // Same day - no reset
+    limits.maybe_reset_periods(base_ts + 1000);
+    assert_eq!(limits.daily_wagered, 50_000);
+    assert_eq!(limits.daily_net_loss, 10_000);
+
+    // Next day - should reset
+    limits.maybe_reset_periods(base_ts + SECS_PER_DAY + 1);
+    assert_eq!(limits.daily_wagered, 0);
+    assert_eq!(limits.daily_net_loss, 0);
+    assert_eq!(limits.day_start_ts, base_ts + SECS_PER_DAY);
+}
+
+#[test]
+fn test_period_reset_weekly() {
+    let mut limits = PlayerGamingLimits::default();
+    let base_ts = SECS_PER_WEEK * 10; // Some arbitrary week
+
+    limits.week_start_ts = base_ts;
+    limits.weekly_wagered = 200_000;
+    limits.weekly_net_loss = 50_000;
+
+    // Same week - no reset
+    limits.maybe_reset_periods(base_ts + SECS_PER_DAY);
+    assert_eq!(limits.weekly_wagered, 200_000);
+
+    // Next week - should reset
+    limits.maybe_reset_periods(base_ts + SECS_PER_WEEK + 1);
+    assert_eq!(limits.weekly_wagered, 0);
+    assert_eq!(limits.weekly_net_loss, 0);
+}
+
+#[test]
+fn test_period_reset_monthly() {
+    let mut limits = PlayerGamingLimits::default();
+    let base_ts = SECS_PER_MONTH * 5; // Some arbitrary month
+
+    limits.month_start_ts = base_ts;
+    limits.monthly_wagered = 500_000;
+    limits.monthly_net_loss = 100_000;
+
+    // Same month - no reset
+    limits.maybe_reset_periods(base_ts + SECS_PER_WEEK);
+    assert_eq!(limits.monthly_wagered, 500_000);
+
+    // Next month - should reset
+    limits.maybe_reset_periods(base_ts + SECS_PER_MONTH + 1);
+    assert_eq!(limits.monthly_wagered, 0);
+    assert_eq!(limits.monthly_net_loss, 0);
+}
+
+#[test]
+fn test_check_limits_allows_bet_within_caps() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    limits.day_start_ts = now_ts;
+    limits.week_start_ts = now_ts;
+    limits.month_start_ts = now_ts;
+
+    // Bet well under all caps
+    let result = limits.check_limits(&config, 1_000, now_ts);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_check_limits_rejects_daily_wager_cap_exceeded() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    limits.day_start_ts = now_ts;
+    limits.week_start_ts = now_ts;
+    limits.month_start_ts = now_ts;
+    limits.daily_wagered = DEFAULT_DAILY_WAGER_CAP - 500;
+
+    // This bet would exceed daily cap
+    let result = limits.check_limits(&config, 1_000, now_ts);
+    assert!(matches!(
+        result,
+        Err(ResponsibleGamingError::DailyWagerCapExceeded { .. })
+    ));
+}
+
+#[test]
+fn test_check_limits_rejects_weekly_wager_cap_exceeded() {
+    let mut config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    // Make daily cap unlimited so we hit weekly first
+    config.default_daily_wager_cap = 0;
+
+    limits.day_start_ts = now_ts;
+    limits.week_start_ts = now_ts;
+    limits.month_start_ts = now_ts;
+    limits.weekly_wagered = DEFAULT_WEEKLY_WAGER_CAP - 500;
+
+    let result = limits.check_limits(&config, 1_000, now_ts);
+    assert!(matches!(
+        result,
+        Err(ResponsibleGamingError::WeeklyWagerCapExceeded { .. })
+    ));
+}
+
+#[test]
+fn test_check_limits_rejects_monthly_wager_cap_exceeded() {
+    let mut config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    // Make daily and weekly caps unlimited
+    config.default_daily_wager_cap = 0;
+    config.default_weekly_wager_cap = 0;
+
+    limits.day_start_ts = now_ts;
+    limits.week_start_ts = now_ts;
+    limits.month_start_ts = now_ts;
+    limits.monthly_wagered = DEFAULT_MONTHLY_WAGER_CAP - 500;
+
+    let result = limits.check_limits(&config, 1_000, now_ts);
+    assert!(matches!(
+        result,
+        Err(ResponsibleGamingError::MonthlyWagerCapExceeded { .. })
+    ));
+}
+
+#[test]
+fn test_check_limits_rejects_daily_loss_cap_reached() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    limits.day_start_ts = now_ts;
+    limits.week_start_ts = now_ts;
+    limits.month_start_ts = now_ts;
+    // Loss cap already reached
+    limits.daily_net_loss = DEFAULT_DAILY_LOSS_CAP as i64;
+
+    let result = limits.check_limits(&config, 100, now_ts);
+    assert!(matches!(
+        result,
+        Err(ResponsibleGamingError::DailyLossCapReached { .. })
+    ));
+}
+
+#[test]
+fn test_check_limits_allows_bet_when_in_profit() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    limits.day_start_ts = now_ts;
+    limits.week_start_ts = now_ts;
+    limits.month_start_ts = now_ts;
+    // Player is in profit (negative net_loss)
+    limits.daily_net_loss = -10_000;
+
+    let result = limits.check_limits(&config, 1_000, now_ts);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_check_limits_rejects_self_excluded() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    limits.self_exclusion_until = now_ts + SECS_PER_DAY;
+
+    let result = limits.check_limits(&config, 100, now_ts);
+    assert!(matches!(
+        result,
+        Err(ResponsibleGamingError::SelfExcluded { until_ts }) if until_ts == now_ts + SECS_PER_DAY
+    ));
+}
+
+#[test]
+fn test_check_limits_rejects_in_cooldown() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    // Self-exclusion ended, but cooldown is active
+    limits.self_exclusion_until = now_ts - 1000;
+    limits.cooldown_until = now_ts + SECS_PER_DAY;
+
+    let result = limits.check_limits(&config, 100, now_ts);
+    assert!(matches!(
+        result,
+        Err(ResponsibleGamingError::InCooldown { until_ts }) if until_ts == now_ts + SECS_PER_DAY
+    ));
+}
+
+#[test]
+fn test_check_limits_disabled_allows_all() {
+    let mut config = ResponsibleGamingConfig::default();
+    config.limits_enabled = false;
+
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    // Even with self-exclusion set, disabled limits allow betting
+    limits.self_exclusion_until = now_ts + SECS_PER_DAY;
+    limits.daily_wagered = u64::MAX - 1;
+
+    let result = limits.check_limits(&config, 100, now_ts);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_record_wager_updates_all_periods() {
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    limits.day_start_ts = now_ts;
+    limits.week_start_ts = now_ts;
+    limits.month_start_ts = now_ts;
+
+    limits.record_wager(1_000, now_ts);
+
+    assert_eq!(limits.daily_wagered, 1_000);
+    assert_eq!(limits.weekly_wagered, 1_000);
+    assert_eq!(limits.monthly_wagered, 1_000);
+    assert_eq!(limits.last_activity_ts, now_ts);
+
+    // Record another wager
+    limits.record_wager(500, now_ts + 100);
+
+    assert_eq!(limits.daily_wagered, 1_500);
+    assert_eq!(limits.weekly_wagered, 1_500);
+    assert_eq!(limits.monthly_wagered, 1_500);
+}
+
+#[test]
+fn test_record_settlement_loss() {
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    limits.day_start_ts = now_ts;
+    limits.week_start_ts = now_ts;
+    limits.month_start_ts = now_ts;
+
+    // Player loses 1000 (negative net_result)
+    limits.record_settlement(-1_000, now_ts);
+
+    // net_loss is positive when player loses
+    assert_eq!(limits.daily_net_loss, 1_000);
+    assert_eq!(limits.weekly_net_loss, 1_000);
+    assert_eq!(limits.monthly_net_loss, 1_000);
+}
+
+#[test]
+fn test_record_settlement_win() {
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    limits.day_start_ts = now_ts;
+    limits.week_start_ts = now_ts;
+    limits.month_start_ts = now_ts;
+
+    // Player wins 1000 (positive net_result)
+    limits.record_settlement(1_000, now_ts);
+
+    // net_loss is negative when player profits
+    assert_eq!(limits.daily_net_loss, -1_000);
+    assert_eq!(limits.weekly_net_loss, -1_000);
+    assert_eq!(limits.monthly_net_loss, -1_000);
+}
+
+#[test]
+fn test_set_self_exclusion() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    limits.set_self_exclusion(7 * SECS_PER_DAY, now_ts, &config);
+
+    assert_eq!(limits.self_exclusion_until, now_ts + 7 * SECS_PER_DAY);
+    assert_eq!(limits.cooldown_until, now_ts + 7 * SECS_PER_DAY + MIN_COOLDOWN_SECS);
+}
+
+#[test]
+fn test_set_self_exclusion_clamps_to_min() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    // Try to set exclusion shorter than minimum
+    limits.set_self_exclusion(1000, now_ts, &config);
+
+    // Should be clamped to minimum (1 day)
+    assert_eq!(limits.self_exclusion_until, now_ts + SECS_PER_DAY);
+}
+
+#[test]
+fn test_set_self_exclusion_clamps_to_max() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = SECS_PER_DAY * 100;
+
+    // Try to set exclusion longer than maximum
+    limits.set_self_exclusion(500 * SECS_PER_DAY, now_ts, &config);
+
+    // Should be clamped to maximum (365 days)
+    assert_eq!(limits.self_exclusion_until, now_ts + 365 * SECS_PER_DAY);
+}
+
+#[test]
+fn test_remaining_wager_allowance() {
+    let config = ResponsibleGamingConfig::default();
+    let mut limits = PlayerGamingLimits::default();
+
+    limits.daily_wagered = 30_000;
+    limits.weekly_wagered = 100_000;
+    limits.monthly_wagered = 500_000;
+
+    assert_eq!(
+        limits.remaining_daily_wager(&config),
+        DEFAULT_DAILY_WAGER_CAP - 30_000
+    );
+    assert_eq!(
+        limits.remaining_weekly_wager(&config),
+        DEFAULT_WEEKLY_WAGER_CAP - 100_000
+    );
+    assert_eq!(
+        limits.remaining_monthly_wager(&config),
+        DEFAULT_MONTHLY_WAGER_CAP - 500_000
+    );
+}
+
+#[test]
+fn test_remaining_wager_unlimited_when_cap_zero() {
+    let mut config = ResponsibleGamingConfig::default();
+    config.default_daily_wager_cap = 0;
+
+    let limits = PlayerGamingLimits::default();
+
+    assert_eq!(limits.remaining_daily_wager(&config), u64::MAX);
+}
+
+#[test]
+fn test_is_self_excluded() {
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = 1000;
+
+    // Not excluded
+    assert!(!limits.is_self_excluded(now_ts));
+
+    // Set exclusion in the future
+    limits.self_exclusion_until = now_ts + 100;
+    assert!(limits.is_self_excluded(now_ts));
+
+    // Exclusion expired
+    limits.self_exclusion_until = now_ts - 1;
+    assert!(!limits.is_self_excluded(now_ts));
+}
+
+#[test]
+fn test_is_in_cooldown() {
+    let mut limits = PlayerGamingLimits::default();
+    let now_ts = 1000;
+
+    // Not in cooldown
+    assert!(!limits.is_in_cooldown(now_ts));
+
+    // Set cooldown in the future
+    limits.cooldown_until = now_ts + 100;
+    assert!(limits.is_in_cooldown(now_ts));
+
+    // Cooldown expired
+    limits.cooldown_until = now_ts - 1;
+    assert!(!limits.is_in_cooldown(now_ts));
+}
+
+#[test]
+fn test_responsible_gaming_error_variants() {
+    // Ensure all error variants can be created and compared
+    let errors = vec![
+        ResponsibleGamingError::SelfExcluded { until_ts: 100 },
+        ResponsibleGamingError::InCooldown { until_ts: 200 },
+        ResponsibleGamingError::DailyWagerCapExceeded {
+            current: 90_000,
+            cap: 100_000,
+            bet_amount: 20_000,
+        },
+        ResponsibleGamingError::WeeklyWagerCapExceeded {
+            current: 450_000,
+            cap: 500_000,
+            bet_amount: 100_000,
+        },
+        ResponsibleGamingError::MonthlyWagerCapExceeded {
+            current: 1_400_000,
+            cap: 1_500_000,
+            bet_amount: 200_000,
+        },
+        ResponsibleGamingError::DailyLossCapReached {
+            current_loss: 50_000,
+            cap: 50_000,
+        },
+        ResponsibleGamingError::WeeklyLossCapReached {
+            current_loss: 200_000,
+            cap: 200_000,
+        },
+        ResponsibleGamingError::MonthlyLossCapReached {
+            current_loss: 500_000,
+            cap: 500_000,
+        },
+    ];
+
+    // All variants should be distinct
+    for (i, e1) in errors.iter().enumerate() {
+        for (j, e2) in errors.iter().enumerate() {
+            if i == j {
+                assert_eq!(e1, e2);
+            } else {
+                assert_ne!(e1, e2);
+            }
+        }
+    }
+}

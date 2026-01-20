@@ -148,6 +148,10 @@ mod tags {
         // Audit Log (36-37)
         pub const AUDIT_LOG_STATE: u8 = 36;
         pub const AUDIT_LOG_ENTRY: u8 = 37;
+
+        // Responsible Gaming (38-39)
+        pub const RESPONSIBLE_GAMING_CONFIG: u8 = 38;
+        pub const PLAYER_GAMING_LIMITS: u8 = 39;
     }
 
     pub mod value {
@@ -204,6 +208,10 @@ mod tags {
         // Audit Log (36-37)
         pub const AUDIT_LOG_STATE: u8 = 36;
         pub const AUDIT_LOG_ENTRY: u8 = 37;
+
+        // Responsible Gaming (38-39)
+        pub const RESPONSIBLE_GAMING_CONFIG: u8 = 38;
+        pub const PLAYER_GAMING_LIMITS: u8 = 39;
     }
 
     pub mod event {
@@ -1596,6 +1604,10 @@ pub enum Key {
     // Audit Log (Tags 36-37)
     AuditLogState,
     AuditLogEntry(u64),
+
+    // Responsible Gaming (Tags 38-39)
+    ResponsibleGamingConfig,
+    PlayerGamingLimits(PublicKey),
 }
 
 impl Write for Key {
@@ -1689,6 +1701,13 @@ impl Write for Key {
                 tags::key::AUDIT_LOG_ENTRY.write(writer);
                 id.write(writer);
             }
+
+            // Responsible Gaming
+            Self::ResponsibleGamingConfig => tags::key::RESPONSIBLE_GAMING_CONFIG.write(writer),
+            Self::PlayerGamingLimits(pk) => {
+                tags::key::PLAYER_GAMING_LIMITS.write(writer);
+                pk.write(writer);
+            }
         }
     }
 }
@@ -1750,6 +1769,10 @@ impl Read for Key {
             tags::key::AUDIT_LOG_STATE => Self::AuditLogState,
             tags::key::AUDIT_LOG_ENTRY => Self::AuditLogEntry(u64::read(reader)?),
 
+            // Responsible Gaming
+            tags::key::RESPONSIBLE_GAMING_CONFIG => Self::ResponsibleGamingConfig,
+            tags::key::PLAYER_GAMING_LIMITS => Self::PlayerGamingLimits(PublicKey::read(reader)?),
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -1803,6 +1826,10 @@ impl EncodeSize for Key {
                 // Audit Log
                 Self::AuditLogState => 0,
                 Self::AuditLogEntry(_) => u64::SIZE,
+
+                // Responsible Gaming
+                Self::ResponsibleGamingConfig => 0,
+                Self::PlayerGamingLimits(_) => PublicKey::SIZE,
         }
     }
 }
@@ -1871,6 +1898,10 @@ pub enum Value {
     // Audit Log (Tags 36-37)
     AuditLogState(crate::casino::AuditLogState),
     AuditLogEntry(crate::casino::AuditLogEntry),
+
+    // Responsible Gaming (Tags 38-39)
+    ResponsibleGamingConfig(crate::casino::ResponsibleGamingConfig),
+    PlayerGamingLimits(crate::casino::PlayerGamingLimits),
 }
 
 impl Write for Value {
@@ -2012,6 +2043,16 @@ impl Write for Value {
                 tags::value::AUDIT_LOG_ENTRY.write(writer);
                 entry.write(writer);
             }
+
+            // Responsible Gaming
+            Self::ResponsibleGamingConfig(config) => {
+                tags::value::RESPONSIBLE_GAMING_CONFIG.write(writer);
+                config.write(writer);
+            }
+            Self::PlayerGamingLimits(limits) => {
+                tags::value::PLAYER_GAMING_LIMITS.write(writer);
+                limits.write(writer);
+            }
         }
     }
 }
@@ -2109,6 +2150,14 @@ impl Read for Value {
                 Self::AuditLogEntry(crate::casino::AuditLogEntry::read(reader)?)
             }
 
+            // Responsible Gaming
+            tags::value::RESPONSIBLE_GAMING_CONFIG => {
+                Self::ResponsibleGamingConfig(crate::casino::ResponsibleGamingConfig::read(reader)?)
+            }
+            tags::value::PLAYER_GAMING_LIMITS => {
+                Self::PlayerGamingLimits(crate::casino::PlayerGamingLimits::read(reader)?)
+            }
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -2165,6 +2214,10 @@ impl EncodeSize for Value {
                 // Audit Log
                 Self::AuditLogState(state) => state.encode_size(),
                 Self::AuditLogEntry(entry) => entry.encode_size(),
+
+                // Responsible Gaming
+                Self::ResponsibleGamingConfig(config) => config.encode_size(),
+                Self::PlayerGamingLimits(limits) => limits.encode_size(),
             }
     }
 }

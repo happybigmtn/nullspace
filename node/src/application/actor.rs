@@ -1312,97 +1312,230 @@ impl<
                             Message::Seeded { block, seed, timer, response } => {
                                 // Execute state transition (will only apply if next block)
                                 let height = block.height;
-                                let commitment = block.commitment();
+                                let block_digest = block.digest();
+                                let mut response = Some(response);
+                                let mut timer = Some(timer);
+                                let mut current_seed = Some(seed);
 
-                                // Apply the block to our state
-                                //
-                                // We must wait for the seed to be available before processing the block,
-                                // otherwise we will not be able to match players or compute attack strength.
-                                let execute_timer = execute_latency.timer();
-                                let (result, sync_result) = {
-                                    let mut state_guard = state.lock().await;
-                                    let mut events_guard = events.lock().await;
-                                    let result = state_transition::execute_state_transition(
-                                        &mut *state_guard,
-                                        &mut *events_guard,
-                                        self.identity,
-                                        height,
-                                        seed,
-                                        block.transactions,
-                                        execution_pool.clone(),
-                                    )
-                                    .await;
-                                    let sync_result = if result.is_ok() {
-                                        match state_guard.sync().await {
-                                            Ok(()) => events_guard.sync().await,
-                                            Err(err) => Err(err),
+                                let fallback_height = committed_height;
+                                let state_height = {
+                                    let state_guard = state.lock().await;
+                                    match block_on(state_guard.get_metadata()) {
+                                        Ok(meta) => meta
+                                            .and_then(|v| match v {
+                                                Value::Commit { height, start: _ } => Some(height),
+                                                _ => None,
+                                            })
+                                            .unwrap_or(fallback_height),
+                                        Err(err) => {
+                                            state_metadata_read_errors.inc();
+                                            warn!(
+                                                ?err,
+                                                "failed to read state metadata before apply; using committed height"
+                                            );
+                                            fallback_height
                                         }
-                                    } else {
-                                        Ok(())
-                                    };
-                                    (result, sync_result)
-                                };
-                                let result = match result {
-                                    Ok(result) => result,
-                                    Err(err) => {
-                                        state_transition_errors.inc();
-                                        error!(?err, height, "state transition failed");
-                                        return;
                                     }
                                 };
-                                drop(execute_timer);
-                                if let Err(err) = sync_result {
-                                    error!(?err, height, "failed to sync execution storage");
-                                    return;
-                                }
 
-                                // Update metrics
-                                txs_executed.inc_by(result.executed_transactions);
-                                finalized_height.set(height as i64);
-                                finalized_height_updated_ms
-                                    .set(system_time_ms(self.context.current()));
+                                let mut apply_block = |block: Block,
+                                                       seed: Seed,
+                                                       timer: histogram::Timer<R>,
+                                                       response: oneshot::Sender<()>| async {
+                                    let height = block.height;
+                                    let commitment = block.commitment();
 
-                                // Update mempool based on processed transactions
-                                let now = self.context.current();
-                                for (public, next_nonce) in &result.processed_nonces {
-                                    mempool.retain(public, *next_nonce);
-                                    next_nonce_cache.insert(now, public.clone(), *next_nonce);
-                                }
+                                    // Apply the block to our state
+                                    //
+                                    // We must wait for the seed to be available before processing the block,
+                                    // otherwise we will not be able to match players or compute attack strength.
+                                    let execute_timer = execute_latency.timer();
+                                    let (result, sync_result) = {
+                                        let mut state_guard = state.lock().await;
+                                        let mut events_guard = events.lock().await;
+                                        let result = state_transition::execute_state_transition(
+                                            &mut *state_guard,
+                                            &mut *events_guard,
+                                            self.identity,
+                                            height,
+                                            seed,
+                                            block.transactions,
+                                            execution_pool.clone(),
+                                        )
+                                        .await;
+                                        let sync_result = if result.is_ok() {
+                                            match state_guard.sync().await {
+                                                Ok(()) => events_guard.sync().await,
+                                                Err(err) => Err(err),
+                                            }
+                                        } else {
+                                            Ok(())
+                                        };
+                                        (result, sync_result)
+                                    };
+                                    let result = match result {
+                                        Ok(result) => result,
+                                        Err(err) => {
+                                            state_transition_errors.inc();
+                                            error!(?err, height, "state transition failed");
+                                            let _ = response.send(());
+                                            drop(timer);
+                                            return Ok(false);
+                                        }
+                                    };
+                                    drop(execute_timer);
+                                    if let Err(err) = sync_result {
+                                        error!(?err, height, "failed to sync execution storage");
+                                        let _ = response.send(());
+                                        drop(timer);
+                                        return Ok(false);
+                                    }
 
-                                // Queue proof generation for changes
-                                let state_op_count = result.state_end_op - result.state_start_op;
-                                let events_op_count = result.events_end_op - result.events_start_op;
-                                if state_op_count == 0 && events_op_count == 0 {
-                                    // No-op execution (already processed or out-of-order); skip proof generation.
-                                    let _ = response.send(());
-                                    drop(timer);
+                                    // Update metrics
+                                    txs_executed.inc_by(result.executed_transactions);
+                                    finalized_height.set(height as i64);
+                                    finalized_height_updated_ms
+                                        .set(system_time_ms(self.context.current()));
+
+                                    // Update mempool based on processed transactions
+                                    let now = self.context.current();
+                                    for (public, next_nonce) in &result.processed_nonces {
+                                        mempool.retain(public, *next_nonce);
+                                        next_nonce_cache.insert(now, public.clone(), *next_nonce);
+                                    }
+
+                                    // Queue proof generation for changes
+                                    let state_op_count = result.state_end_op - result.state_start_op;
+                                    let events_op_count = result.events_end_op - result.events_start_op;
+                                    if state_op_count == 0 && events_op_count == 0 {
+                                        // No-op execution (already processed or out-of-order); skip proof generation.
+                                        let _ = response.send(());
+                                        drop(timer);
+                                        return Ok(true);
+                                    }
+                                    committed_height = committed_height.max(height);
+                                    let job = ProofJob {
+                                        view: block.view,
+                                        height: block.height,
+                                        commitment,
+                                        result,
+                                        finalize_timer: timer,
+                                        response,
+                                    };
+                                    match proof_tx.try_send(job) {
+                                        Ok(()) => Ok(true),
+                                        Err(err) if err.is_full() => {
+                                            let job = err.into_inner();
+                                            if proof_tx.send(job).await.is_err() {
+                                                warn!(height, "proof queue closed; stopping application");
+                                                return Err(());
+                                            }
+                                            Ok(true)
+                                        }
+                                        Err(err) => {
+                                            let job = err.into_inner();
+                                            warn!(height, "proof queue closed; stopping application");
+                                            let _ = job.response.send(());
+                                            drop(job.finalize_timer);
+                                            Err(())
+                                        }
+                                    }
+                                };
+
+                                if height > state_height.saturating_add(1) {
+                                    warn!(
+                                        height,
+                                        state_height,
+                                        "state height gap detected; attempting replay"
+                                    );
+                                    let Some(blocks) = ancestry_cached(
+                                        marshal.clone(),
+                                        (None, block_digest),
+                                        state_height,
+                                        ancestry_cache.clone(),
+                                    )
+                                    .await
+                                    else {
+                                        warn!(
+                                            height,
+                                            state_height,
+                                            "failed to fetch ancestry for replay; skipping block"
+                                        );
+                                        if let Some(response) = response.take() {
+                                            let _ = response.send(());
+                                        }
+                                        if let Some(timer) = timer.take() {
+                                            drop(timer);
+                                        }
+                                        continue;
+                                    };
+
+                                    let mut replay_failed = false;
+                                    for replay_block in blocks.iter().cloned() {
+                                        let is_current = replay_block.height == height;
+                                        let seed = if is_current {
+                                            current_seed
+                                                .take()
+                                                .expect("current seed should be available")
+                                        } else {
+                                            match seeder.get(replay_block.view).await {
+                                                Ok(seed) => seed,
+                                                Err(err) => {
+                                                    warn!(
+                                                        ?err,
+                                                        view = replay_block.view.get(),
+                                                        height = replay_block.height,
+                                                        "failed to fetch seed during replay"
+                                                    );
+                                                    replay_failed = true;
+                                                    break;
+                                                }
+                                            }
+                                        };
+
+                                        let finalize_timer = if is_current {
+                                            timer.take().expect("current timer should be available")
+                                        } else {
+                                            finalize_latency.timer()
+                                        };
+                                        let response = if is_current {
+                                            response.take().expect("current response should be available")
+                                        } else {
+                                            let (tx, _rx) = oneshot::channel();
+                                            tx
+                                        };
+
+                                        match apply_block(replay_block, seed, finalize_timer, response).await {
+                                            Ok(true) => {}
+                                            Ok(false) => {
+                                                replay_failed = true;
+                                                break;
+                                            }
+                                            Err(()) => return,
+                                        }
+                                    }
+
+                                    if replay_failed {
+                                        if let Some(response) = response.take() {
+                                            let _ = response.send(());
+                                        }
+                                        if let Some(timer) = timer.take() {
+                                            drop(timer);
+                                        }
+                                    }
                                     continue;
                                 }
-                                committed_height = committed_height.max(height);
-                                let job = ProofJob {
-                                    view: block.view,
-                                    height: block.height,
-                                    commitment,
-                                    result,
-                                    finalize_timer: timer,
-                                    response,
-                                };
-                                match proof_tx.try_send(job) {
-                                    Ok(()) => {}
-                                    Err(err) if err.is_full() => {
-                                        let job = err.into_inner();
-                                        if proof_tx.send(job).await.is_err() {
-                                            warn!(height, "proof queue closed; stopping application");
-                                            return;
-                                        }
-                                    }
-                                    Err(err) => {
-                                        let job = err.into_inner();
-                                        warn!(height, "proof queue closed; stopping application");
-                                        let _ = job.response.send(());
-                                        drop(job.finalize_timer);
-                                        return;
-                                    }
+
+                                let seed = current_seed
+                                    .take()
+                                    .expect("current seed should be available");
+                                let timer = timer.take().expect("current timer should be available");
+                                let response =
+                                    response.take().expect("current response should be available");
+
+                                match apply_block(block, seed, timer, response).await {
+                                    Ok(true) | Ok(false) => {}
+                                    Err(()) => return,
                                 }
                             },
                         }

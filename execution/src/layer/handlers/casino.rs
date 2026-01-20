@@ -2826,10 +2826,13 @@ impl<'a, S: State> Layer<'a, S> {
         } else {
             0
         };
+        // net_result for responsible gaming: positive = player win, negative = player loss
+        // payout_delta is already in this format (positive for win, negative for loss)
         self.release_bet_exposure(
             public,
             total_wagered.saturating_mul(CRAPS_MAX_PAYOUT_MULTIPLIER),
             payout_amount,
+            payout_delta,
         )
         .await?;
 
@@ -3107,7 +3110,7 @@ impl<'a, S: State> Layer<'a, S> {
         Ok(())
     }
 
-    /// Check if a bet can be accepted based on exposure limits.
+    /// Check if a bet can be accepted based on exposure limits and responsible gaming caps.
     /// Returns Ok(()) if allowed, or an error code and message if rejected.
     pub(in crate::layer) async fn check_exposure_limits(
         &mut self,
@@ -3115,6 +3118,90 @@ impl<'a, S: State> Layer<'a, S> {
         bet_amount: u64,
         max_payout_multiplier: u64,
     ) -> Result<(), (u8, String)> {
+        // Check responsible gaming limits first (AC-7.4)
+        let rg_config = self.get_or_init_responsible_gaming_config().await.map_err(|e| {
+            (
+                nullspace_types::casino::ERROR_INVALID_STATE,
+                format!("Failed to load responsible gaming config: {}", e),
+            )
+        })?;
+        let mut player_limits = self.get_or_init_player_gaming_limits(public).await.map_err(|e| {
+            (
+                nullspace_types::casino::ERROR_INVALID_STATE,
+                format!("Failed to load player gaming limits: {}", e),
+            )
+        })?;
+
+        // Convert seed_view to seconds for timestamp comparison
+        let now_ts = self.seed_view;
+
+        // Reset period totals if periods have rolled over
+        player_limits.maybe_reset_periods(now_ts);
+
+        // Check responsible gaming limits
+        player_limits.check_limits(&rg_config, bet_amount, now_ts).map_err(|e| {
+            use nullspace_types::casino::ResponsibleGamingError;
+            match e {
+                ResponsibleGamingError::SelfExcluded { until_ts } => (
+                    nullspace_types::casino::ERROR_RESPONSIBLE_GAMING,
+                    format!("Self-excluded until timestamp {}", until_ts),
+                ),
+                ResponsibleGamingError::InCooldown { until_ts } => (
+                    nullspace_types::casino::ERROR_RESPONSIBLE_GAMING,
+                    format!("In cooldown period until timestamp {}", until_ts),
+                ),
+                ResponsibleGamingError::DailyWagerCapExceeded { current, cap, bet_amount } => (
+                    nullspace_types::casino::ERROR_RESPONSIBLE_GAMING,
+                    format!(
+                        "Daily wager cap exceeded: {} + {} > {} cap",
+                        current, bet_amount, cap
+                    ),
+                ),
+                ResponsibleGamingError::WeeklyWagerCapExceeded { current, cap, bet_amount } => (
+                    nullspace_types::casino::ERROR_RESPONSIBLE_GAMING,
+                    format!(
+                        "Weekly wager cap exceeded: {} + {} > {} cap",
+                        current, bet_amount, cap
+                    ),
+                ),
+                ResponsibleGamingError::MonthlyWagerCapExceeded { current, cap, bet_amount } => (
+                    nullspace_types::casino::ERROR_RESPONSIBLE_GAMING,
+                    format!(
+                        "Monthly wager cap exceeded: {} + {} > {} cap",
+                        current, bet_amount, cap
+                    ),
+                ),
+                ResponsibleGamingError::DailyLossCapReached { current_loss, cap } => (
+                    nullspace_types::casino::ERROR_RESPONSIBLE_GAMING,
+                    format!(
+                        "Daily loss cap reached: {} >= {} cap",
+                        current_loss, cap
+                    ),
+                ),
+                ResponsibleGamingError::WeeklyLossCapReached { current_loss, cap } => (
+                    nullspace_types::casino::ERROR_RESPONSIBLE_GAMING,
+                    format!(
+                        "Weekly loss cap reached: {} >= {} cap",
+                        current_loss, cap
+                    ),
+                ),
+                ResponsibleGamingError::MonthlyLossCapReached { current_loss, cap } => (
+                    nullspace_types::casino::ERROR_RESPONSIBLE_GAMING,
+                    format!(
+                        "Monthly loss cap reached: {} >= {} cap",
+                        current_loss, cap
+                    ),
+                ),
+            }
+        })?;
+
+        // Update player limits state (periods may have been reset)
+        self.insert(
+            Key::PlayerGamingLimits(public.clone()),
+            Value::PlayerGamingLimits(player_limits),
+        );
+
+        // Check exposure limits
         let bankroll = self.get_or_init_house_bankroll().await.map_err(|e| {
             (
                 nullspace_types::casino::ERROR_INVALID_STATE,
@@ -3167,6 +3254,7 @@ impl<'a, S: State> Layer<'a, S> {
     }
 
     /// Add exposure for a bet that has been accepted.
+    /// Also records the wager for responsible gaming tracking.
     pub(in crate::layer) async fn add_bet_exposure(
         &mut self,
         public: &PublicKey,
@@ -3188,15 +3276,26 @@ impl<'a, S: State> Layer<'a, S> {
             Value::PlayerExposure(player_exposure),
         );
 
+        // Record wager for responsible gaming tracking (AC-7.4)
+        let mut player_limits = self.get_or_init_player_gaming_limits(public).await?;
+        let now_ts = self.seed_view;
+        player_limits.record_wager(bet_amount, now_ts);
+        self.insert(
+            Key::PlayerGamingLimits(public.clone()),
+            Value::PlayerGamingLimits(player_limits),
+        );
+
         Ok(())
     }
 
     /// Release exposure after bet settlement.
+    /// `net_result` is positive for player win, negative for player loss (for responsible gaming tracking).
     pub(in crate::layer) async fn release_bet_exposure(
         &mut self,
         public: &PublicKey,
         exposure_amount: u64,
         payout_amount: u64,
+        net_result: i64,
     ) -> anyhow::Result<()> {
         let mut bankroll = self.get_or_init_house_bankroll().await?;
         bankroll.release_exposure(exposure_amount);
@@ -3212,6 +3311,15 @@ impl<'a, S: State> Layer<'a, S> {
         self.insert(
             Key::PlayerExposure(public.clone()),
             Value::PlayerExposure(player_exposure),
+        );
+
+        // Record settlement for responsible gaming loss tracking (AC-7.4)
+        let mut player_limits = self.get_or_init_player_gaming_limits(public).await?;
+        let now_ts = self.seed_view;
+        player_limits.record_settlement(net_result, now_ts);
+        self.insert(
+            Key::PlayerGamingLimits(public.clone()),
+            Value::PlayerGamingLimits(player_limits),
         );
 
         Ok(())

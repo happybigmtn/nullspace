@@ -671,6 +671,25 @@ impl<'a, S: State> Layer<'a, S> {
         })
     }
 
+    async fn get_or_init_responsible_gaming_config(
+        &mut self,
+    ) -> Result<nullspace_types::casino::ResponsibleGamingConfig> {
+        Ok(match self.get(Key::ResponsibleGamingConfig).await? {
+            Some(Value::ResponsibleGamingConfig(config)) => config,
+            _ => nullspace_types::casino::ResponsibleGamingConfig::default(),
+        })
+    }
+
+    async fn get_or_init_player_gaming_limits(
+        &mut self,
+        public: &PublicKey,
+    ) -> Result<nullspace_types::casino::PlayerGamingLimits> {
+        Ok(match self.get(Key::PlayerGamingLimits(public.clone())).await? {
+            Some(Value::PlayerGamingLimits(limits)) => limits,
+            _ => nullspace_types::casino::PlayerGamingLimits::default(),
+        })
+    }
+
     async fn get_lp_balance(&self, public: &PublicKey) -> Result<u64> {
         Ok(match self.get(Key::LpBalance(public.clone())).await? {
             Some(Value::LpBalance(bal)) => bal,

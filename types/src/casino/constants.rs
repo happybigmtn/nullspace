@@ -98,6 +98,8 @@ pub const ERROR_FEATURE_DISABLED: u8 = 19;
 pub const ERROR_BRIDGE_DISABLED: u8 = 20;
 /// Error when bet exceeds exposure limits.
 pub const ERROR_EXPOSURE_LIMIT: u8 = 21;
+/// Error when responsible gaming limits are exceeded (daily/weekly/monthly caps, self-exclusion).
+pub const ERROR_RESPONSIBLE_GAMING: u8 = 22;
 
 /// Tournament duration in seconds (5 minutes)
 pub const TOURNAMENT_DURATION_SECS: u64 = 5 * 60;

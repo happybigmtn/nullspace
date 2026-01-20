@@ -379,11 +379,20 @@
       - `POST /admin/config/policy` - Update policy config (creates audit entry)
     - IP hash extraction from X-Forwarded-For for privacy-preserving audit trail
     - Tests: 4 admin tests (load/save bankroll, load/save policy, audit log creation, multiple entries)
-- [ ] Implement responsible gaming caps in bet validation
+- [x] Implement responsible gaming caps in bet validation
   - Specs: `specs/sprint-07-payments-admin.md` AC-7.4
   - Tests/backpressure:
-    - Programmatic: `cargo test -p execution`
+    - Programmatic: `cargo test -p nullspace-execution`
   - Perceptual: None
+  - **Completed**: Added responsible gaming limit enforcement:
+    - `ResponsibleGamingConfig` type (`types/src/casino/economy.rs`): System-wide defaults for daily/weekly/monthly wager caps (100K/500K/1.5M), loss caps (50K/200K/500K), self-exclusion periods (1 day min, 1 year max), and cooldown after exclusion
+    - `PlayerGamingLimits` type: Per-player caps (can only be stricter than system), rolling period tracking (day/week/month start timestamps and totals), self-exclusion/cooldown timestamps
+    - `ResponsibleGamingError` enum: 8 variants (SelfExcluded, InCooldown, DailyWagerCapExceeded, WeeklyWagerCapExceeded, MonthlyWagerCapExceeded, DailyLossCapReached, WeeklyLossCapReached, MonthlyLossCapReached)
+    - Key/Value variants: ResponsibleGamingConfig (tag 38), PlayerGamingLimits(PublicKey) (tag 39)
+    - Helper methods: `effective_*_cap()` (returns min of player/system cap), `maybe_reset_periods()` (auto-reset on period rollover), `check_limits()` (validates bet against all caps), `record_wager()`, `record_settlement()`
+    - Integration: `check_exposure_limits()` now checks responsible gaming limits FIRST; `add_bet_exposure()` records wagers; `release_bet_exposure()` records settlements with net_result
+    - 27 unit tests in `types/src/casino/tests.rs` covering defaults, roundtrip encoding, effective caps, period resets, wager/loss cap enforcement, self-exclusion, cooldown, and error variants
+    - Tests: `cargo test -p nullspace-types casino::tests` (57 tests), `cargo test -p nullspace-execution` (511 tests)
 - [ ] Update web client to show limit errors and exposure warnings
   - Specs: `specs/sprint-07-payments-admin.md` AC-7.5
   - Tests/backpressure:
