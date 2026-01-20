@@ -45,6 +45,15 @@ One context window. One task. Fresh each iteration.
 - Passing tests: just "✓ N tests passed"
 - Summarize if >50 lines of output
 
+## RCT (Review Completed Tasks)
+
+When tasks are already marked complete in `IMPLEMENTATION_PLAN.md`, follow RCT:
+
+1. Review each `[x]` task in order and verify the implementation against cited ACs.
+2. Make only necessary corrections; ignore unrelated/unreviewed changes.
+3. Move the completed task entry into `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`.
+4. Commit per task (check `git status` before each commit; never amend without approval).
+
 ## Files
 
 ```
