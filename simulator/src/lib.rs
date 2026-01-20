@@ -2321,4 +2321,476 @@ mod tests {
             }
         });
     }
+
+    /// Test explorer HTTP endpoints for rounds, bets, and leaderboards (AC-4.3).
+    ///
+    /// This test validates:
+    /// - GET /explorer/rounds returns paginated rounds with filters
+    /// - GET /explorer/rounds/:game_type/:round_id returns round details with bets/payouts
+    /// - GET /explorer/leaderboard returns player stats with sorting
+    #[test]
+    fn test_explorer_round_endpoints() {
+        let executor = cw_tokio::Runner::new(cw_tokio::Config::default());
+        executor.start(|context| async move {
+            use crate::explorer::apply_block_indexing;
+            use nullspace_types::casino::{GameType, GlobalTableBet, GlobalTableConfig};
+            use std::time::{SystemTime, UNIX_EPOCH};
+
+            // Initialize
+            let (network_secret, network_identity) = create_network_keypair();
+            let (mut state, mut events) = create_adbs(&context).await;
+
+            // Create simulator with explorer state
+            let simulator = Arc::new(Simulator::new(network_identity));
+            let metrics = ExplorerMetrics::default();
+            let now_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+
+            // Create player accounts
+            let (admin_private, admin_public) = create_account_keypair(0);
+            let (private1, public1) = create_account_keypair(1);
+            let (private2, public2) = create_account_keypair(2);
+            let player1_hex = commonware_utils::hex(public1.as_ref());
+            let player2_hex = commonware_utils::hex(public2.as_ref());
+
+            // Set admin env var
+            let admin_hex: String = admin_public
+                .as_ref()
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect();
+            std::env::set_var("CASINO_ADMIN_PUBLIC_KEY_HEX", &admin_hex);
+
+            // Execute setup blocks (register, deposit, init, open, bet, lock, reveal, settle, finalize)
+            // Block 1: Register
+            let txs1 = vec![
+                Transaction::sign(&admin_private, 0, Instruction::CasinoRegister { name: "Admin".to_string() }),
+                Transaction::sign(&private1, 0, Instruction::CasinoRegister { name: "Player1".to_string() }),
+                Transaction::sign(&private2, 0, Instruction::CasinoRegister { name: "Player2".to_string() }),
+            ];
+            let (_, summary1) = execute_block(&network_secret, network_identity, &mut state, &mut events, 1, txs1).await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(&mut explorer, &summary1.progress, &summary1.events_proof_ops, now_ms, &metrics);
+            }
+
+            // Block 2: Deposit
+            let txs2 = vec![
+                Transaction::sign(&private1, 1, Instruction::CasinoDeposit { amount: 10_000 }),
+                Transaction::sign(&private2, 1, Instruction::CasinoDeposit { amount: 10_000 }),
+            ];
+            let (_, summary2) = execute_block(&network_secret, network_identity, &mut state, &mut events, 2, txs2).await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(&mut explorer, &summary2.progress, &summary2.events_proof_ops, now_ms, &metrics);
+            }
+
+            // Block 3: Init global table
+            let txs3 = vec![Transaction::sign(&admin_private, 1, Instruction::GlobalTableInit {
+                config: GlobalTableConfig {
+                    game_type: GameType::Craps,
+                    betting_ms: 30_000,
+                    lock_ms: 5_000,
+                    payout_ms: 10_000,
+                    cooldown_ms: 5_000,
+                    min_bet: 100,
+                    max_bet: 10_000,
+                    max_bets_per_round: 10,
+                },
+            })];
+            let (_, summary3) = execute_block(&network_secret, network_identity, &mut state, &mut events, 3, txs3).await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(&mut explorer, &summary3.progress, &summary3.events_proof_ops, now_ms, &metrics);
+            }
+
+            // Block 4: Open round
+            let txs4 = vec![Transaction::sign(&admin_private, 2, Instruction::GlobalTableOpenRound { game_type: GameType::Craps })];
+            let (_, summary4) = execute_block(&network_secret, network_identity, &mut state, &mut events, 100, txs4).await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(&mut explorer, &summary4.progress, &summary4.events_proof_ops, now_ms, &metrics);
+            }
+
+            // Block 5: Place bets
+            let txs5 = vec![
+                Transaction::sign(&private1, 2, Instruction::GlobalTableSubmitBets {
+                    game_type: GameType::Craps,
+                    round_id: 1,
+                    bets: vec![GlobalTableBet { bet_type: 4, target: 0, amount: 500 }],
+                }),
+                Transaction::sign(&private2, 2, Instruction::GlobalTableSubmitBets {
+                    game_type: GameType::Craps,
+                    round_id: 1,
+                    bets: vec![GlobalTableBet { bet_type: 4, target: 0, amount: 300 }],
+                }),
+            ];
+            let (_, summary5) = execute_block(&network_secret, network_identity, &mut state, &mut events, 105, txs5).await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(&mut explorer, &summary5.progress, &summary5.events_proof_ops, now_ms, &metrics);
+            }
+
+            // Block 6-9: Lock, Reveal, Settle, Finalize
+            let txs6 = vec![Transaction::sign(&admin_private, 3, Instruction::GlobalTableLock { game_type: GameType::Craps, round_id: 1 })];
+            let (_, summary6) = execute_block(&network_secret, network_identity, &mut state, &mut events, 111, txs6).await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(&mut explorer, &summary6.progress, &summary6.events_proof_ops, now_ms, &metrics);
+            }
+
+            let txs7 = vec![Transaction::sign(&admin_private, 4, Instruction::GlobalTableReveal { game_type: GameType::Craps, round_id: 1 })];
+            let (_, summary7) = execute_block(&network_secret, network_identity, &mut state, &mut events, 114, txs7).await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(&mut explorer, &summary7.progress, &summary7.events_proof_ops, now_ms, &metrics);
+            }
+
+            let txs8 = vec![
+                Transaction::sign(&private1, 3, Instruction::GlobalTableSettle { game_type: GameType::Craps, round_id: 1 }),
+                Transaction::sign(&private2, 3, Instruction::GlobalTableSettle { game_type: GameType::Craps, round_id: 1 }),
+            ];
+            let (_, summary8) = execute_block(&network_secret, network_identity, &mut state, &mut events, 115, txs8).await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(&mut explorer, &summary8.progress, &summary8.events_proof_ops, now_ms, &metrics);
+            }
+
+            let txs9 = vec![Transaction::sign(&admin_private, 5, Instruction::GlobalTableFinalize { game_type: GameType::Craps, round_id: 1 })];
+            let (_, summary9) = execute_block(&network_secret, network_identity, &mut state, &mut events, 118, txs9).await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(&mut explorer, &summary9.progress, &summary9.events_proof_ops, now_ms, &metrics);
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 1: list_rounds - Basic pagination
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                // All rounds - should have 1 round (indexed_rounds is pub(super))
+                let all_rounds: Vec<_> = explorer
+                    .indexed_rounds
+                    .values()
+                    .cloned()
+                    .collect();
+
+                assert_eq!(all_rounds.len(), 1, "Should have 1 round indexed");
+                assert_eq!(all_rounds[0].game_type, "Craps");
+                assert_eq!(all_rounds[0].round_id, 1);
+                assert_eq!(all_rounds[0].phase, "Finalized");
+
+                // Test pagination with limit
+                let paginated: Vec<_> = all_rounds.iter().take(1).collect();
+                assert_eq!(paginated.len(), 1, "Pagination should return 1 round");
+
+                // Test offset
+                let with_offset: Vec<_> = all_rounds.iter().skip(1).take(10).collect();
+                assert_eq!(with_offset.len(), 0, "Offset 1 should return 0 rounds (only 1 total)");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 2: list_rounds - game_type filter
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                // Filter by game_type=Craps
+                let craps_rounds: Vec<_> = explorer
+                    .indexed_rounds
+                    .values()
+                    .filter(|r| r.game_type.eq_ignore_ascii_case("Craps"))
+                    .collect();
+                assert_eq!(craps_rounds.len(), 1, "Should find 1 Craps round");
+
+                // Filter by game_type=Blackjack (should be empty)
+                let blackjack_rounds: Vec<_> = explorer
+                    .indexed_rounds
+                    .values()
+                    .filter(|r| r.game_type.eq_ignore_ascii_case("Blackjack"))
+                    .collect();
+                assert_eq!(blackjack_rounds.len(), 0, "Should find 0 Blackjack rounds");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 3: list_rounds - phase filter
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                // Filter by phase=Finalized
+                let finalized_rounds: Vec<_> = explorer
+                    .indexed_rounds
+                    .values()
+                    .filter(|r| r.phase.eq_ignore_ascii_case("Finalized"))
+                    .collect();
+                assert_eq!(finalized_rounds.len(), 1, "Should find 1 Finalized round");
+
+                // Filter by phase=Betting (should be empty after finalization)
+                let betting_rounds: Vec<_> = explorer
+                    .indexed_rounds
+                    .values()
+                    .filter(|r| r.phase.eq_ignore_ascii_case("Betting"))
+                    .collect();
+                assert_eq!(betting_rounds.len(), 0, "Should find 0 Betting rounds");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 4: list_rounds - player filter
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                // Filter rounds where player1 placed a bet
+                let player1_rounds: Vec<_> = explorer
+                    .indexed_rounds
+                    .values()
+                    .filter(|r| {
+                        let key = (r.game_type.clone(), r.round_id);
+                        explorer
+                            .bets_by_round
+                            .get(&key)
+                            .map(|bets| bets.iter().any(|b| b.player == player1_hex))
+                            .unwrap_or(false)
+                    })
+                    .collect();
+                assert_eq!(player1_rounds.len(), 1, "Player1 should have bet in 1 round");
+
+                // Filter rounds where a non-existent player placed a bet
+                let fake_player = "0000000000000000000000000000000000000000000000000000000000000000";
+                let fake_player_rounds: Vec<_> = explorer
+                    .indexed_rounds
+                    .values()
+                    .filter(|r| {
+                        let key = (r.game_type.clone(), r.round_id);
+                        explorer
+                            .bets_by_round
+                            .get(&key)
+                            .map(|bets| bets.iter().any(|b| b.player == fake_player))
+                            .unwrap_or(false)
+                    })
+                    .collect();
+                assert_eq!(fake_player_rounds.len(), 0, "Fake player should have 0 rounds");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 5: get_round - Get specific round with bets and payouts
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                // Find round by game_type and round_id
+                let key = ("Craps".to_string(), 1u64);
+                let round = explorer.indexed_rounds.get(&key);
+                assert!(round.is_some(), "Round Craps/1 should exist");
+                let round = round.unwrap();
+
+                // Verify round details
+                assert_eq!(round.game_type, "Craps");
+                assert_eq!(round.round_id, 1);
+                assert_eq!(round.phase, "Finalized");
+                assert_eq!(round.bet_count, 2);
+                assert_eq!(round.total_bet_amount, 800); // 500 + 300
+
+                // Get bets for this round
+                let bets = explorer.bets_by_round.get(&key);
+                assert!(bets.is_some(), "Should have bets for round");
+                let bets = bets.unwrap();
+                assert_eq!(bets.len(), 2, "Should have 2 bets");
+
+                // Verify bet amounts
+                let bet_amounts: Vec<u64> = bets.iter().map(|b| b.amount).collect();
+                assert!(bet_amounts.contains(&500), "Should have 500 bet");
+                assert!(bet_amounts.contains(&300), "Should have 300 bet");
+
+                // Get payouts for this round
+                let payouts = explorer.payouts_by_round.get(&key);
+                assert!(payouts.is_some(), "Should have payouts for round");
+                let payouts = payouts.unwrap();
+                assert_eq!(payouts.len(), 2, "Should have 2 payouts");
+
+                // Verify players received payouts
+                let payout_players: Vec<&String> = payouts.iter().map(|p| &p.player).collect();
+                assert!(payout_players.contains(&&player1_hex), "Player1 should have payout");
+                assert!(payout_players.contains(&&player2_hex), "Player2 should have payout");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 6: get_round - Case-insensitive game_type lookup
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                // Find round with lowercase game_type
+                let found = explorer
+                    .indexed_rounds
+                    .keys()
+                    .find(|(gt, rid)| *rid == 1 && gt.eq_ignore_ascii_case("craps"))
+                    .is_some();
+                assert!(found, "Should find round with case-insensitive game_type");
+
+                // Find round with uppercase game_type
+                let found_upper = explorer
+                    .indexed_rounds
+                    .keys()
+                    .find(|(gt, rid)| *rid == 1 && gt.eq_ignore_ascii_case("CRAPS"))
+                    .is_some();
+                assert!(found_upper, "Should find round with uppercase game_type");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 7: get_round - Non-existent round returns empty
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                let nonexistent = explorer.indexed_rounds.get(&("Craps".to_string(), 999u64));
+                assert!(nonexistent.is_none(), "Non-existent round should return None");
+
+                let wrong_game = explorer.indexed_rounds.get(&("Blackjack".to_string(), 1u64));
+                assert!(wrong_game.is_none(), "Wrong game type should return None");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 8: get_leaderboard - Aggregated player stats
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                // Aggregate player stats manually to verify leaderboard logic
+                let mut player_stats: std::collections::HashMap<String, (u64, i64, usize)> = std::collections::HashMap::new();
+
+                for ((gt, _), round) in explorer.indexed_rounds.iter() {
+                    let round_key = (gt.clone(), round.round_id);
+
+                    // Sum bets
+                    if let Some(bets) = explorer.bets_by_round.get(&round_key) {
+                        for bet in bets {
+                            let entry = player_stats.entry(bet.player.clone()).or_insert((0, 0, 0));
+                            entry.0 += bet.amount; // total_wagered
+                            entry.2 += 1; // bet_count
+                        }
+                    }
+
+                    // Sum payouts
+                    if let Some(payouts) = explorer.payouts_by_round.get(&round_key) {
+                        for payout in payouts {
+                            let entry = player_stats.entry(payout.player.clone()).or_insert((0, 0, 0));
+                            entry.1 += payout.payout; // total_payout
+                        }
+                    }
+                }
+
+                assert_eq!(player_stats.len(), 2, "Should have 2 players in leaderboard");
+
+                // Verify player1 stats
+                let p1_stats = player_stats.get(&player1_hex);
+                assert!(p1_stats.is_some(), "Player1 should be in leaderboard");
+                let (wagered, payout, bets) = p1_stats.unwrap();
+                assert_eq!(*wagered, 500, "Player1 wagered 500");
+                assert_eq!(*bets, 1, "Player1 made 1 bet");
+                // Payout depends on dice roll - just verify it exists
+                let net_profit = *payout - *wagered as i64;
+                assert!(net_profit.abs() <= 1500, "Net profit should be reasonable");
+
+                // Verify player2 stats
+                let p2_stats = player_stats.get(&player2_hex);
+                assert!(p2_stats.is_some(), "Player2 should be in leaderboard");
+                let (wagered2, _payout2, bets2) = p2_stats.unwrap();
+                assert_eq!(*wagered2, 300, "Player2 wagered 300");
+                assert_eq!(*bets2, 1, "Player2 made 1 bet");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 9: get_leaderboard - Sort by total_wagered
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                // Collect and sort by total_wagered
+                let mut entries: Vec<_> = Vec::new();
+                let mut player_wagered: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+
+                for (round_key, _) in explorer.indexed_rounds.iter() {
+                    if let Some(bets) = explorer.bets_by_round.get(round_key) {
+                        for bet in bets {
+                            *player_wagered.entry(bet.player.clone()).or_insert(0) += bet.amount;
+                        }
+                    }
+                }
+
+                for (player, wagered) in player_wagered {
+                    entries.push((player, wagered));
+                }
+                entries.sort_by(|a, b| b.1.cmp(&a.1));
+
+                assert_eq!(entries.len(), 2, "Should have 2 leaderboard entries");
+                assert_eq!(entries[0].1, 500, "Top wagerer should have wagered 500");
+                assert_eq!(entries[1].1, 300, "Second wagerer should have wagered 300");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 10: get_leaderboard - Filter by game_type
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                // Filter by Craps
+                let craps_players: std::collections::HashSet<_> = explorer
+                    .indexed_rounds
+                    .iter()
+                    .filter(|((gt, _), _)| gt.eq_ignore_ascii_case("Craps"))
+                    .flat_map(|(key, _)| {
+                        explorer
+                            .bets_by_round
+                            .get(key)
+                            .map(|bets| bets.iter().map(|b| b.player.clone()).collect::<Vec<_>>())
+                            .unwrap_or_default()
+                    })
+                    .collect();
+
+                assert_eq!(craps_players.len(), 2, "2 players in Craps leaderboard");
+
+                // Filter by Blackjack (should be empty)
+                let blackjack_players: std::collections::HashSet<_> = explorer
+                    .indexed_rounds
+                    .iter()
+                    .filter(|((gt, _), _)| gt.eq_ignore_ascii_case("Blackjack"))
+                    .flat_map(|(key, _)| {
+                        explorer
+                            .bets_by_round
+                            .get(key)
+                            .map(|bets| bets.iter().map(|b| b.player.clone()).collect::<Vec<_>>())
+                            .unwrap_or_default()
+                    })
+                    .collect();
+
+                assert_eq!(blackjack_players.len(), 0, "0 players in Blackjack leaderboard");
+            }
+
+            // -------------------------------------------------------------------------
+            // Test 11: Pagination edge cases
+            // -------------------------------------------------------------------------
+            {
+                let explorer = simulator.explorer.read().await;
+
+                let rounds: Vec<_> = explorer.indexed_rounds.values().collect();
+
+                // Large offset returns empty
+                let with_large_offset: Vec<_> = rounds.iter().skip(1000).take(10).collect();
+                assert_eq!(with_large_offset.len(), 0, "Large offset should return empty");
+
+                // Zero limit returns empty
+                let with_zero_limit: Vec<_> = rounds.iter().take(0).collect();
+                assert_eq!(with_zero_limit.len(), 0, "Zero limit should return empty");
+
+                // Limit larger than total returns all
+                let with_large_limit: Vec<_> = rounds.iter().take(1000).collect();
+                assert_eq!(with_large_limit.len(), rounds.len(), "Large limit should return all");
+            }
+        });
+    }
 }

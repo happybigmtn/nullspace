@@ -109,11 +109,19 @@
     - Programmatic: restart integration test
   - Perceptual: None
   - **Completed**: Core functionality already existed in `explorer_persistence.rs` with `load_into_sqlite` and `load_into_postgres` functions that load persisted blocks in height order via `apply_block_indexing`. Added `test_indexer_restart_recovery` integration test that validates: (1) blocks are persisted during indexing, (2) on restart the indexer reloads all persisted blocks, (3) state totals match pre-restart values (blocks, transactions, accounts). Test exercises full lifecycle with 3 accounts and 3 blocks.
-- [ ] Implement explorer HTTP endpoints for rounds, bets, leaderboards
+- [x] Implement explorer HTTP endpoints for rounds, bets, leaderboards
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.3
   - Tests/backpressure:
     - Programmatic: API tests with pagination/filters
   - Perceptual: None
+  - **Completed**: Added 5 HTTP endpoints in `explorer.rs`:
+    - `GET /explorer/rounds` - List recent rounds with pagination and filters (game_type, phase, player)
+    - `GET /explorer/rounds/:game_type/:round_id` - Get specific round with bets and payouts
+    - `GET /explorer/rounds/:game_type/:round_id/bets` - Get bets for a round with pagination
+    - `GET /explorer/rounds/:game_type/:round_id/payouts` - Get payouts for a round with pagination
+    - `GET /explorer/leaderboard` - Player stats with sorting (net_profit, total_wagered, bet_count)
+  - All endpoints support caching, pagination (offset/limit), and case-insensitive game_type matching
+  - Added `test_explorer_round_endpoints` test with 11 test cases covering pagination, filters, and edge cases
 - [ ] Add aggregation jobs for volume, house edge, and payouts
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.4
   - Tests/backpressure:

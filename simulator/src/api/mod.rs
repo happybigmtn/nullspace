@@ -180,7 +180,21 @@ impl Api {
                 "/explorer/games/:pubkey",
                 get(crate::explorer::get_game_history),
             )
-            .route("/explorer/search", get(crate::explorer::search_explorer));
+            .route("/explorer/search", get(crate::explorer::search_explorer))
+            .route("/explorer/rounds", get(crate::explorer::list_rounds))
+            .route(
+                "/explorer/rounds/:game_type/:round_id",
+                get(crate::explorer::get_round),
+            )
+            .route(
+                "/explorer/rounds/:game_type/:round_id/bets",
+                get(crate::explorer::get_round_bets),
+            )
+            .route(
+                "/explorer/rounds/:game_type/:round_id/payouts",
+                get(crate::explorer::get_round_payouts),
+            )
+            .route("/explorer/leaderboard", get(crate::explorer::get_leaderboard));
 
         #[cfg(feature = "passkeys")]
         let router = router

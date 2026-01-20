@@ -1262,3 +1262,389 @@ fn with_cache_bytes(body: Vec<u8>) -> Response {
     );
     response
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Explorer Round Endpoints (AC-4.3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Query parameters for listing rounds
+#[derive(Deserialize)]
+pub(crate) struct RoundListQuery {
+    offset: Option<usize>,
+    limit: Option<usize>,
+    /// Filter by game type (e.g. "Craps", "Blackjack")
+    game_type: Option<String>,
+    /// Filter by phase (e.g. "Betting", "Locked", "Finalized")
+    phase: Option<String>,
+    /// Filter by player public key (hex) - rounds where player placed a bet
+    player: Option<String>,
+}
+
+/// Response for a single round with details
+#[derive(Clone, Serialize)]
+pub struct RoundDetail {
+    #[serde(flatten)]
+    pub round: IndexedRound,
+    pub bets: Vec<IndexedBet>,
+    pub payouts: Vec<IndexedPayout>,
+}
+
+/// Leaderboard entry for player stats
+#[derive(Clone, Serialize)]
+pub struct LeaderboardEntry {
+    pub player: String,
+    pub total_wagered: u64,
+    pub total_payout: i64,
+    pub net_profit: i64,
+    pub bet_count: usize,
+    pub round_count: usize,
+    pub win_count: usize,
+}
+
+/// Query parameters for leaderboard
+#[derive(Deserialize)]
+pub(crate) struct LeaderboardQuery {
+    offset: Option<usize>,
+    limit: Option<usize>,
+    /// Filter by game type
+    game_type: Option<String>,
+    /// Sort by field: "net_profit", "total_wagered", "bet_count" (default: "net_profit")
+    sort_by: Option<String>,
+}
+
+/// List recent rounds with optional filters
+pub(crate) async fn list_rounds(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Query(params): Query<RoundListQuery>,
+) -> impl IntoResponse {
+    let offset = params.offset.unwrap_or(0);
+    let limit = params.limit.unwrap_or(20).min(100);
+    let game_type_filter = params.game_type.clone();
+    let phase_filter = params.phase.clone();
+    let player_filter = params.player.clone();
+
+    let cache_key = format!(
+        "rounds:offset={offset}:limit={limit}:game_type={:?}:phase={:?}:player={:?}",
+        game_type_filter, phase_filter, player_filter
+    );
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        async move {
+            let explorer = simulator.explorer.read().await;
+
+            // Collect rounds in reverse chronological order (most recent first)
+            let mut rounds: Vec<_> = explorer
+                .rounds_by_height
+                .iter()
+                .rev()
+                .flat_map(|(_, keys)| keys.iter())
+                .filter_map(|key| explorer.indexed_rounds.get(key).cloned())
+                .collect();
+
+            // Apply game_type filter
+            if let Some(ref gt) = game_type_filter {
+                rounds.retain(|r| r.game_type.eq_ignore_ascii_case(gt));
+            }
+
+            // Apply phase filter
+            if let Some(ref ph) = phase_filter {
+                rounds.retain(|r| r.phase.eq_ignore_ascii_case(ph));
+            }
+
+            // Apply player filter - keep rounds where player has placed a bet
+            if let Some(ref player_hex) = player_filter {
+                rounds.retain(|r| {
+                    let key = (r.game_type.clone(), r.round_id);
+                    explorer
+                        .bets_by_round
+                        .get(&key)
+                        .map(|bets| bets.iter().any(|b| b.player == *player_hex))
+                        .unwrap_or(false)
+                });
+            }
+
+            let total = rounds.len();
+            let paginated: Vec<_> = rounds.into_iter().skip(offset).take(limit).collect();
+
+            let next_offset = if offset + paginated.len() < total {
+                Some(offset + paginated.len())
+            } else {
+                None
+            };
+
+            json!({
+                "rounds": paginated,
+                "next_offset": next_offset,
+                "total": total
+            })
+        }
+    })
+    .await
+}
+
+/// Path parameters for getting a specific round
+#[derive(Deserialize)]
+pub(crate) struct RoundPath {
+    game_type: String,
+    round_id: u64,
+}
+
+/// Get a specific round with its bets and payouts
+pub(crate) async fn get_round(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Path(path): Path<RoundPath>,
+) -> impl IntoResponse {
+    let cache_key = format!("round:{}:{}", path.game_type, path.round_id);
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json_optional(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        let game_type = path.game_type.clone();
+        let round_id = path.round_id;
+        async move {
+            let explorer = simulator.explorer.read().await;
+
+            // Find the round - try exact match first, then case-insensitive
+            let key = explorer
+                .indexed_rounds
+                .keys()
+                .find(|(gt, rid)| {
+                    *rid == round_id && gt.eq_ignore_ascii_case(&game_type)
+                })
+                .cloned()?;
+
+            let round = explorer.indexed_rounds.get(&key)?.clone();
+            let bets = explorer.bets_by_round.get(&key).cloned().unwrap_or_default();
+            let payouts = explorer
+                .payouts_by_round
+                .get(&key)
+                .cloned()
+                .unwrap_or_default();
+
+            Some(RoundDetail {
+                round,
+                bets,
+                payouts,
+            })
+        }
+    })
+    .await
+    .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
+}
+
+/// Get leaderboard of players by net profit
+pub(crate) async fn get_leaderboard(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Query(params): Query<LeaderboardQuery>,
+) -> impl IntoResponse {
+    let offset = params.offset.unwrap_or(0);
+    let limit = params.limit.unwrap_or(20).min(100);
+    let game_type_filter = params.game_type.clone();
+    let sort_by = params.sort_by.clone().unwrap_or_else(|| "net_profit".to_string());
+
+    let cache_key = format!(
+        "leaderboard:offset={offset}:limit={limit}:game_type={:?}:sort_by={}",
+        game_type_filter, sort_by
+    );
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        async move {
+            let explorer = simulator.explorer.read().await;
+
+            // Aggregate player stats from indexed bets and payouts
+            let mut player_stats: HashMap<String, LeaderboardEntry> = HashMap::new();
+
+            // Iterate over all rounds, optionally filtered by game_type
+            for ((gt, _round_id), round) in explorer.indexed_rounds.iter() {
+                if let Some(ref filter) = game_type_filter {
+                    if !gt.eq_ignore_ascii_case(filter) {
+                        continue;
+                    }
+                }
+
+                let round_key = (gt.clone(), round.round_id);
+
+                // Aggregate bets
+                if let Some(bets) = explorer.bets_by_round.get(&round_key) {
+                    for bet in bets {
+                        let entry = player_stats.entry(bet.player.clone()).or_insert_with(|| {
+                            LeaderboardEntry {
+                                player: bet.player.clone(),
+                                total_wagered: 0,
+                                total_payout: 0,
+                                net_profit: 0,
+                                bet_count: 0,
+                                round_count: 0,
+                                win_count: 0,
+                            }
+                        });
+                        entry.total_wagered += bet.amount;
+                        entry.bet_count += 1;
+                    }
+                }
+
+                // Aggregate payouts
+                if let Some(payouts) = explorer.payouts_by_round.get(&round_key) {
+                    // Track unique players in this round for round_count
+                    let mut players_in_round: std::collections::HashSet<String> =
+                        std::collections::HashSet::new();
+
+                    for payout in payouts {
+                        players_in_round.insert(payout.player.clone());
+
+                        let entry = player_stats.entry(payout.player.clone()).or_insert_with(|| {
+                            LeaderboardEntry {
+                                player: payout.player.clone(),
+                                total_wagered: 0,
+                                total_payout: 0,
+                                net_profit: 0,
+                                bet_count: 0,
+                                round_count: 0,
+                                win_count: 0,
+                            }
+                        });
+                        entry.total_payout += payout.payout;
+                        if payout.payout > 0 {
+                            entry.win_count += 1;
+                        }
+                    }
+
+                    // Increment round_count for each player in this round
+                    for player in players_in_round {
+                        if let Some(entry) = player_stats.get_mut(&player) {
+                            entry.round_count += 1;
+                        }
+                    }
+                }
+            }
+
+            // Calculate net profit
+            for entry in player_stats.values_mut() {
+                entry.net_profit = entry.total_payout - entry.total_wagered as i64;
+            }
+
+            // Sort by the requested field
+            let mut entries: Vec<_> = player_stats.into_values().collect();
+            match sort_by.as_str() {
+                "total_wagered" => entries.sort_by(|a, b| b.total_wagered.cmp(&a.total_wagered)),
+                "bet_count" => entries.sort_by(|a, b| b.bet_count.cmp(&a.bet_count)),
+                _ => entries.sort_by(|a, b| b.net_profit.cmp(&a.net_profit)), // default: net_profit
+            }
+
+            let total = entries.len();
+            let paginated: Vec<_> = entries.into_iter().skip(offset).take(limit).collect();
+
+            let next_offset = if offset + paginated.len() < total {
+                Some(offset + paginated.len())
+            } else {
+                None
+            };
+
+            json!({
+                "leaderboard": paginated,
+                "next_offset": next_offset,
+                "total": total
+            })
+        }
+    })
+    .await
+}
+
+/// Get bets for a specific round (convenience endpoint)
+pub(crate) async fn get_round_bets(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Path(path): Path<RoundPath>,
+    Query(pagination): Query<Pagination>,
+) -> impl IntoResponse {
+    let offset = pagination.offset.unwrap_or(0);
+    let limit = pagination.limit.unwrap_or(50).min(200);
+
+    let cache_key = format!(
+        "round_bets:{}:{}:offset={offset}:limit={limit}",
+        path.game_type, path.round_id
+    );
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json_optional(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        let game_type = path.game_type.clone();
+        let round_id = path.round_id;
+        async move {
+            let explorer = simulator.explorer.read().await;
+
+            // Find the round key - case-insensitive match
+            let key = explorer
+                .indexed_rounds
+                .keys()
+                .find(|(gt, rid)| *rid == round_id && gt.eq_ignore_ascii_case(&game_type))
+                .cloned()?;
+
+            let bets = explorer.bets_by_round.get(&key)?.clone();
+            let total = bets.len();
+            let paginated: Vec<_> = bets.into_iter().skip(offset).take(limit).collect();
+
+            let next_offset = if offset + paginated.len() < total {
+                Some(offset + paginated.len())
+            } else {
+                None
+            };
+
+            Some(json!({
+                "bets": paginated,
+                "next_offset": next_offset,
+                "total": total
+            }))
+        }
+    })
+    .await
+    .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
+}
+
+/// Get payouts for a specific round (convenience endpoint)
+pub(crate) async fn get_round_payouts(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Path(path): Path<RoundPath>,
+    Query(pagination): Query<Pagination>,
+) -> impl IntoResponse {
+    let offset = pagination.offset.unwrap_or(0);
+    let limit = pagination.limit.unwrap_or(50).min(200);
+
+    let cache_key = format!(
+        "round_payouts:{}:{}:offset={offset}:limit={limit}",
+        path.game_type, path.round_id
+    );
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json_optional(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        let game_type = path.game_type.clone();
+        let round_id = path.round_id;
+        async move {
+            let explorer = simulator.explorer.read().await;
+
+            // Find the round key - case-insensitive match
+            let key = explorer
+                .indexed_rounds
+                .keys()
+                .find(|(gt, rid)| *rid == round_id && gt.eq_ignore_ascii_case(&game_type))
+                .cloned()?;
+
+            let payouts = explorer.payouts_by_round.get(&key)?.clone();
+            let total = payouts.len();
+            let paginated: Vec<_> = payouts.into_iter().skip(offset).take(limit).collect();
+
+            let next_offset = if offset + paginated.len() < total {
+                Some(offset + paginated.len())
+            } else {
+                None
+            };
+
+            Some(json!({
+                "payouts": paginated,
+                "next_offset": next_offset,
+                "total": total
+            }))
+        }
+    })
+    .await
+    .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
+}
