@@ -407,6 +407,19 @@ export class NonceManager {
   }
 
   /**
+   * Extract expected nonce from backend error strings like:
+   * "nonce_too_low:...:expected=15" or "expected: 15"
+   * @param {string} message
+   * @returns {number} expected nonce or NaN
+   * @private
+   */
+  extractExpectedNonce(message) {
+    if (!message || typeof message !== 'string') return Number.NaN;
+    const match = message.match(/expected[=:\s]+(\d+)/i);
+    return match ? Number(match[1]) : Number.NaN;
+  }
+
+  /**
    * Get the next nonce to use for a transaction.
    * @returns {number} The next nonce value
    */
@@ -755,10 +768,26 @@ export class NonceManager {
           console.log('[TX] Error', { type: txType, nonce, error: message });
           console.error(`Error submitting ${txType} transaction with nonce ${nonce}:`, message);
 
-          if (isNonceError && attempt === 0 && typeof this.forceSyncFromChain === 'function') {
-            logDebug('[NonceManager] Detected nonce mismatch, syncing from chain and retrying');
-            await this.forceSyncFromChain();
-            continue;
+          if (isNonceError && attempt === 0) {
+            const expected = this.extractExpectedNonce(message);
+            if (Number.isFinite(expected)) {
+              const localNonce = this.getCurrentNonce();
+              if (expected > localNonce) {
+                logDebug(`[NonceManager] Nonce mismatch: bumping local nonce ${localNonce} -> ${expected}`);
+                this.setNonce(expected);
+              }
+              if (expected > 0) {
+                this.cleanupConfirmedTransactions(expected - 1);
+              }
+              // Pending queue likely stale; clear to avoid replaying bad nonces
+              this.cleanupAllTransactions();
+              continue;
+            }
+            if (typeof this.forceSyncFromChain === 'function') {
+              logDebug('[NonceManager] Detected nonce mismatch, syncing from chain and retrying');
+              await this.forceSyncFromChain();
+              continue;
+            }
           }
 
           throw error;
