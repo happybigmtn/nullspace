@@ -140,3 +140,12 @@ Completed work items moved from `IMPLEMENTATION_PLAN.md`.
 - `gateway/src/logger.ts` (requestId logging context)
 - `simulator/src/api/mod.rs` (request_id middleware)
 - `tests/integration/correlation-id.test.ts` (propagation checks)
+
+### Sprint 02: Round scheduler state machine ✅
+
+- [x] Deterministic phase transitions for betting → lock → rolling → payout → cooldown
+- [x] Timing helpers based on view * MS_PER_VIEW
+- [x] Unit coverage for transitions and timing validation
+
+**Files Reviewed**:
+- `execution/src/round_scheduler.rs`
