@@ -1592,3 +1592,219 @@ impl EncodeSize for PlayerExposure {
             + self.last_bet_ts.encode_size()
     }
 }
+
+// ============================================================================
+// Admin Audit Log Types for AC-7.3: Admin Operations with Audit Logging
+// ============================================================================
+
+/// Type of admin operation being audited.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum AdminActionType {
+    /// Update house bankroll limits
+    UpdateBankrollLimits = 0,
+    /// Update game configuration
+    UpdateGameConfig = 1,
+    /// Update policy/economic parameters
+    UpdatePolicy = 2,
+    /// Update responsible gaming limits
+    UpdateResponsibleGamingLimits = 3,
+    /// Pause/unpause bridge
+    ToggleBridge = 4,
+    /// Pause/unpause oracle
+    ToggleOracle = 5,
+    /// Emergency action (e.g., pause all)
+    EmergencyAction = 6,
+}
+
+impl Write for AdminActionType {
+    fn write(&self, writer: &mut impl BufMut) {
+        (*self as u8).write(writer);
+    }
+}
+
+impl Read for AdminActionType {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let tag = u8::read(reader)?;
+        match tag {
+            0 => Ok(Self::UpdateBankrollLimits),
+            1 => Ok(Self::UpdateGameConfig),
+            2 => Ok(Self::UpdatePolicy),
+            3 => Ok(Self::UpdateResponsibleGamingLimits),
+            4 => Ok(Self::ToggleBridge),
+            5 => Ok(Self::ToggleOracle),
+            6 => Ok(Self::EmergencyAction),
+            _ => Err(Error::InvalidEnum(tag)),
+        }
+    }
+}
+
+impl EncodeSize for AdminActionType {
+    fn encode_size(&self) -> usize {
+        u8::SIZE
+    }
+}
+
+/// Audit log entry for admin operations.
+/// Each entry tracks a single admin action with before/after state and authorization.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AuditLogEntry {
+    /// Unique sequential ID for this audit entry
+    pub id: u64,
+    /// Type of admin action
+    pub action_type: AdminActionType,
+    /// Admin public key who performed the action
+    pub admin: PublicKey,
+    /// Timestamp when action was performed (L2 block time)
+    pub timestamp: u64,
+    /// IP address hash (SHA256 of IP, privacy-preserving)
+    pub ip_hash: [u8; 32],
+    /// Before state (serialized, variable length)
+    pub before_state: Vec<u8>,
+    /// After state (serialized, variable length)
+    pub after_state: Vec<u8>,
+    /// Human-readable reason/note as UTF-8 bytes (max 256 bytes)
+    pub reason: Vec<u8>,
+    /// Block height when this action was recorded
+    pub block_height: u64,
+    /// Request ID for correlation with logs
+    pub request_id: u64,
+}
+
+impl AuditLogEntry {
+    /// Get the reason as a string (best-effort UTF-8 decode).
+    pub fn reason_str(&self) -> String {
+        String::from_utf8_lossy(&self.reason).to_string()
+    }
+}
+
+impl Write for AuditLogEntry {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.id.write(writer);
+        self.action_type.write(writer);
+        self.admin.write(writer);
+        self.timestamp.write(writer);
+        self.ip_hash.write(writer);
+        self.before_state.write(writer);
+        self.after_state.write(writer);
+        self.reason.write(writer);
+        self.block_height.write(writer);
+        self.request_id.write(writer);
+    }
+}
+
+impl Read for AuditLogEntry {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            id: u64::read(reader)?,
+            action_type: AdminActionType::read(reader)?,
+            admin: PublicKey::read(reader)?,
+            timestamp: u64::read(reader)?,
+            ip_hash: <[u8; 32]>::read(reader)?,
+            before_state: Vec::<u8>::read_range(reader, 0..=65536)?,
+            after_state: Vec::<u8>::read_range(reader, 0..=65536)?,
+            reason: Vec::<u8>::read_range(reader, 0..=256)?,
+            block_height: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            request_id: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+        })
+    }
+}
+
+impl EncodeSize for AuditLogEntry {
+    fn encode_size(&self) -> usize {
+        self.id.encode_size()
+            + self.action_type.encode_size()
+            + self.admin.encode_size()
+            + self.timestamp.encode_size()
+            + self.ip_hash.encode_size()
+            + self.before_state.encode_size()
+            + self.after_state.encode_size()
+            + self.reason.encode_size()
+            + self.block_height.encode_size()
+            + self.request_id.encode_size()
+    }
+}
+
+/// Aggregated audit log state for efficient querying.
+/// Tracks totals and latest entries for quick retrieval.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct AuditLogState {
+    /// Next audit entry ID (auto-increment)
+    pub next_entry_id: u64,
+    /// Total entries logged
+    pub total_entries: u64,
+    /// Count of entries by action type (index matches AdminActionType)
+    pub entries_by_type: [u64; 7],
+    /// Last entry timestamp
+    pub last_entry_ts: u64,
+    /// ID of last entry (for quick retrieval)
+    pub last_entry_id: u64,
+}
+
+impl Write for AuditLogState {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.next_entry_id.write(writer);
+        self.total_entries.write(writer);
+        for count in &self.entries_by_type {
+            count.write(writer);
+        }
+        self.last_entry_ts.write(writer);
+        self.last_entry_id.write(writer);
+    }
+}
+
+impl Read for AuditLogState {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let next_entry_id = u64::read(reader)?;
+        let total_entries = u64::read(reader)?;
+        let mut entries_by_type = [0u64; 7];
+        for count in entries_by_type.iter_mut() {
+            *count = if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            };
+        }
+        let last_entry_ts = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
+        let last_entry_id = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
+        Ok(Self {
+            next_entry_id,
+            total_entries,
+            entries_by_type,
+            last_entry_ts,
+            last_entry_id,
+        })
+    }
+}
+
+impl EncodeSize for AuditLogState {
+    fn encode_size(&self) -> usize {
+        self.next_entry_id.encode_size()
+            + self.total_entries.encode_size()
+            + (u64::SIZE * 7) // entries_by_type
+            + self.last_entry_ts.encode_size()
+            + self.last_entry_id.encode_size()
+    }
+}

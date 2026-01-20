@@ -199,7 +199,13 @@ impl Api {
             )
             .route("/explorer/leaderboard", get(crate::explorer::get_leaderboard))
             .route("/explorer/stats", get(crate::explorer::get_aggregated_stats))
-            .route("/backfill/blocks", get(crate::explorer::get_backfill_blocks));
+            .route("/backfill/blocks", get(crate::explorer::get_backfill_blocks))
+            // Admin endpoints (AC-7.3)
+            .route("/admin/state", get(http::get_admin_state))
+            .route("/admin/audit-logs", get(http::list_audit_logs))
+            .route("/admin/audit-logs/:id", get(http::get_audit_log))
+            .route("/admin/limits/bankroll", post(http::update_bankroll_limits))
+            .route("/admin/config/policy", post(http::update_policy_config));
 
         #[cfg(feature = "passkeys")]
         let router = router

@@ -379,6 +379,17 @@ pub struct Simulator {
     system_metrics: SystemMetrics,
     ws_connections: Mutex<WsConnectionTracker>,
     global_table_presence: Mutex<GlobalTablePresence>,
+    // Admin state for AC-7.3
+    admin_state: RwLock<AdminState>,
+}
+
+/// In-memory admin state for admin operations (AC-7.3).
+#[derive(Default)]
+pub struct AdminState {
+    pub house_bankroll: nullspace_types::casino::HouseBankroll,
+    pub policy_state: nullspace_types::casino::PolicyState,
+    pub audit_log_state: nullspace_types::casino::AuditLogState,
+    pub audit_log_entries: std::collections::BTreeMap<u64, nullspace_types::casino::AuditLogEntry>,
 }
 
 pub enum WsConnectionRejection {
@@ -528,6 +539,7 @@ impl Simulator {
             system_metrics: SystemMetrics::new(),
             ws_connections: Mutex::new(WsConnectionTracker::default()),
             global_table_presence: Mutex::new(GlobalTablePresence::default()),
+            admin_state: RwLock::new(AdminState::default()),
         }
     }
 
@@ -662,6 +674,92 @@ impl Simulator {
         }
     }
 
+    // =========================================================================
+    // Admin State Methods (AC-7.3)
+    // =========================================================================
+
+    /// Load the current house bankroll state.
+    pub async fn load_house_bankroll(&self) -> nullspace_types::casino::HouseBankroll {
+        self.admin_state.read().await.house_bankroll.clone()
+    }
+
+    /// Save updated house bankroll state.
+    pub async fn save_house_bankroll(&self, bankroll: &nullspace_types::casino::HouseBankroll) {
+        self.admin_state.write().await.house_bankroll = bankroll.clone();
+    }
+
+    /// Load the current policy state.
+    pub async fn load_policy_state(&self) -> nullspace_types::casino::PolicyState {
+        self.admin_state.read().await.policy_state.clone()
+    }
+
+    /// Save updated policy state.
+    pub async fn save_policy_state(&self, policy: &nullspace_types::casino::PolicyState) {
+        self.admin_state.write().await.policy_state = policy.clone();
+    }
+
+    /// Load the audit log state (summary).
+    pub async fn load_audit_log_state(&self) -> nullspace_types::casino::AuditLogState {
+        self.admin_state.read().await.audit_log_state.clone()
+    }
+
+    /// Load a specific audit log entry by ID.
+    pub async fn load_audit_log_entry(
+        &self,
+        id: u64,
+    ) -> Option<nullspace_types::casino::AuditLogEntry> {
+        self.admin_state
+            .read()
+            .await
+            .audit_log_entries
+            .get(&id)
+            .cloned()
+    }
+
+    /// Create a new audit log entry and return its ID.
+    pub async fn create_audit_log_entry<B, A>(
+        &self,
+        action_type: nullspace_types::casino::AdminActionType,
+        admin: commonware_cryptography::ed25519::PublicKey,
+        ip_hash: [u8; 32],
+        before_state: &B,
+        after_state: &A,
+        reason: Vec<u8>,
+    ) -> u64
+    where
+        B: commonware_codec::Encode,
+        A: commonware_codec::Encode,
+    {
+        let mut state = self.admin_state.write().await;
+        let id = state.audit_log_state.next_entry_id;
+        state.audit_log_state.next_entry_id += 1;
+        state.audit_log_state.total_entries += 1;
+        state.audit_log_state.entries_by_type[action_type as usize] += 1;
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        state.audit_log_state.last_entry_ts = timestamp;
+        state.audit_log_state.last_entry_id = id;
+
+        let entry = nullspace_types::casino::AuditLogEntry {
+            id,
+            action_type,
+            admin,
+            timestamp,
+            ip_hash,
+            before_state: before_state.encode().to_vec(),
+            after_state: after_state.encode().to_vec(),
+            reason,
+            block_height: 0, // Not tied to a specific block in simulator mode
+            request_id: id,  // Use entry ID as request ID for simplicity
+        };
+
+        state.audit_log_entries.insert(id, entry);
+        id
+    }
+
     pub(crate) fn try_acquire_ws_connection(
         self: &Arc<Self>,
         ip: IpAddr,
@@ -726,7 +824,7 @@ impl Simulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use commonware_codec::Encode;
+    use commonware_codec::{Encode, ReadExt};
     use commonware_cryptography::{Hasher, Sha256};
     use commonware_runtime::{tokio as cw_tokio, Runner as _};
     use commonware_storage::qmdb::{
@@ -3587,4 +3685,160 @@ mod tests {
             assert!(status.indexed_accounts > 0, "Accounts should be indexed");
         });
     }
+
+    // =========================================================================
+    // Admin Operations Tests (AC-7.3)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_admin_state_load_save_bankroll() {
+        let (_, network_identity) = create_network_keypair();
+        let simulator = Simulator::new(network_identity);
+
+        // Load default bankroll state
+        let bankroll = simulator.load_house_bankroll().await;
+        assert_eq!(bankroll.bankroll, 0, "Default bankroll should be 0");
+        assert_eq!(bankroll.max_exposure_bps, 5000, "Default max exposure should be 50%");
+
+        // Update and save
+        let mut updated = bankroll.clone();
+        updated.bankroll = 1_000_000;
+        updated.max_single_bet = 50_000;
+        simulator.save_house_bankroll(&updated).await;
+
+        // Verify persistence
+        let loaded = simulator.load_house_bankroll().await;
+        assert_eq!(loaded.bankroll, 1_000_000);
+        assert_eq!(loaded.max_single_bet, 50_000);
+    }
+
+    #[tokio::test]
+    async fn test_admin_state_load_save_policy() {
+        let (_, network_identity) = create_network_keypair();
+        let simulator = Simulator::new(network_identity);
+
+        // Load default policy state
+        let policy = simulator.load_policy_state().await;
+        assert!(policy.bridge_paused, "Default bridge should be paused");
+
+        // Update and save
+        let mut updated = policy.clone();
+        updated.bridge_paused = false;
+        updated.bridge_daily_limit = 100_000;
+        simulator.save_policy_state(&updated).await;
+
+        // Verify persistence
+        let loaded = simulator.load_policy_state().await;
+        assert!(!loaded.bridge_paused);
+        assert_eq!(loaded.bridge_daily_limit, 100_000);
+    }
+
+    #[tokio::test]
+    async fn test_admin_audit_log_entry_creation() {
+        let (_, network_identity) = create_network_keypair();
+        let simulator = Simulator::new(network_identity);
+
+        // Initially no entries
+        let state = simulator.load_audit_log_state().await;
+        assert_eq!(state.total_entries, 0);
+
+        // Create admin public key (zeroed for testing)
+        let admin = commonware_cryptography::ed25519::PublicKey::read(&mut [0u8; 32].as_slice())
+            .unwrap();
+        let ip_hash = [0u8; 32];
+
+        // Create an audit log entry for bankroll update
+        let before = nullspace_types::casino::HouseBankroll::default();
+        let mut after = before.clone();
+        after.max_single_bet = 100_000;
+
+        let entry_id = simulator
+            .create_audit_log_entry(
+                nullspace_types::casino::AdminActionType::UpdateBankrollLimits,
+                admin,
+                ip_hash,
+                &before,
+                &after,
+                b"Test update".to_vec(),
+            )
+            .await;
+
+        assert_eq!(entry_id, 0, "First entry should have ID 0");
+
+        // Verify state updated
+        let state = simulator.load_audit_log_state().await;
+        assert_eq!(state.total_entries, 1);
+        assert_eq!(state.next_entry_id, 1);
+        assert_eq!(state.entries_by_type[0], 1); // UpdateBankrollLimits
+
+        // Load the entry
+        let entry = simulator.load_audit_log_entry(0).await;
+        assert!(entry.is_some(), "Entry should exist");
+        let entry = entry.unwrap();
+        assert_eq!(entry.id, 0);
+        assert_eq!(
+            entry.action_type,
+            nullspace_types::casino::AdminActionType::UpdateBankrollLimits
+        );
+        assert_eq!(entry.reason_str(), "Test update");
+    }
+
+    #[tokio::test]
+    async fn test_admin_audit_log_multiple_entries() {
+        let (_, network_identity) = create_network_keypair();
+        let simulator = Simulator::new(network_identity);
+
+        let admin = commonware_cryptography::ed25519::PublicKey::read(&mut [0u8; 32].as_slice())
+            .unwrap();
+        let ip_hash = [0u8; 32];
+        let dummy_state = 0u64;
+
+        // Create multiple entries of different types
+        let _ = simulator
+            .create_audit_log_entry(
+                nullspace_types::casino::AdminActionType::UpdateBankrollLimits,
+                admin.clone(),
+                ip_hash,
+                &dummy_state,
+                &dummy_state,
+                b"Bankroll update".to_vec(),
+            )
+            .await;
+
+        let _ = simulator
+            .create_audit_log_entry(
+                nullspace_types::casino::AdminActionType::UpdatePolicy,
+                admin.clone(),
+                ip_hash,
+                &dummy_state,
+                &dummy_state,
+                b"Policy update".to_vec(),
+            )
+            .await;
+
+        let _ = simulator
+            .create_audit_log_entry(
+                nullspace_types::casino::AdminActionType::ToggleBridge,
+                admin,
+                ip_hash,
+                &dummy_state,
+                &dummy_state,
+                b"Bridge toggle".to_vec(),
+            )
+            .await;
+
+        // Verify counts
+        let state = simulator.load_audit_log_state().await;
+        assert_eq!(state.total_entries, 3);
+        assert_eq!(state.entries_by_type[0], 1); // UpdateBankrollLimits
+        assert_eq!(state.entries_by_type[2], 1); // UpdatePolicy
+        assert_eq!(state.entries_by_type[4], 1); // ToggleBridge
+
+        // Verify all entries can be loaded
+        assert!(simulator.load_audit_log_entry(0).await.is_some());
+        assert!(simulator.load_audit_log_entry(1).await.is_some());
+        assert!(simulator.load_audit_log_entry(2).await.is_some());
+        assert!(simulator.load_audit_log_entry(3).await.is_none()); // Does not exist
+    }
+
 }

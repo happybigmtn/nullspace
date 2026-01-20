@@ -144,6 +144,10 @@ mod tags {
         // Bankroll/Exposure (34-35)
         pub const HOUSE_BANKROLL: u8 = 34;
         pub const PLAYER_EXPOSURE: u8 = 35;
+
+        // Audit Log (36-37)
+        pub const AUDIT_LOG_STATE: u8 = 36;
+        pub const AUDIT_LOG_ENTRY: u8 = 37;
     }
 
     pub mod value {
@@ -196,6 +200,10 @@ mod tags {
         // Bankroll/Exposure (34-35)
         pub const HOUSE_BANKROLL: u8 = 34;
         pub const PLAYER_EXPOSURE: u8 = 35;
+
+        // Audit Log (36-37)
+        pub const AUDIT_LOG_STATE: u8 = 36;
+        pub const AUDIT_LOG_ENTRY: u8 = 37;
     }
 
     pub mod event {
@@ -1584,6 +1592,10 @@ pub enum Key {
     // Bankroll/Exposure (Tags 34-35)
     HouseBankroll,
     PlayerExposure(PublicKey),
+
+    // Audit Log (Tags 36-37)
+    AuditLogState,
+    AuditLogEntry(u64),
 }
 
 impl Write for Key {
@@ -1670,6 +1682,13 @@ impl Write for Key {
                 tags::key::PLAYER_EXPOSURE.write(writer);
                 pk.write(writer);
             }
+
+            // Audit Log
+            Self::AuditLogState => tags::key::AUDIT_LOG_STATE.write(writer),
+            Self::AuditLogEntry(id) => {
+                tags::key::AUDIT_LOG_ENTRY.write(writer);
+                id.write(writer);
+            }
         }
     }
 }
@@ -1727,6 +1746,10 @@ impl Read for Key {
             tags::key::HOUSE_BANKROLL => Self::HouseBankroll,
             tags::key::PLAYER_EXPOSURE => Self::PlayerExposure(PublicKey::read(reader)?),
 
+            // Audit Log
+            tags::key::AUDIT_LOG_STATE => Self::AuditLogState,
+            tags::key::AUDIT_LOG_ENTRY => Self::AuditLogEntry(u64::read(reader)?),
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -1776,6 +1799,10 @@ impl EncodeSize for Key {
                 // Bankroll/Exposure
                 Self::HouseBankroll => 0,
                 Self::PlayerExposure(_) => PublicKey::SIZE,
+
+                // Audit Log
+                Self::AuditLogState => 0,
+                Self::AuditLogEntry(_) => u64::SIZE,
         }
     }
 }
@@ -1840,6 +1867,10 @@ pub enum Value {
     // Bankroll/Exposure (Tags 34-35)
     HouseBankroll(crate::casino::HouseBankroll),
     PlayerExposure(crate::casino::PlayerExposure),
+
+    // Audit Log (Tags 36-37)
+    AuditLogState(crate::casino::AuditLogState),
+    AuditLogEntry(crate::casino::AuditLogEntry),
 }
 
 impl Write for Value {
@@ -1971,6 +2002,16 @@ impl Write for Value {
                 tags::value::PLAYER_EXPOSURE.write(writer);
                 exposure.write(writer);
             }
+
+            // Audit Log
+            Self::AuditLogState(state) => {
+                tags::value::AUDIT_LOG_STATE.write(writer);
+                state.write(writer);
+            }
+            Self::AuditLogEntry(entry) => {
+                tags::value::AUDIT_LOG_ENTRY.write(writer);
+                entry.write(writer);
+            }
         }
     }
 }
@@ -2060,6 +2101,14 @@ impl Read for Value {
                 Self::PlayerExposure(crate::casino::PlayerExposure::read(reader)?)
             }
 
+            // Audit Log
+            tags::value::AUDIT_LOG_STATE => {
+                Self::AuditLogState(crate::casino::AuditLogState::read(reader)?)
+            }
+            tags::value::AUDIT_LOG_ENTRY => {
+                Self::AuditLogEntry(crate::casino::AuditLogEntry::read(reader)?)
+            }
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -2112,6 +2161,10 @@ impl EncodeSize for Value {
                 // Bankroll/Exposure
                 Self::HouseBankroll(bankroll) => bankroll.encode_size(),
                 Self::PlayerExposure(exposure) => exposure.encode_size(),
+
+                // Audit Log
+                Self::AuditLogState(state) => state.encode_size(),
+                Self::AuditLogEntry(entry) => entry.encode_size(),
             }
     }
 }

@@ -359,11 +359,26 @@
     - Integrated into `handle_global_table_submit_bets` and `handle_global_table_settle`
     - 17 unit tests for HouseBankroll and PlayerExposure types
     - Tests: `cargo test -p nullspace-types house_bankroll` (14 tests) + `cargo test -p nullspace-types player_exposure` (3 tests)
-- [ ] Build admin ops endpoints for config updates and audit log entries
+- [x] Build admin ops endpoints for config updates and audit log entries
   - Specs: `specs/sprint-07-payments-admin.md` AC-7.3
   - Tests/backpressure:
     - Programmatic: API tests for admin auth and audit logging
   - Perceptual: None
+  - **Completed**: Added admin operations infrastructure:
+    - `AuditLogEntry` type (`types/src/casino/economy.rs`): Full audit trail with id, action_type, admin pubkey, timestamp, ip_hash (SHA256), before/after state blobs, reason, block_height, request_id
+    - `AuditLogState` type: Aggregate tracking (next_entry_id, total_entries, entries_by_type[8])
+    - `AdminActionType` enum: UpdateBankrollLimits, UpdateGameConfig, UpdatePolicy, UpdateResponsibleGamingLimits, ToggleBridge, ToggleOracle, EmergencyAction
+    - Key/Value variants: AuditLogState (tag 36), AuditLogEntry(u64) (tag 37)
+    - `AdminState` struct in Simulator for in-memory admin state caching
+    - Admin auth via `ADMIN_AUTH_TOKEN` env var with `admin_auth_error()` helper
+    - HTTP endpoints (`simulator/src/api/http.rs`):
+      - `GET /admin/state` - Get current admin state (bankroll + policy)
+      - `GET /admin/audit-logs` - List audit log entries with pagination (offset/limit)
+      - `GET /admin/audit-logs/:id` - Get specific audit log entry
+      - `POST /admin/limits/bankroll` - Update house bankroll limits (creates audit entry)
+      - `POST /admin/config/policy` - Update policy config (creates audit entry)
+    - IP hash extraction from X-Forwarded-For for privacy-preserving audit trail
+    - Tests: 4 admin tests (load/save bankroll, load/save policy, audit log creation, multiple entries)
 - [ ] Implement responsible gaming caps in bet validation
   - Specs: `specs/sprint-07-payments-admin.md` AC-7.4
   - Tests/backpressure:

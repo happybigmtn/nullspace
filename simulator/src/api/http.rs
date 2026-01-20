@@ -296,6 +296,32 @@ fn presence_ttl_ms() -> u64 {
         .unwrap_or(15_000)
 }
 
+/// Validates admin authentication via x-admin-token header or Bearer token.
+/// Returns None if authorized, Some(StatusCode::UNAUTHORIZED) if not.
+/// Uses ADMIN_AUTH_TOKEN environment variable. If not set, blocks all admin access.
+pub fn admin_auth_error(headers: &HeaderMap) -> Option<StatusCode> {
+    let token = std::env::var("ADMIN_AUTH_TOKEN").unwrap_or_default();
+    if token.is_empty() {
+        // No token configured = block all admin access (secure by default)
+        return Some(StatusCode::UNAUTHORIZED);
+    }
+    let bearer = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(str::to_string);
+    let header_token = headers
+        .get("x-admin-token")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+    if bearer.as_deref() == Some(token.as_str()) || header_token.as_deref() == Some(token.as_str())
+    {
+        None
+    } else {
+        Some(StatusCode::UNAUTHORIZED)
+    }
+}
+
 async fn render_prometheus_metrics(simulator: &Simulator) -> String {
     let ws = simulator.ws_metrics_snapshot();
     let http = simulator.http_metrics_snapshot();
@@ -799,4 +825,359 @@ pub(super) async fn query_seed(
 
     simulator.http_metrics().record_query_seed(start.elapsed());
     response
+}
+
+// ============================================================================
+// Admin Operations Endpoints (AC-7.3)
+// ============================================================================
+
+use nullspace_types::casino::{AdminActionType, AuditLogEntry};
+
+/// Request body for updating house bankroll limits.
+#[derive(Debug, Deserialize)]
+pub struct UpdateBankrollLimitsRequest {
+    /// Maximum allowed exposure as basis points of bankroll (e.g., 5000 = 50%)
+    pub max_exposure_bps: Option<u16>,
+    /// Maximum single bet amount
+    pub max_single_bet: Option<u64>,
+    /// Maximum exposure per player
+    pub max_player_exposure: Option<u64>,
+    /// Admin reason/note for this change
+    pub reason: String,
+}
+
+/// Request body for updating policy state.
+#[derive(Debug, Deserialize)]
+pub struct UpdatePolicyRequest {
+    /// Bridge paused flag
+    pub bridge_paused: Option<bool>,
+    /// Bridge daily limit
+    pub bridge_daily_limit: Option<u64>,
+    /// Bridge daily limit per account
+    pub bridge_daily_limit_per_account: Option<u64>,
+    /// Oracle enabled flag
+    pub oracle_enabled: Option<bool>,
+    /// Admin reason/note for this change
+    pub reason: String,
+}
+
+/// Response for admin operations.
+#[derive(Debug, Serialize)]
+pub struct AdminOpResponse {
+    /// Whether the operation succeeded
+    pub success: bool,
+    /// Audit log entry ID
+    pub audit_id: u64,
+    /// Message/error details
+    pub message: String,
+}
+
+/// Query parameters for listing audit logs.
+#[derive(Debug, Deserialize)]
+pub struct AuditLogQuery {
+    /// Filter by action type (0-6)
+    pub action_type: Option<u8>,
+    /// Offset for pagination
+    pub offset: Option<usize>,
+    /// Limit for pagination (max 100)
+    pub limit: Option<usize>,
+}
+
+/// Response for listing audit logs.
+#[derive(Debug, Serialize)]
+pub struct AuditLogListResponse {
+    pub entries: Vec<AuditLogEntryResponse>,
+    pub total: u64,
+    pub offset: usize,
+    pub limit: usize,
+}
+
+/// Individual audit log entry in response.
+#[derive(Debug, Serialize)]
+pub struct AuditLogEntryResponse {
+    pub id: u64,
+    pub action_type: String,
+    pub admin: String,
+    pub timestamp: u64,
+    pub reason: String,
+    pub block_height: u64,
+}
+
+impl From<&AuditLogEntry> for AuditLogEntryResponse {
+    fn from(entry: &AuditLogEntry) -> Self {
+        Self {
+            id: entry.id,
+            action_type: format!("{:?}", entry.action_type),
+            admin: commonware_utils::hex(&entry.admin.encode()),
+            timestamp: entry.timestamp,
+            reason: entry.reason_str(),
+            block_height: entry.block_height,
+        }
+    }
+}
+
+/// GET /admin/audit-logs - List audit log entries with optional filters.
+pub async fn list_audit_logs(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    headers: HeaderMap,
+    axum::extract::Query(query): axum::extract::Query<AuditLogQuery>,
+) -> impl IntoResponse {
+    if let Some(status) = admin_auth_error(&headers) {
+        return (status, Json(AdminOpResponse {
+            success: false,
+            audit_id: 0,
+            message: "Unauthorized: Invalid or missing admin token".to_string(),
+        })).into_response();
+    }
+
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit.unwrap_or(20).min(100);
+
+    // Load audit log state to get total count
+    let audit_state = simulator.load_audit_log_state().await;
+    let total = audit_state.total_entries;
+
+    // Load entries within range
+    let mut entries = Vec::new();
+    let start_id = offset as u64;
+    let end_id = (offset + limit).min(total as usize) as u64;
+
+    for id in start_id..end_id {
+        if let Some(entry) = simulator.load_audit_log_entry(id).await {
+            // Apply action type filter if specified
+            if let Some(filter_type) = query.action_type {
+                if entry.action_type as u8 != filter_type {
+                    continue;
+                }
+            }
+            entries.push(AuditLogEntryResponse::from(&entry));
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(AuditLogListResponse {
+            entries,
+            total,
+            offset,
+            limit,
+        }),
+    ).into_response()
+}
+
+/// GET /admin/audit-logs/:id - Get a specific audit log entry.
+pub async fn get_audit_log(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    headers: HeaderMap,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+) -> impl IntoResponse {
+    if let Some(status) = admin_auth_error(&headers) {
+        return (status, Json(AdminOpResponse {
+            success: false,
+            audit_id: 0,
+            message: "Unauthorized: Invalid or missing admin token".to_string(),
+        })).into_response();
+    }
+
+    match simulator.load_audit_log_entry(id).await {
+        Some(entry) => (StatusCode::OK, Json(AuditLogEntryResponse::from(&entry))).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(AdminOpResponse {
+            success: false,
+            audit_id: 0,
+            message: format!("Audit log entry {} not found", id),
+        })).into_response(),
+    }
+}
+
+/// POST /admin/limits/bankroll - Update house bankroll limits.
+pub async fn update_bankroll_limits(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    headers: HeaderMap,
+    Json(request): Json<UpdateBankrollLimitsRequest>,
+) -> impl IntoResponse {
+    if let Some(status) = admin_auth_error(&headers) {
+        return (status, Json(AdminOpResponse {
+            success: false,
+            audit_id: 0,
+            message: "Unauthorized: Invalid or missing admin token".to_string(),
+        }));
+    }
+
+    // Get admin public key from header (for audit trail)
+    let admin_pk = extract_admin_pubkey_or_zero(&headers);
+
+    // Load current bankroll state
+    let mut bankroll = simulator.load_house_bankroll().await;
+    let before_state = bankroll.clone();
+
+    // Apply updates
+    if let Some(max_exposure_bps) = request.max_exposure_bps {
+        bankroll.max_exposure_bps = max_exposure_bps;
+    }
+    if let Some(max_single_bet) = request.max_single_bet {
+        bankroll.max_single_bet = max_single_bet;
+    }
+    if let Some(max_player_exposure) = request.max_player_exposure {
+        bankroll.max_player_exposure = max_player_exposure;
+    }
+    bankroll.last_updated_ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    // Create audit log entry
+    let ip_hash = extract_ip_hash(&headers);
+    let audit_id = simulator
+        .create_audit_log_entry(
+            AdminActionType::UpdateBankrollLimits,
+            admin_pk,
+            ip_hash,
+            &before_state,
+            &bankroll,
+            request.reason.as_bytes().to_vec(),
+        )
+        .await;
+
+    // Save updated bankroll
+    simulator.save_house_bankroll(&bankroll).await;
+
+    (StatusCode::OK, Json(AdminOpResponse {
+        success: true,
+        audit_id,
+        message: "Bankroll limits updated successfully".to_string(),
+    }))
+}
+
+/// POST /admin/config/policy - Update policy configuration.
+pub async fn update_policy_config(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    headers: HeaderMap,
+    Json(request): Json<UpdatePolicyRequest>,
+) -> impl IntoResponse {
+    if let Some(status) = admin_auth_error(&headers) {
+        return (status, Json(AdminOpResponse {
+            success: false,
+            audit_id: 0,
+            message: "Unauthorized: Invalid or missing admin token".to_string(),
+        }));
+    }
+
+    // Get admin public key from header (for audit trail)
+    let admin_pk = extract_admin_pubkey_or_zero(&headers);
+
+    // Load current policy state
+    let mut policy = simulator.load_policy_state().await;
+    let before_state = policy.clone();
+
+    // Apply updates
+    if let Some(bridge_paused) = request.bridge_paused {
+        policy.bridge_paused = bridge_paused;
+    }
+    if let Some(bridge_daily_limit) = request.bridge_daily_limit {
+        policy.bridge_daily_limit = bridge_daily_limit;
+    }
+    if let Some(bridge_daily_limit_per_account) = request.bridge_daily_limit_per_account {
+        policy.bridge_daily_limit_per_account = bridge_daily_limit_per_account;
+    }
+    if let Some(oracle_enabled) = request.oracle_enabled {
+        policy.oracle_enabled = oracle_enabled;
+    }
+
+    // Determine action type
+    let action_type = if request.bridge_paused.is_some() {
+        AdminActionType::ToggleBridge
+    } else if request.oracle_enabled.is_some() {
+        AdminActionType::ToggleOracle
+    } else {
+        AdminActionType::UpdatePolicy
+    };
+
+    // Create audit log entry
+    let ip_hash = extract_ip_hash(&headers);
+    let audit_id = simulator
+        .create_audit_log_entry(
+            action_type,
+            admin_pk,
+            ip_hash,
+            &before_state,
+            &policy,
+            request.reason.as_bytes().to_vec(),
+        )
+        .await;
+
+    // Save updated policy
+    simulator.save_policy_state(&policy).await;
+
+    (StatusCode::OK, Json(AdminOpResponse {
+        success: true,
+        audit_id,
+        message: "Policy configuration updated successfully".to_string(),
+    }))
+}
+
+/// GET /admin/state - Get current admin-relevant state (bankroll, policy, audit summary).
+pub async fn get_admin_state(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Some(status) = admin_auth_error(&headers) {
+        return (status, Json(serde_json::json!({
+            "error": "Unauthorized: Invalid or missing admin token"
+        }))).into_response();
+    }
+
+    let bankroll = simulator.load_house_bankroll().await;
+    let policy = simulator.load_policy_state().await;
+    let audit_state = simulator.load_audit_log_state().await;
+
+    (StatusCode::OK, Json(serde_json::json!({
+        "bankroll": {
+            "bankroll": bankroll.bankroll,
+            "current_exposure": bankroll.current_exposure,
+            "max_exposure_bps": bankroll.max_exposure_bps,
+            "max_single_bet": bankroll.max_single_bet,
+            "max_player_exposure": bankroll.max_player_exposure,
+            "total_bets_placed": bankroll.total_bets_placed,
+            "total_amount_wagered": bankroll.total_amount_wagered,
+            "total_payouts": bankroll.total_payouts,
+            "last_updated_ts": bankroll.last_updated_ts,
+        },
+        "policy": {
+            "bridge_paused": policy.bridge_paused,
+            "bridge_daily_limit": policy.bridge_daily_limit,
+            "bridge_daily_limit_per_account": policy.bridge_daily_limit_per_account,
+            "oracle_enabled": policy.oracle_enabled,
+        },
+        "audit": {
+            "total_entries": audit_state.total_entries,
+            "last_entry_ts": audit_state.last_entry_ts,
+            "entries_by_type": audit_state.entries_by_type,
+        }
+    }))).into_response()
+}
+
+/// Extract admin public key from x-admin-pubkey header.
+/// Returns a zeroed public key if the header is missing or invalid.
+fn extract_admin_pubkey_or_zero(headers: &HeaderMap) -> PublicKey {
+    headers
+        .get("x-admin-pubkey")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|hex_str| from_hex(hex_str))
+        .and_then(|bytes| PublicKey::read(&mut bytes.as_slice()).ok())
+        .unwrap_or_else(|| PublicKey::read(&mut [0u8; 32].as_slice()).unwrap())
+}
+
+/// Hash IP address for privacy-preserving audit trail.
+fn extract_ip_hash(headers: &HeaderMap) -> [u8; 32] {
+    let ip = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("unknown");
+    let mut hasher = Sha256::new();
+    hasher.update(ip.as_bytes());
+    let digest = hasher.finalize();
+    let mut result = [0u8; 32];
+    result.copy_from_slice(digest.as_ref());
+    result
 }
