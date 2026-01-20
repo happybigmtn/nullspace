@@ -33,3 +33,10 @@ export { useParallaxTilt } from './useParallaxTilt';
 export type { ParallaxTiltOptions, ParallaxTiltResult } from './useParallaxTilt';
 // Bet history (US-165)
 export { useBetHistory } from './useBetHistory';
+// Wallet connection (AC-8.1)
+export { useWalletConnection } from './useWalletConnection';
+export type {
+  WalletConnectionStatus,
+  WalletConnectionState,
+  WalletConnectionActions,
+} from './useWalletConnection';

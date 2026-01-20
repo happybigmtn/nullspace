@@ -408,11 +408,25 @@
     - Tests: `npx vitest run` (525 tests passing)
 
 ## Sprint 08 - Mobile Client
-- [ ] Implement wallet connection and session persistence on mobile
+- [x] Implement wallet connection and session persistence on mobile
   - Specs: `specs/sprint-08-mobile-client.md` AC-8.1
   - Tests/backpressure:
     - Programmatic: mobile unit tests
   - Perceptual: None
+  - **Completed**: Added `useWalletConnection` hook (`mobile/src/hooks/useWalletConnection.ts`) providing unified wallet connection interface:
+    - Combines vault status, gateway session, and WebSocket connection into single state machine
+    - Session persistence via MMKV/SecureStore with `WALLET_PUBLIC_KEY` storage key
+    - Status states: disconnected, vault_missing, vault_locked, vault_corrupted, connecting, connected, offline, error
+    - Actions: unlockAndConnect, disconnectAndLock, reconnect, refreshBalance
+    - Session restoration detection on app restart
+  - Added `WalletStatusDisplay` component (`mobile/src/components/ui/WalletStatusDisplay.tsx`):
+    - Visual status indicators with color coding (green=connected, yellow=connecting, red=error, gray=offline, purple=vault_locked)
+    - Balance display when connected and ready
+    - Public key truncation for display
+    - Compact mode for inline use
+    - Accessibility: button role, labels, hints
+    - "Restored" badge for session restoration
+  - Added 47 unit tests covering status derivation, persistence logic, unlock/disconnect flows, and AC-8.1 compliance
 - [ ] Build table view and bet controls optimized for touch
   - Specs: `specs/sprint-08-mobile-client.md` AC-8.2, AC-PQ.2
   - Tests/backpressure:

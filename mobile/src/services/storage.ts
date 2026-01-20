@@ -230,6 +230,10 @@ export const STORAGE_KEYS = {
   SESSION_ACTIVE: 'auth.session_active',
   SESSION_CREATED_AT: 'auth.session_created_at',
 
+  // Wallet (AC-8.1)
+  WALLET_PUBLIC_KEY: 'wallet.public_key',
+  WALLET_LAST_CONNECTED: 'wallet.last_connected',
+
   // Game settings
   HAPTICS_ENABLED: 'settings.haptics_enabled',
   SOUND_ENABLED: 'settings.sound_enabled',

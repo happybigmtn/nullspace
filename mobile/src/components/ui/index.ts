@@ -48,3 +48,5 @@ export { StaggerContainer, StaggerList, useStaggerEntering } from './StaggerCont
 export type { StaggerContainerProps, StaggerListProps, StaggerDirection } from './StaggerContainer';
 // DS-049: Ambient floating particles
 export { AmbientParticles } from './AmbientParticles';
+// AC-8.1: Wallet connection status display
+export { WalletStatusDisplay } from './WalletStatusDisplay';
