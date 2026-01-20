@@ -240,11 +240,16 @@
     - Explanation text describing commit-reveal scheme
     - Accessibility: aria-labels, aria-expanded, role="region"
     - Tests: 43 unit tests covering component rendering, utility functions, and AC-5.5 compliance
-- [ ] Ensure keyboard accessibility and visible focus states on bet controls
+- [x] Ensure keyboard accessibility and visible focus states on bet controls
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.6
   - Tests/backpressure:
     - Programmatic: `pnpm -C website test`
   - Perceptual: None
+  - **Completed**: Added consistent `focus-visible` ring styles to all bet control components:
+    - `BetSlipWithConfirmation.tsx`: Added focus-visible:ring-2 + focus-visible:outline-none to Place Bet, Cancel, Confirm, Clear, Remove, Retry, and Dismiss buttons. Primary buttons use ring-offset-2 for visibility.
+    - `InlineBetSelector.tsx`: Already had proper focus-visible:ring-2 styles on stepper (+/-) and preset (MIN/1/4/1/2/MAX) buttons.
+    - `GameControlBar.tsx`: Added focus-visible:ring-4 to FAB button (primary action), focus-visible:ring-2 to menu toggle, close button, and secondary action buttons. Added role="group" with aria-label to non-classic UI path.
+    - Added `KeyboardAccessibility.test.tsx` with 32 tests validating focus-visible patterns, keyboard navigation attributes, and screen reader support across all bet control components.
 
 ## Sprint 06 - Multi-Game Expansion and Compact Encoding v2
 - [ ] Implement compact v2 encoding for additional games

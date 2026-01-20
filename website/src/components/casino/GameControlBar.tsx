@@ -110,7 +110,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                             type="button"
                             onClick={primaryAction.onClick}
                             disabled={primaryAction.disabled}
-                            className={`absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full shadow-xl flex items-center justify-center text-white font-bold tracking-widest text-sm transition-all
+                            className={`absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full shadow-xl flex items-center justify-center text-white font-bold tracking-widest text-sm transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-action-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black
                                 ${primaryAction.disabled ? 'bg-gray-700 cursor-not-allowed' : 'bg-action-primary hover:scale-105 active:scale-95'} ${primaryAction.className || ''}`}
                         >
                             {primaryAction.label}
@@ -119,7 +119,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
 
                     <button
                         onClick={() => setMenuOpen(true)}
-                        className="p-3 rounded-full hover:bg-white/10 active:scale-95 transition-colors"
+                        className="p-3 rounded-full hover:bg-white/10 active:scale-95 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary/50"
                         aria-label="Open menu"
                     >
                         <Grid className="text-white w-6 h-6" />
@@ -194,7 +194,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                                             action.onClick?.();
                                         }}
                                         disabled={action.disabled}
-                                        className={`h-14 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
+                                        className={`h-14 rounded-xl flex flex-col items-center justify-center gap-1 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary/50 ${
                                             action.active
                                                 ? 'bg-action-primary text-white shadow-lg shadow-blue-500/20'
                                                 : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -301,7 +301,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
     return (
         <>
             {/* Main Floating Island - US-266: Using GlassSurface for consistent glass effect */}
-            <GlassSurface depth="float" as="div" className={`${baseContainerClasses} ${className}`}>
+            <GlassSurface depth="float" as="div" role="group" aria-label={ariaLabel} className={`${baseContainerClasses} ${className}`}>
                 {/* Left: Balance/Bet Info - LUX-010: Inline bet selector */}
                 <div className="flex flex-col pl-4 pr-3 border-r border-ns-border/60">
                     {showBetSelector && currentBet !== undefined && onBetChange ? (
@@ -354,7 +354,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                                     ? fabMagneticStyle.transform
                                     : breatheSpring.breathe.to((b) => `scale(${b})`),
                             }}
-                            className={`w-24 h-24 rounded-full flex items-center justify-center text-white font-semibold tracking-[0.15em] text-sm transition-all motion-interaction
+                            className={`w-24 h-24 rounded-full flex items-center justify-center text-white font-semibold tracking-[0.15em] text-sm transition-all motion-interaction focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-ns-surface
                             ${primaryAction.disabled
                                 ? 'bg-ns-border/60 text-ns-muted cursor-not-allowed opacity-60'
                                 : 'bg-action-primary hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl ring-4 ring-action-primary/20'
@@ -372,7 +372,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                     {children && <div className="hidden sm:flex">{children}</div>}
                     <button
                         onClick={() => setMenuOpen(true)}
-                        className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-white/60 active:scale-95 transition-all motion-interaction group"
+                        className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-white/60 active:scale-95 transition-all motion-interaction group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary/50"
                         aria-label="Open menu"
                     >
                         <Grid className="text-ns-muted group-hover:text-ns w-5 h-5" strokeWidth={2.5} />
@@ -443,7 +443,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                                                 action.onClick?.();
                                             }}
                                             disabled={action.disabled}
-                                            className={`h-16 rounded-[24px] flex flex-col items-center justify-center gap-1 transition-all motion-interaction shadow-soft border ${
+                                            className={`h-16 rounded-[24px] flex flex-col items-center justify-center gap-1 transition-all motion-interaction shadow-soft border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary/50 ${
                                                 action.active
                                                     ? 'bg-action-primary text-white border-action-primary shadow-lg'
                                                     : 'bg-white/70 text-ns border-ns-border/60 hover:border-ns-border'

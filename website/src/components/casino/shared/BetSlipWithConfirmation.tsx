@@ -307,7 +307,7 @@ export const BetSlipWithConfirmation: React.FC<BetSlipWithConfirmationProps> = (
           <button
             type="button"
             onClick={onClearAll}
-            className="text-[10px] font-medium uppercase tracking-wider text-ns-muted hover:text-ns transition-colors"
+            className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ns-muted hover:text-ns transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-ns-surface"
             aria-label="Clear all bets"
           >
             Clear
@@ -340,7 +340,7 @@ export const BetSlipWithConfirmation: React.FC<BetSlipWithConfirmationProps> = (
                   <button
                     type="button"
                     onClick={() => onRemoveBet(bet.id)}
-                    className="rounded-full p-1 text-ns-muted hover:bg-ns-border/60 hover:text-ns transition-colors"
+                    className="rounded-full p-1 text-ns-muted hover:bg-ns-border/60 hover:text-ns transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary/50"
                     aria-label={`Remove ${bet.type} bet`}
                   >
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -399,7 +399,7 @@ export const BetSlipWithConfirmation: React.FC<BetSlipWithConfirmationProps> = (
                   <button
                     type="button"
                     onClick={handleRetry}
-                    className="rounded-lg bg-red-500/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/30 transition-colors"
+                    className="rounded-lg bg-red-500/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
                   >
                     Retry
                   </button>
@@ -407,7 +407,7 @@ export const BetSlipWithConfirmation: React.FC<BetSlipWithConfirmationProps> = (
                 <button
                   type="button"
                   onClick={handleDismissError}
-                  className="rounded-lg bg-ns-border/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-ns-muted hover:bg-ns-border transition-colors"
+                  className="rounded-lg bg-ns-border/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-ns-muted hover:bg-ns-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary/50"
                 >
                   Dismiss
                 </button>
@@ -446,7 +446,7 @@ export const BetSlipWithConfirmation: React.FC<BetSlipWithConfirmationProps> = (
             type="button"
             onClick={handleValidateAndConfirm}
             disabled={!bettingEnabled || !isConnected}
-            className="w-full rounded-xl bg-action-primary py-3 text-sm font-bold uppercase tracking-wider text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-xl bg-action-primary py-3 text-sm font-bold uppercase tracking-wider text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary focus-visible:ring-offset-2 focus-visible:ring-offset-ns-surface"
             aria-label="Place bet"
           >
             {!isConnected ? 'Connecting...' : !bettingEnabled ? 'Betting Locked' : 'Place Bet'}
@@ -482,7 +482,7 @@ export const BetSlipWithConfirmation: React.FC<BetSlipWithConfirmationProps> = (
               <button
                 type="button"
                 onClick={handleCancel}
-                className="flex-1 rounded-xl border border-ns-border py-2.5 text-sm font-bold uppercase tracking-wider text-ns transition-all hover:bg-ns-border/60 active:scale-[0.98]"
+                className="flex-1 rounded-xl border border-ns-border py-2.5 text-sm font-bold uppercase tracking-wider text-ns transition-all hover:bg-ns-border/60 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-ns-surface"
                 aria-label="Cancel bet"
               >
                 Cancel
@@ -491,7 +491,7 @@ export const BetSlipWithConfirmation: React.FC<BetSlipWithConfirmationProps> = (
                 ref={submitButtonRef}
                 type="button"
                 onClick={handleConfirmSubmit}
-                className="flex-1 rounded-xl bg-action-primary py-2.5 text-sm font-bold uppercase tracking-wider text-white transition-all hover:brightness-110 active:scale-[0.98]"
+                className="flex-1 rounded-xl bg-action-primary py-2.5 text-sm font-bold uppercase tracking-wider text-white transition-all hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary focus-visible:ring-offset-2 focus-visible:ring-offset-ns-surface"
                 aria-label="Confirm and submit bet"
               >
                 Confirm
