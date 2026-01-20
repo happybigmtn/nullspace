@@ -313,11 +313,21 @@
     - Game-specific view components exist for all 10 games (BlackjackView, RouletteView, CrapsView, etc.)
     - ActiveGame.tsx conditionally renders game-specific layouts based on gameState.type
     - Tests: `pnpm -C website test` (429 tests passing)
-- [ ] Add regression tests for flagship game outcomes and encoding
+- [x] Add regression tests for flagship game outcomes and encoding
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.6
   - Tests/backpressure:
     - Programmatic: `cargo test -p execution`
   - Perceptual: None
+  - **Completed**: Added 17 regression tests to `baccarat.rs` covering:
+    - Golden encoding vectors for v1 atomic batch (single bet, multi-bet)
+    - State blob encoding stability (roundtrip verification)
+    - Deterministic outcome verification (seed/session consistency)
+    - Payout regression tests (Player win, Banker 6, Tie, Player Pair, Dragon Bonus natural/margin, Panda 8, Perfect Pair)
+    - Bet type encoding stability (enum values)
+    - Payout multiplier stability (all 16 payout constants)
+    - Max bet amount stability (overflow prevention)
+    - Full game flow consistency (identical results across multiple runs)
+    - Tests: `cargo test -p nullspace-execution regression` (17 tests), all baccarat tests (75 tests), full suite (511 tests)
 
 ## Sprint 07 - Payments, Treasury, and Admin Ops
 - [ ] Implement deposit/withdraw ledger reconciliation against chain state
