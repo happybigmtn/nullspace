@@ -38,6 +38,33 @@
 
 If you intentionally want to use the indexer directly in the browser, you must enable CORS on the indexer host.
 
+**Indexer CORS (Caddy) Fix Details**
+- If Caddy already injects any `Access-Control-Allow-*` headers from an upstream, duplicate ACAO headers will break preflight.
+- Ensure OPTIONS requests return 204 and strip upstream ACAO before adding your own:
+  ```caddyfile
+  @preflight {
+    method OPTIONS
+  }
+  handle @preflight {
+    header Access-Control-Allow-Origin https://testnet.regenesis.dev
+    header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    header Access-Control-Allow-Headers "Content-Type, Authorization"
+    header Access-Control-Max-Age 86400
+    respond 204
+  }
+
+  handle {
+    reverse_proxy 127.0.0.1:8080 {
+      header_down -Access-Control-Allow-Origin
+      header_down -Access-Control-Allow-Methods
+      header_down -Access-Control-Allow-Headers
+    }
+    header Access-Control-Allow-Origin https://testnet.regenesis.dev
+    header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    header Access-Control-Allow-Headers "Content-Type, Authorization"
+  }
+  ```
+
 **Recovery Steps (Immediate)**
 1. Redeploy validators with the updated image (or restart validators to clear a stuck mempool):
    ```bash
