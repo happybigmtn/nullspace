@@ -593,6 +593,19 @@ export const FaucetClaimRequestSchema = z.object({
   amount: z.number().positive().optional(),
 });
 
+export const PingRequestSchema = z.object({
+  type: z.literal('ping'),
+});
+
+export const GetBalanceRequestSchema = z.object({
+  type: z.literal('get_balance'),
+});
+
+export const SubmitRawRequestSchema = z.object({
+  type: z.literal('submit_raw'),
+  submission: z.string().min(1),
+});
+
 // --- Outbound Message Union ---
 export const OutboundMessageSchema = z.discriminatedUnion('type', [
   // Blackjack
@@ -702,7 +715,76 @@ export type UltimateTXLegacyBetRequest = z.infer<typeof UltimateTXLegacyBetReque
 export type UltimateTXLegacyCheckRequest = z.infer<typeof UltimateTXLegacyCheckRequestSchema>;
 export type UltimateTXLegacyFoldRequest = z.infer<typeof UltimateTXLegacyFoldRequestSchema>;
 export type FaucetClaimRequest = z.infer<typeof FaucetClaimRequestSchema>;
+export type PingRequest = z.infer<typeof PingRequestSchema>;
+export type GetBalanceRequest = z.infer<typeof GetBalanceRequestSchema>;
+export type SubmitRawRequest = z.infer<typeof SubmitRawRequestSchema>;
 export type OutboundMessage = z.infer<typeof OutboundMessageSchema>;
+
+// --- Complete Inbound Message Schema ---
+// All valid client-to-server message types (game + system messages)
+export const InboundMessageSchema = z.discriminatedUnion('type', [
+  // System messages
+  PingRequestSchema,
+  GetBalanceRequestSchema,
+  SubmitRawRequestSchema,
+  FaucetClaimRequestSchema,
+  // Blackjack
+  BlackjackDealRequestSchema,
+  BlackjackHitRequestSchema,
+  BlackjackStandRequestSchema,
+  BlackjackDoubleRequestSchema,
+  BlackjackSplitRequestSchema,
+  // Roulette
+  RouletteSpinRequestSchema,
+  // Craps
+  CrapsRollRequestSchema,
+  CrapsSingleBetRequestSchema,
+  CrapsLiveJoinRequestSchema,
+  CrapsLiveLeaveRequestSchema,
+  CrapsLiveBetRequestSchema,
+  // Hi-Lo
+  HiLoBetRequestSchema,
+  HiLoDealRequestSchema,
+  HiLoHigherRequestSchema,
+  HiLoLowerRequestSchema,
+  HiLoSameRequestSchema,
+  HiLoCashoutRequestSchema,
+  // Baccarat
+  BaccaratDealRequestSchema,
+  // Casino War
+  CasinoWarDealRequestSchema,
+  CasinoWarWarRequestSchema,
+  CasinoWarSurrenderRequestSchema,
+  CasinoWarLegacyDealRequestSchema,
+  CasinoWarLegacyWarRequestSchema,
+  CasinoWarLegacySurrenderRequestSchema,
+  // Video Poker
+  VideoPokerDealRequestSchema,
+  VideoPokerDrawRequestSchema,
+  VideoPokerLegacyDealRequestSchema,
+  VideoPokerLegacyHoldRequestSchema,
+  // Sic Bo
+  SicBoRollRequestSchema,
+  SicBoLegacyRollRequestSchema,
+  // Three Card Poker
+  ThreeCardPokerDealRequestSchema,
+  ThreeCardPokerPlayRequestSchema,
+  ThreeCardPokerFoldRequestSchema,
+  ThreeCardPokerLegacyDealRequestSchema,
+  ThreeCardPokerLegacyPlayRequestSchema,
+  ThreeCardPokerLegacyFoldRequestSchema,
+  // Ultimate TX Hold'em
+  UltimateTXDealRequestSchema,
+  UltimateTXBetRequestSchema,
+  UltimateTXCheckRequestSchema,
+  UltimateTXFoldRequestSchema,
+  UltimateTXLegacyDealRequestSchema,
+  UltimateTXLegacyBetRequestSchema,
+  UltimateTXLegacyCheckRequestSchema,
+  UltimateTXLegacyFoldRequestSchema,
+]);
+
+export type InboundMessage = z.infer<typeof InboundMessageSchema>;
 
 export const OUTBOUND_MESSAGE_GAME_TYPES = {
   blackjack_deal: GameType.Blackjack,

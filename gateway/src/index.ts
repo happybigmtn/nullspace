@@ -11,7 +11,13 @@ import { createHandlerRegistry, type HandlerContext } from './handlers/index.js'
 import { SessionManager, NonceManager, ConnectionLimiter } from './session/index.js';
 import { SubmitClient } from './backend/index.js';
 import { ErrorCodes, createError } from './types/errors.js';
-import { OutboundMessageSchema, type OutboundMessage, getOutboundMessageGameType } from '@nullspace/protocol/mobile';
+import {
+  InboundMessageSchema,
+  OutboundMessageSchema,
+  type InboundMessage,
+  type OutboundMessage,
+  getOutboundMessageGameType,
+} from '@nullspace/protocol/mobile';
 import { CURRENT_PROTOCOL_VERSION, MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION } from '@nullspace/protocol';
 import { trackGatewayFaucet, trackGatewayResponse, trackGatewaySession } from './ops.js';
 import { logDebug, logError, logInfo, logWarn } from './logger.js';
@@ -213,6 +219,9 @@ function sendError(ws: WebSocket, code: string, message: string, traceId?: strin
 /**
  * Handle incoming message from mobile client
  * Wraps processing in an OpenTelemetry span for distributed tracing
+ *
+ * AC-3.2: All inbound messages are schema-validated; invalid payloads are
+ * rejected without crashing the gateway.
  */
 async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
   // Size check before parsing to prevent DoS
@@ -223,27 +232,34 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
   }
 
   // Parse JSON
-  let msg: Record<string, unknown>;
+  let rawMsg: unknown;
   try {
-    msg = JSON.parse(rawData.toString());
+    rawMsg = JSON.parse(rawData.toString());
   } catch {
     sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Invalid JSON');
     return;
   }
 
-  const msgType = msg.type as string | undefined;
-  // Extract client-provided traceId or generate new one for tracing
-  const clientTraceParent = typeof msg.traceparent === 'string' ? msg.traceparent : undefined;
+  // Extract traceId from raw message before validation (for error correlation)
+  const rawObj = typeof rawMsg === 'object' && rawMsg !== null ? rawMsg as Record<string, unknown> : {};
+  const clientTraceParent = typeof rawObj.traceparent === 'string' ? rawObj.traceparent : undefined;
   const { traceId } = clientTraceParent
     ? { traceId: clientTraceParent.split('-')[1] || generateTraceId().traceId }
     : generateTraceId();
 
-  logDebug(`[Gateway] Received message: ${msgType}`, JSON.stringify(msg).slice(0, 200), { requestId: traceId });
-
-  if (!msgType) {
-    sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Missing message type', traceId);
+  // AC-3.2: Validate ALL inbound messages against schema
+  const validation = InboundMessageSchema.safeParse(rawMsg);
+  if (!validation.success) {
+    const msgType = typeof rawObj.type === 'string' ? rawObj.type : 'unknown';
+    logDebug(`[Gateway] Schema validation failed for ${msgType}:`, validation.error.message, { requestId: traceId });
+    sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Invalid message payload', traceId);
     return;
   }
+
+  const msg = validation.data;
+  const msgType = msg.type;
+
+  logDebug(`[Gateway] Received message: ${msgType}`, JSON.stringify(msg).slice(0, 200), { requestId: traceId });
 
   // Handle system messages (no tracing overhead for high-frequency messages)
   if (msgType === 'ping') {
@@ -258,13 +274,9 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
       sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session', traceId);
       return;
     }
-    const submissionB64 = typeof msg.submission === 'string' ? msg.submission : null;
-    if (!submissionB64) {
-      sendError(ws, ErrorCodes.INVALID_MESSAGE, 'submission (base64) required', traceId);
-      return;
-    }
+    // msg.submission is guaranteed to be a non-empty string by schema validation
     try {
-      const bytes = Buffer.from(submissionB64, 'base64');
+      const bytes = Buffer.from(msg.submission, 'base64');
       const result = await submitClient.submit(bytes);
       if (result.accepted) {
         send(ws, { type: 'submit_result', accepted: true }, traceId);
@@ -319,8 +331,8 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
 
       addSpanAttributes(span, { 'session.public_key': session.publicKeyHex });
 
-      const amountRaw = typeof msg.amount === 'number' ? msg.amount : null;
-      const amount = amountRaw && amountRaw > 0 ? BigInt(Math.floor(amountRaw)) : DEFAULT_FAUCET_AMOUNT;
+      // msg.amount is validated by schema (positive number or undefined)
+      const amount = msg.amount ? BigInt(Math.floor(msg.amount)) : DEFAULT_FAUCET_AMOUNT;
       addSpanAttributes(span, { 'faucet.amount': Number(amount) });
 
       const result = await sessionManager.requestFaucet(session, amount, FAUCET_COOLDOWN_MS);
@@ -345,13 +357,16 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
       return;
     }
 
-    const validation = OutboundMessageSchema.safeParse(msg);
-    if (!validation.success) {
-      sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Invalid message payload', traceId);
+    // For game messages, re-validate with OutboundMessageSchema for type narrowing
+    // (System messages have already been handled above)
+    const gameValidation = OutboundMessageSchema.safeParse(msg);
+    if (!gameValidation.success) {
+      // This shouldn't happen since InboundMessageSchema is a superset
+      sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Invalid game message payload', traceId);
       return;
     }
 
-    const validatedMsg = validation.data as OutboundMessage;
+    const validatedMsg = gameValidation.data;
     const validatedType = validatedMsg.type;
 
     // Get session

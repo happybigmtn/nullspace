@@ -39,11 +39,12 @@
     - Error response format (RFC 7807 Problem Details)
     - Edge cases (case sensitivity, ports, trailing slashes)
     - Existing implementation in `middleware/security.ts` and `src/index.ts` validated
-- [ ] Add schema validation for all inbound messages
+- [x] Add schema validation for all inbound messages
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.2
   - Tests/backpressure:
     - Programmatic: `pnpm -C gateway test`
   - Perceptual: None
+  - **Completed**: Added `InboundMessageSchema` covering all client-to-server message types (ping, get_balance, submit_raw, faucet_claim, plus all game messages). Updated `handleMessage` to validate ALL inbound messages upfront. Added 58 unit tests for schema validation covering valid messages, invalid payloads, malformed data, and security edge cases (SQL injection attempts, XSS, prototype pollution).
 - [ ] Implement fanout with backpressure controls
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.3
   - Tests/backpressure:
