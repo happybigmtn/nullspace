@@ -83,18 +83,26 @@
     - Session cleanup on disconnect
     - Tests: 38 unit tests + 7 integration tests for duplicate bet intent handling
     - Tests: `pnpm -C gateway test` (187 tests passing)
-- [ ] Add presence and clock sync broadcasting
+- [x] Add presence and clock sync broadcasting
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.6
   - Tests/backpressure:
     - Programmatic: end-to-end gateway sync test
   - Perceptual: None
+  - **Completed**: Added `PresenceManager` class (`gateway/src/presence/index.ts`) with:
+    - Clock sync messages delivered on connect and periodically (configurable via GATEWAY_CLOCK_SYNC_INTERVAL_MS)
+    - Presence messages delivered on connect and when users join/leave (configurable via GATEWAY_PRESENCE_INTERVAL_MS)
+    - Added `ClockSyncMessageSchema` and `PresenceMessageSchema` to protocol package
+    - Integrated presence tracking into gateway connection handler
+    - Tests: 23 unit tests + 12 integration tests for sync message validation
+    - Tests: `pnpm -C gateway test` (210 tests passing)
 
 ## Sprint 04 - Simulator/Indexer and Explorer APIs
-- [ ] Implement event ingestion pipeline and persistence schema
+- [x] Implement event ingestion pipeline and persistence schema
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.1
   - Tests/backpressure:
     - Programmatic: integration tests for stored rounds
   - Perceptual: None
+  - **Completed**: Added `IndexedRound`, `IndexedBet`, and `IndexedPayout` types to `explorer.rs`. Updated `record_event` to track `GlobalTableRoundOpened`, `GlobalTableLocked`, `GlobalTableOutcome`, `GlobalTableFinalized`, `GlobalTableBetAccepted`, and `GlobalTablePlayerSettled` events. Added round/bet/payout maps to `ExplorerState` with LRU retention. Added `ExplorerMetrics` counters for round lifecycle. Integration test (`test_explorer_round_indexing`) validates full round lifecycle indexing.
 - [ ] Add snapshot replay and log catch-up on indexer startup
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.2
   - Tests/backpressure:

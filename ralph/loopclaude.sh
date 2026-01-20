@@ -191,10 +191,15 @@ while true; do
         echo -e "${DIM}💰 Session cost: \$${TOTAL_COST}${NC}"
     fi
 
-    # Check for completion signal
+    # Check for completion signal (with validation)
     if grep -qE '<promise>COMPLETE</promise>' "$RAWFILE" 2>/dev/null; then
-        echo -e "${GREEN}✅ All tasks complete!${NC}"
-        break
+        unchecked=$(grep -c '\- \[ \]' IMPLEMENTATION_PLAN.md 2>/dev/null || echo 0)
+        if [ "$unchecked" -gt 0 ]; then
+            echo -e "${YELLOW}⚠ Claude signaled completion but $unchecked tasks remain unchecked. Continuing...${NC}"
+        else
+            echo -e "${GREEN}✅ All tasks complete!${NC}"
+            break
+        fi
     fi
 
     # Commit + push changes after each iteration (build mode only)

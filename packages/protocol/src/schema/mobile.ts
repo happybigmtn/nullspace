@@ -63,6 +63,24 @@ export const BalanceMessageSchema = BaseMessageSchema.extend({
   message: z.string().optional(),
 }).passthrough();
 
+// AC-3.6: Clock sync message - delivered on connect and periodically during session
+export const ClockSyncMessageSchema = BaseMessageSchema.extend({
+  type: z.literal('clock_sync'),
+  /** Server timestamp in milliseconds since epoch */
+  serverTime: z.number().int().nonnegative(),
+  /** Monotonic sequence number for ordering (optional) */
+  seq: z.number().int().nonnegative().optional(),
+}).passthrough();
+
+// AC-3.6: Presence message - delivered on connect and when presence changes
+export const PresenceMessageSchema = BaseMessageSchema.extend({
+  type: z.literal('presence'),
+  /** Number of connected sessions */
+  onlineCount: z.number().int().nonnegative(),
+  /** Number of sessions with active games */
+  activeGames: z.number().int().nonnegative().optional(),
+}).passthrough();
+
 export const GameStartedMessageSchema = BaseMessageSchema.extend({
   type: z.literal('game_started'),
   gameType: z.number().optional(),
@@ -303,6 +321,8 @@ export const UltimateTXMessageSchema = BaseMessageSchema.extend({
 export const GameMessageSchema = z.discriminatedUnion('type', [
   SessionReadyMessageSchema,
   BalanceMessageSchema,
+  ClockSyncMessageSchema,
+  PresenceMessageSchema,
   GameStartedMessageSchema,
   GameMoveMessageSchema,
   MoveAcceptedMessageSchema,
@@ -317,6 +337,8 @@ export const GameMessageSchema = z.discriminatedUnion('type', [
 export type GameMessage = z.infer<typeof GameMessageSchema>;
 export type SessionReadyMessage = z.infer<typeof SessionReadyMessageSchema>;
 export type BalanceMessage = z.infer<typeof BalanceMessageSchema>;
+export type ClockSyncMessage = z.infer<typeof ClockSyncMessageSchema>;
+export type PresenceMessage = z.infer<typeof PresenceMessageSchema>;
 export type GameStartedMessage = z.infer<typeof GameStartedMessageSchema>;
 export type GameMoveMessage = z.infer<typeof GameMoveMessageSchema>;
 export type MoveAcceptedMessage = z.infer<typeof MoveAcceptedMessageSchema>;
@@ -897,6 +919,20 @@ export function isSessionReadyMessage(msg: unknown): msg is SessionReadyMessage 
  */
 export function isBalanceMessage(msg: unknown): msg is BalanceMessage {
   return BalanceMessageSchema.safeParse(msg).success;
+}
+
+/**
+ * Type guard for clock_sync messages (AC-3.6).
+ */
+export function isClockSyncMessage(msg: unknown): msg is ClockSyncMessage {
+  return ClockSyncMessageSchema.safeParse(msg).success;
+}
+
+/**
+ * Type guard for presence messages (AC-3.6).
+ */
+export function isPresenceMessage(msg: unknown): msg is PresenceMessage {
+  return PresenceMessageSchema.safeParse(msg).success;
 }
 
 /**

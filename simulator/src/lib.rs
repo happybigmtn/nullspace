@@ -169,6 +169,8 @@ pub struct ExplorerMetrics {
     tournament_started: AtomicU64,
     tournament_ended: AtomicU64,
     active_casino_sessions: AtomicU64,
+    global_table_rounds_opened: AtomicU64,
+    global_table_rounds_finalized: AtomicU64,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -187,6 +189,8 @@ pub struct ExplorerMetricsSnapshot {
     pub tournament_started: u64,
     pub tournament_ended: u64,
     pub active_casino_sessions: u64,
+    pub global_table_rounds_opened: u64,
+    pub global_table_rounds_finalized: u64,
 }
 
 impl ExplorerMetrics {
@@ -212,6 +216,10 @@ impl ExplorerMetrics {
             tournament_started: self.tournament_started.load(Ordering::Relaxed),
             tournament_ended: self.tournament_ended.load(Ordering::Relaxed),
             active_casino_sessions: self.active_casino_sessions.load(Ordering::Relaxed),
+            global_table_rounds_opened: self.global_table_rounds_opened.load(Ordering::Relaxed),
+            global_table_rounds_finalized: self
+                .global_table_rounds_finalized
+                .load(Ordering::Relaxed),
         }
     }
 
@@ -293,6 +301,15 @@ impl ExplorerMetrics {
 
     pub fn inc_tournament_ended(&self) {
         self.tournament_ended.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_global_table_round_opened(&self) {
+        self.global_table_rounds_opened.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_global_table_round_finalized(&self) {
+        self.global_table_rounds_finalized
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     fn dec_active_sessions(&self) {
@@ -1621,6 +1638,446 @@ mod tests {
             // 6. Outcome was revealed (deterministic RNG)
             // 7. Players settled their bets (with correct payouts)
             // 8. Round was finalized
+        });
+    }
+
+    /// Test that the explorer properly indexes rounds, bets, and payouts from global table events.
+    ///
+    /// This test validates AC-4.1:
+    /// - Indexer ingests event logs and persists rounds, bets, and payouts to storage.
+    #[test]
+    fn test_explorer_round_indexing() {
+        let executor = cw_tokio::Runner::new(cw_tokio::Config::default());
+        executor.start(|context| async move {
+            use crate::explorer::apply_block_indexing;
+            use nullspace_types::casino::{GameType, GlobalTableBet, GlobalTableConfig};
+            use std::time::{SystemTime, UNIX_EPOCH};
+
+            // Initialize
+            let (network_secret, network_identity) = create_network_keypair();
+            let (mut state, mut events) = create_adbs(&context).await;
+
+            // Create simulator with explorer state
+            let simulator = Simulator::new(network_identity);
+            let metrics = ExplorerMetrics::default();
+            let now_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+
+            // Create player accounts
+            let (admin_private, admin_public) = create_account_keypair(0);
+            let (private1, _public1) = create_account_keypair(1);
+            let (private2, _public2) = create_account_keypair(2);
+
+            // Set admin env var
+            let admin_hex: String = admin_public
+                .as_ref()
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect();
+            std::env::set_var("CASINO_ADMIN_PUBLIC_KEY_HEX", &admin_hex);
+
+            // Block 1: Register players
+            let txs1 = vec![
+                Transaction::sign(
+                    &admin_private,
+                    0,
+                    Instruction::CasinoRegister {
+                        name: "Admin".to_string(),
+                    },
+                ),
+                Transaction::sign(
+                    &private1,
+                    0,
+                    Instruction::CasinoRegister {
+                        name: "Player1".to_string(),
+                    },
+                ),
+                Transaction::sign(
+                    &private2,
+                    0,
+                    Instruction::CasinoRegister {
+                        name: "Player2".to_string(),
+                    },
+                ),
+            ];
+            let (_, summary1) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                1,
+                txs1,
+            )
+            .await;
+
+            // Apply to explorer
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(
+                    &mut explorer,
+                    &summary1.progress,
+                    &summary1.events_proof_ops,
+                    now_ms,
+                    &metrics,
+                );
+            }
+
+            // Block 2: Deposit chips
+            let txs2 = vec![
+                Transaction::sign(&private1, 1, Instruction::CasinoDeposit { amount: 10_000 }),
+                Transaction::sign(&private2, 1, Instruction::CasinoDeposit { amount: 10_000 }),
+            ];
+            let (_, summary2) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                2,
+                txs2,
+            )
+            .await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(
+                    &mut explorer,
+                    &summary2.progress,
+                    &summary2.events_proof_ops,
+                    now_ms,
+                    &metrics,
+                );
+            }
+
+            // Block 3: Initialize global table
+            let txs3 = vec![Transaction::sign(
+                &admin_private,
+                1,
+                Instruction::GlobalTableInit {
+                    config: GlobalTableConfig {
+                        game_type: GameType::Craps,
+                        betting_ms: 30_000,
+                        lock_ms: 5_000,
+                        payout_ms: 10_000,
+                        cooldown_ms: 5_000,
+                        min_bet: 100,
+                        max_bet: 10_000,
+                        max_bets_per_round: 10,
+                    },
+                },
+            )];
+            let (_, summary3) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                3,
+                txs3,
+            )
+            .await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(
+                    &mut explorer,
+                    &summary3.progress,
+                    &summary3.events_proof_ops,
+                    now_ms,
+                    &metrics,
+                );
+            }
+
+            // Block 4: Open round
+            let txs4 = vec![Transaction::sign(
+                &admin_private,
+                2,
+                Instruction::GlobalTableOpenRound {
+                    game_type: GameType::Craps,
+                },
+            )];
+            let (_, summary4) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                100,
+                txs4,
+            )
+            .await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(
+                    &mut explorer,
+                    &summary4.progress,
+                    &summary4.events_proof_ops,
+                    now_ms,
+                    &metrics,
+                );
+            }
+
+            // Verify round was indexed
+            {
+                let explorer = simulator.explorer.read().await;
+                let round_key = ("Craps".to_string(), 1u64);
+                let round = explorer.indexed_rounds.get(&round_key);
+                assert!(round.is_some(), "Round should be indexed after open");
+                let round = round.unwrap();
+                assert_eq!(round.game_type, "Craps");
+                assert_eq!(round.round_id, 1);
+                assert_eq!(round.phase, "Betting");
+                assert!(round.opened_at_height > 0);
+                assert!(round.locked_at_height.is_none());
+            }
+
+            // Block 5: Place bets
+            let txs5 = vec![
+                Transaction::sign(
+                    &private1,
+                    2,
+                    Instruction::GlobalTableSubmitBets {
+                        game_type: GameType::Craps,
+                        round_id: 1,
+                        bets: vec![GlobalTableBet {
+                            bet_type: 4,
+                            target: 0,
+                            amount: 500,
+                        }],
+                    },
+                ),
+                Transaction::sign(
+                    &private2,
+                    2,
+                    Instruction::GlobalTableSubmitBets {
+                        game_type: GameType::Craps,
+                        round_id: 1,
+                        bets: vec![GlobalTableBet {
+                            bet_type: 4,
+                            target: 0,
+                            amount: 300,
+                        }],
+                    },
+                ),
+            ];
+            let (_, summary5) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                105,
+                txs5,
+            )
+            .await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(
+                    &mut explorer,
+                    &summary5.progress,
+                    &summary5.events_proof_ops,
+                    now_ms,
+                    &metrics,
+                );
+            }
+
+            // Verify bets were indexed
+            {
+                let explorer = simulator.explorer.read().await;
+                let round_key = ("Craps".to_string(), 1u64);
+                let bets = explorer.bets_by_round.get(&round_key);
+                assert!(bets.is_some(), "Bets should be indexed");
+                let bets = bets.unwrap();
+                assert_eq!(bets.len(), 2, "Both players' bets should be indexed");
+
+                // Verify bet details
+                let total_bet: u64 = bets.iter().map(|b| b.amount).sum();
+                assert_eq!(total_bet, 800, "Total bet amount should be 500+300=800");
+
+                // Verify round stats updated
+                let round = explorer.indexed_rounds.get(&round_key).unwrap();
+                assert_eq!(round.bet_count, 2);
+                assert_eq!(round.total_bet_amount, 800);
+                assert!(round.player_count >= 1); // At least one unique player
+            }
+
+            // Block 6: Lock
+            let txs6 = vec![Transaction::sign(
+                &admin_private,
+                3,
+                Instruction::GlobalTableLock {
+                    game_type: GameType::Craps,
+                    round_id: 1,
+                },
+            )];
+            let (_, summary6) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                111,
+                txs6,
+            )
+            .await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(
+                    &mut explorer,
+                    &summary6.progress,
+                    &summary6.events_proof_ops,
+                    now_ms,
+                    &metrics,
+                );
+            }
+
+            // Verify lock was recorded
+            {
+                let explorer = simulator.explorer.read().await;
+                let round_key = ("Craps".to_string(), 1u64);
+                let round = explorer.indexed_rounds.get(&round_key).unwrap();
+                assert_eq!(round.phase, "Locked");
+                assert!(round.locked_at_height.is_some());
+            }
+
+            // Block 7: Reveal
+            let txs7 = vec![Transaction::sign(
+                &admin_private,
+                4,
+                Instruction::GlobalTableReveal {
+                    game_type: GameType::Craps,
+                    round_id: 1,
+                },
+            )];
+            let (_, summary7) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                114,
+                txs7,
+            )
+            .await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(
+                    &mut explorer,
+                    &summary7.progress,
+                    &summary7.events_proof_ops,
+                    now_ms,
+                    &metrics,
+                );
+            }
+
+            // Verify outcome was recorded
+            {
+                let explorer = simulator.explorer.read().await;
+                let round_key = ("Craps".to_string(), 1u64);
+                let round = explorer.indexed_rounds.get(&round_key).unwrap();
+                assert!(round.outcome_at_height.is_some());
+                // Dice should be non-zero after reveal
+                assert!(round.d1 > 0 || round.d2 > 0);
+            }
+
+            // Block 8: Settle
+            let txs8 = vec![
+                Transaction::sign(
+                    &private1,
+                    3,
+                    Instruction::GlobalTableSettle {
+                        game_type: GameType::Craps,
+                        round_id: 1,
+                    },
+                ),
+                Transaction::sign(
+                    &private2,
+                    3,
+                    Instruction::GlobalTableSettle {
+                        game_type: GameType::Craps,
+                        round_id: 1,
+                    },
+                ),
+            ];
+            let (_, summary8) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                115,
+                txs8,
+            )
+            .await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(
+                    &mut explorer,
+                    &summary8.progress,
+                    &summary8.events_proof_ops,
+                    now_ms,
+                    &metrics,
+                );
+            }
+
+            // Verify payouts were indexed
+            {
+                let explorer = simulator.explorer.read().await;
+                let round_key = ("Craps".to_string(), 1u64);
+                let payouts = explorer.payouts_by_round.get(&round_key);
+                assert!(payouts.is_some(), "Payouts should be indexed");
+                let payouts = payouts.unwrap();
+                assert_eq!(payouts.len(), 2, "Both players' payouts should be indexed");
+
+                // Verify round stats updated with total payout
+                let round = explorer.indexed_rounds.get(&round_key).unwrap();
+                // Total payout should match the sum of individual payouts
+                let total_payout: i64 = payouts.iter().map(|p| p.payout).sum();
+                assert_eq!(round.total_payout_amount, total_payout);
+            }
+
+            // Block 9: Finalize
+            let txs9 = vec![Transaction::sign(
+                &admin_private,
+                5,
+                Instruction::GlobalTableFinalize {
+                    game_type: GameType::Craps,
+                    round_id: 1,
+                },
+            )];
+            let (_, summary9) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                118,
+                txs9,
+            )
+            .await;
+            {
+                let mut explorer = simulator.explorer.write().await;
+                apply_block_indexing(
+                    &mut explorer,
+                    &summary9.progress,
+                    &summary9.events_proof_ops,
+                    now_ms,
+                    &metrics,
+                );
+            }
+
+            // Verify final round state
+            {
+                let explorer = simulator.explorer.read().await;
+                let round_key = ("Craps".to_string(), 1u64);
+                let round = explorer.indexed_rounds.get(&round_key).unwrap();
+                assert_eq!(round.phase, "Finalized");
+                assert!(round.finalized_at_height.is_some());
+
+                // Final verification: all lifecycle stages recorded
+                assert!(round.opened_at_height > 0);
+                assert!(round.locked_at_height.is_some());
+                assert!(round.outcome_at_height.is_some());
+                assert!(round.finalized_at_height.is_some());
+
+                // Verify bet and payout counts
+                let bets = explorer.bets_by_round.get(&round_key).unwrap();
+                let payouts = explorer.payouts_by_round.get(&round_key).unwrap();
+                assert_eq!(bets.len(), 2, "Should have 2 bets indexed");
+                assert_eq!(payouts.len(), 2, "Should have 2 payouts indexed");
+            }
         });
     }
 }

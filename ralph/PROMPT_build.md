@@ -43,10 +43,12 @@ When a task or spec is fully complete:
 3. Keep `IMPLEMENTATION_PLAN.md` focused on current blocking issues and pending work only
 
 ### Completion Signal (Critical)
-- Do **NOT** output `<promise>COMPLETE</promise>` unless ALL tasks in `IMPLEMENTATION_PLAN.md` are checked `[x]`
+- Run `grep -c '\- \[ \]' IMPLEMENTATION_PLAN.md` before considering completion
+- ONLY output `<promise>COMPLETE</promise>` if this returns `0` (zero unchecked tasks)
+- Do **NOT** confuse "current sprint complete" with "all work complete"
 - After completing your ONE task, the iteration ends naturally—just stop
 - The loop script handles restarting for the next task automatically
-- Only output `<promise>COMPLETE</promise>` when zero unchecked `[ ]` items remain
+- Completing a sprint does NOT mean all work is done—check ALL sprints
 
 ### Commit Policy
 - Do **not** commit/push unless the user explicitly requests it.

@@ -74,6 +74,64 @@ pub struct IndexedGameEvent {
     block_height: u64,
 }
 
+/// Indexed bet within a global table round
+#[derive(Clone, Debug, Serialize)]
+pub struct IndexedBet {
+    pub player: String,
+    pub round_id: u64,
+    pub bet_type: u8,
+    pub target: u8,
+    pub amount: u64,
+    pub block_height: u64,
+}
+
+/// Indexed payout from global table settlement
+#[derive(Clone, Debug, Serialize)]
+pub struct IndexedPayout {
+    pub player: String,
+    pub round_id: u64,
+    pub payout: i64,
+    pub block_height: u64,
+}
+
+/// Indexed global table round
+#[derive(Clone, Debug, Serialize)]
+pub struct IndexedRound {
+    pub game_type: String,
+    pub round_id: u64,
+    pub phase: String,
+    pub opened_at_height: u64,
+    pub locked_at_height: Option<u64>,
+    pub outcome_at_height: Option<u64>,
+    pub finalized_at_height: Option<u64>,
+    pub d1: u8,
+    pub d2: u8,
+    pub total_bet_amount: u64,
+    pub total_payout_amount: i64,
+    pub bet_count: usize,
+    pub player_count: usize,
+}
+
+impl Default for IndexedRound {
+    fn default() -> Self {
+        Self {
+            game_type: String::new(),
+            round_id: 0,
+            phase: "Betting".to_string(),
+            opened_at_height: 0,
+            locked_at_height: None,
+            outcome_at_height: None,
+            finalized_at_height: None,
+            d1: 0,
+            d2: 0,
+            total_bet_amount: 0,
+            total_payout_amount: 0,
+            bet_count: 0,
+            player_count: 0,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct ExplorerState {
     pub(super) indexed_blocks: BTreeMap<u64, ExplorerBlock>,
@@ -84,6 +142,14 @@ pub struct ExplorerState {
     pub(super) accounts: HashMap<PublicKey, AccountActivity>,
     /// Game completion events indexed by player public key
     pub(super) game_events: HashMap<PublicKey, VecDeque<IndexedGameEvent>>,
+    /// Global table rounds indexed by (game_type, round_id)
+    pub(super) indexed_rounds: BTreeMap<(String, u64), IndexedRound>,
+    /// Bets indexed by round for efficient round lookup
+    pub(super) bets_by_round: HashMap<(String, u64), Vec<IndexedBet>>,
+    /// Payouts indexed by round for efficient round lookup
+    pub(super) payouts_by_round: HashMap<(String, u64), Vec<IndexedPayout>>,
+    /// Recent rounds ordered by block height for pagination
+    rounds_by_height: BTreeMap<u64, Vec<(String, u64)>>,
     account_last_seen: HashMap<PublicKey, u64>,
     game_events_last_seen: HashMap<PublicKey, u64>,
     account_lru: VecDeque<(PublicKey, u64)>,
@@ -95,6 +161,7 @@ pub struct ExplorerState {
     max_game_events_per_account: Option<usize>,
     max_accounts: Option<usize>,
     max_game_event_accounts: Option<usize>,
+    max_rounds: Option<usize>,
 }
 
 impl ExplorerState {
@@ -110,6 +177,7 @@ impl ExplorerState {
         self.max_game_events_per_account = Some(100); // Default limit
         self.max_accounts = max_accounts;
         self.max_game_event_accounts = max_game_event_accounts;
+        self.max_rounds = Some(1000); // Default limit for rounds
     }
 
     fn enforce_block_retention(&mut self) {
@@ -216,6 +284,23 @@ impl ExplorerState {
                     self.game_events_last_seen.remove(&public_key);
                     self.game_events.remove(&public_key);
                 }
+            }
+        }
+    }
+
+    fn enforce_round_retention(&mut self) {
+        let Some(max_rounds) = self.max_rounds else {
+            return;
+        };
+        while self.indexed_rounds.len() > max_rounds {
+            // Remove oldest round (smallest height)
+            let Some((_, round_keys)) = self.rounds_by_height.pop_first() else {
+                break;
+            };
+            for round_key in round_keys {
+                self.indexed_rounds.remove(&round_key);
+                self.bets_by_round.remove(&round_key);
+                self.payouts_by_round.remove(&round_key);
             }
         }
     }
@@ -408,13 +493,144 @@ fn record_event(
         Event::Unstaked { player, .. } => touch_account(player),
         Event::EpochProcessed { .. } => {}
         Event::RewardsClaimed { player, .. } => touch_account(player),
-        Event::GlobalTableRoundOpened { .. } => {}
-        Event::GlobalTableLocked { .. } => {}
-        Event::GlobalTableOutcome { .. } => {}
-        Event::GlobalTableFinalized { .. } => {}
-        Event::GlobalTableBetAccepted { player, .. } => touch_account(player),
+        Event::GlobalTableRoundOpened { round } => {
+            metrics.inc_global_table_round_opened();
+            let game_type_str = describe_game_type(&round.game_type).to_string();
+            let round_key = (game_type_str.clone(), round.round_id);
+            let indexed_round = IndexedRound {
+                game_type: game_type_str,
+                round_id: round.round_id,
+                phase: format!("{:?}", round.phase),
+                opened_at_height: height,
+                locked_at_height: None,
+                outcome_at_height: None,
+                finalized_at_height: None,
+                d1: round.d1,
+                d2: round.d2,
+                total_bet_amount: round.totals.iter().map(|t| t.amount).sum(),
+                total_payout_amount: 0,
+                bet_count: 0,
+                player_count: 0,
+            };
+            explorer.indexed_rounds.insert(round_key.clone(), indexed_round);
+            explorer
+                .rounds_by_height
+                .entry(height)
+                .or_default()
+                .push(round_key);
+            explorer.enforce_round_retention();
+        }
+        Event::GlobalTableLocked { game_type, round_id, .. } => {
+            let game_type_str = describe_game_type(game_type).to_string();
+            let round_key = (game_type_str, *round_id);
+            if let Some(round) = explorer.indexed_rounds.get_mut(&round_key) {
+                round.phase = "Locked".to_string();
+                round.locked_at_height = Some(height);
+            }
+        }
+        Event::GlobalTableOutcome { round, .. } => {
+            let game_type_str = describe_game_type(&round.game_type).to_string();
+            let round_key = (game_type_str, round.round_id);
+            if let Some(indexed_round) = explorer.indexed_rounds.get_mut(&round_key) {
+                indexed_round.phase = format!("{:?}", round.phase);
+                indexed_round.outcome_at_height = Some(height);
+                indexed_round.d1 = round.d1;
+                indexed_round.d2 = round.d2;
+            }
+        }
+        Event::GlobalTableFinalized { game_type, round_id } => {
+            metrics.inc_global_table_round_finalized();
+            let game_type_str = describe_game_type(game_type).to_string();
+            let round_key = (game_type_str, *round_id);
+            if let Some(round) = explorer.indexed_rounds.get_mut(&round_key) {
+                round.phase = "Finalized".to_string();
+                round.finalized_at_height = Some(height);
+            }
+        }
+        Event::GlobalTableBetAccepted {
+            player,
+            round_id,
+            bets,
+            ..
+        } => {
+            touch_account(player);
+            // Find game_type from any round that matches this round_id
+            let game_type_str = explorer
+                .indexed_rounds
+                .keys()
+                .find(|(_, rid)| *rid == *round_id)
+                .map(|(gt, _)| gt.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
+            let round_key = (game_type_str.clone(), *round_id);
+            let player_hex = hex(player.as_ref());
+
+            // Index each bet
+            for bet in bets {
+                let indexed_bet = IndexedBet {
+                    player: player_hex.clone(),
+                    round_id: *round_id,
+                    bet_type: bet.bet_type,
+                    target: bet.target,
+                    amount: bet.amount,
+                    block_height: height,
+                };
+                explorer
+                    .bets_by_round
+                    .entry(round_key.clone())
+                    .or_default()
+                    .push(indexed_bet);
+            }
+
+            // Update round stats
+            if let Some(round) = explorer.indexed_rounds.get_mut(&round_key) {
+                let total_bet: u64 = bets.iter().map(|b| b.amount).sum();
+                round.total_bet_amount += total_bet;
+                round.bet_count += bets.len();
+                // Track unique players
+                let existing_players: std::collections::HashSet<_> = explorer
+                    .bets_by_round
+                    .get(&round_key)
+                    .map(|bets| bets.iter().map(|b| &b.player).collect())
+                    .unwrap_or_default();
+                round.player_count = existing_players.len();
+            }
+        }
         Event::GlobalTableBetRejected { player, .. } => touch_account(player),
-        Event::GlobalTablePlayerSettled { player, .. } => touch_account(player),
+        Event::GlobalTablePlayerSettled {
+            player,
+            round_id,
+            payout,
+            ..
+        } => {
+            touch_account(player);
+            // Find game_type from any round that matches this round_id
+            let game_type_str = explorer
+                .indexed_rounds
+                .keys()
+                .find(|(_, rid)| *rid == *round_id)
+                .map(|(gt, _)| gt.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
+            let round_key = (game_type_str, *round_id);
+            let player_hex = hex(player.as_ref());
+
+            // Index the payout
+            let indexed_payout = IndexedPayout {
+                player: player_hex,
+                round_id: *round_id,
+                payout: *payout,
+                block_height: height,
+            };
+            explorer
+                .payouts_by_round
+                .entry(round_key.clone())
+                .or_default()
+                .push(indexed_payout);
+
+            // Update round stats
+            if let Some(round) = explorer.indexed_rounds.get_mut(&round_key) {
+                round.total_payout_amount += payout;
+            }
+        }
     }
 }
 

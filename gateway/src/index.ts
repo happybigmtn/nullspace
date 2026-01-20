@@ -10,6 +10,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { createHandlerRegistry, type HandlerContext } from './handlers/index.js';
 import { SessionManager, NonceManager, ConnectionLimiter, MessageRateLimiter } from './session/index.js';
 import { SubmitClient } from './backend/index.js';
+import { PresenceManager } from './presence/index.js';
 import { ErrorCodes, createError } from './types/errors.js';
 import {
   InboundMessageSchema,
@@ -126,6 +127,9 @@ const GATEWAY_DRAIN_TIMEOUT_MS = parsePositiveInt(
   30_000, // 30 seconds default - wait for active games to complete
   { allowZero: true },
 );
+// AC-3.6: Presence and clock sync configuration
+const CLOCK_SYNC_INTERVAL_MS = parsePositiveInt('GATEWAY_CLOCK_SYNC_INTERVAL_MS', 30_000, { allowZero: true });
+const PRESENCE_INTERVAL_MS = parsePositiveInt('GATEWAY_PRESENCE_INTERVAL_MS', 10_000, { allowZero: true });
 const GATEWAY_ALLOW_NO_ORIGIN = ['1', 'true', 'yes'].includes(
   String(process.env.GATEWAY_ALLOW_NO_ORIGIN ?? '').toLowerCase(),
 );
@@ -199,6 +203,13 @@ const messageRateLimiter = new MessageRateLimiter({
   blockMs: SESSION_RATE_LIMIT_BLOCK_MS,
 });
 const handlers = createHandlerRegistry();
+
+// AC-3.6: Presence and clock sync manager
+const presenceManager = new PresenceManager({
+  clockSyncIntervalMs: CLOCK_SYNC_INTERVAL_MS,
+  presenceIntervalMs: PRESENCE_INTERVAL_MS,
+  enablePeriodicBroadcasts: CLOCK_SYNC_INTERVAL_MS > 0 || PRESENCE_INTERVAL_MS > 0,
+});
 
 // NOTE: Live-table mode disabled per specs/gateway-live-mode-deferment.md (AC-1.1)
 // Live craps table features are deferred to reduce runtime complexity.
@@ -586,6 +597,9 @@ const server = createServer(async (req, res) => {
 const wss = new WebSocketServer({ server });
 server.listen(PORT);
 
+// AC-3.6: Start presence manager for periodic clock sync and presence broadcasts
+presenceManager.start();
+
 // SESSION CLEANUP: Periodic cleanup of idle sessions (runs every 5 minutes)
 // Sessions idle for more than 30 minutes are cleaned up with SESSION_EXPIRED notification
 const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -674,6 +688,9 @@ wss.on('connection', async (ws: WebSocket, req) => {
     });
     trackGatewaySession(session);
 
+    // AC-3.6: Add session to presence tracking (sends clock_sync + presence on connect)
+    presenceManager.addSession(ws);
+
     // Handle messages
     ws.on('message', async (data: Buffer) => {
       try {
@@ -697,6 +714,8 @@ wss.on('connection', async (ws: WebSocket, req) => {
       }
       // AC-3.4: Clean up rate limit state for disconnected session
       messageRateLimiter.removeSession(session.id);
+      // AC-3.6: Remove session from presence tracking
+      presenceManager.removeSession(ws);
       connectionLimiter.unregisterConnection(clientIp, connectionId);
       trackConnection('disconnect', clientIp);
     });
@@ -754,6 +773,9 @@ const drainAndShutdown = async (label: string): Promise<void> => {
   if (noncePersistTimer) {
     clearInterval(noncePersistTimer);
   }
+
+  // AC-3.6: Stop presence manager
+  presenceManager.stop();
 
   // Count initial state
   const initialSessions = sessionManager.getSessionCount();
@@ -827,4 +849,5 @@ logInfo(`[Gateway] Gateway Origin: ${GATEWAY_ORIGIN}`);
 logInfo(`[Gateway] Connection limits: ${MAX_CONNECTIONS_PER_IP} per IP, ${MAX_TOTAL_SESSIONS} total`);
 logInfo(`[Gateway] Max message size: ${MAX_MESSAGE_SIZE} bytes`);
 logInfo(`[Gateway] Message rate limit: ${SESSION_RATE_LIMIT_POINTS} msgs/${SESSION_RATE_LIMIT_WINDOW_MS}ms, block ${SESSION_RATE_LIMIT_BLOCK_MS}ms`);
+logInfo(`[Gateway] Presence: clock sync ${CLOCK_SYNC_INTERVAL_MS}ms, presence ${PRESENCE_INTERVAL_MS}ms`);
 logInfo(`[Gateway] Registered handlers for ${handlers.size} game types`);
