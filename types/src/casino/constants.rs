@@ -96,6 +96,8 @@ pub const ERROR_DECK_EXHAUSTED: u8 = 18;
 pub const ERROR_FEATURE_DISABLED: u8 = 19;
 /// Error when bridge functionality is disabled.
 pub const ERROR_BRIDGE_DISABLED: u8 = 20;
+/// Error when bet exceeds exposure limits.
+pub const ERROR_EXPOSURE_LIMIT: u8 = 21;
 
 /// Tournament duration in seconds (5 minutes)
 pub const TOURNAMENT_DURATION_SECS: u64 = 5 * 60;

@@ -2206,6 +2206,24 @@ impl<'a, S: State> Layer<'a, S> {
 
         let mut working_session = player_session.session.clone();
         let mut delta: i64 = 0;
+
+        // Calculate total exposure for all bets and check limits
+        // Craps max payout is typically 30:1 for proposition bets
+        const CRAPS_MAX_PAYOUT_MULTIPLIER: u64 = 30;
+
+        let mut total_bet_amount = 0u64;
+        for bet in bets {
+            total_bet_amount = total_bet_amount.saturating_add(bet.amount);
+        }
+
+        // Check exposure limits before processing any bets
+        if let Err((error_code, message)) = self
+            .check_exposure_limits(public, total_bet_amount, CRAPS_MAX_PAYOUT_MULTIPLIER)
+            .await
+        {
+            return reject(error_code, &message);
+        }
+
         for bet in bets {
             if bet.amount < config.min_bet || bet.amount > config.max_bet {
                 return reject(
@@ -2287,6 +2305,10 @@ impl<'a, S: State> Layer<'a, S> {
             bets = ?bets,
             "global table bets accepted"
         );
+
+        // Track exposure for accepted bets
+        self.add_bet_exposure(public, total_wagered, CRAPS_MAX_PAYOUT_MULTIPLIER)
+            .await?;
 
         let mut events = vec![Event::GlobalTableBetAccepted {
             player: public.clone(),
@@ -2796,6 +2818,21 @@ impl<'a, S: State> Layer<'a, S> {
             Value::GlobalTableRound(round),
         );
 
+        // Release exposure for settled bets
+        const CRAPS_MAX_PAYOUT_MULTIPLIER: u64 = 30;
+        let total_wagered: u64 = before_bets.iter().map(|b| b.amount).sum();
+        let payout_amount = if payout_delta > 0 {
+            payout_delta as u64
+        } else {
+            0
+        };
+        self.release_bet_exposure(
+            public,
+            total_wagered.saturating_mul(CRAPS_MAX_PAYOUT_MULTIPLIER),
+            payout_amount,
+        )
+        .await?;
+
         let mut events = vec![Event::GlobalTablePlayerSettled {
             player: public.clone(),
             round_id,
@@ -3067,6 +3104,116 @@ impl<'a, S: State> Layer<'a, S> {
         let mut house = self.get_or_init_house().await?;
         house.net_pnl += amount;
         self.insert(Key::House, Value::House(house));
+        Ok(())
+    }
+
+    /// Check if a bet can be accepted based on exposure limits.
+    /// Returns Ok(()) if allowed, or an error code and message if rejected.
+    pub(in crate::layer) async fn check_exposure_limits(
+        &mut self,
+        public: &PublicKey,
+        bet_amount: u64,
+        max_payout_multiplier: u64,
+    ) -> Result<(), (u8, String)> {
+        let bankroll = self.get_or_init_house_bankroll().await.map_err(|e| {
+            (
+                nullspace_types::casino::ERROR_INVALID_STATE,
+                format!("Failed to load house bankroll: {}", e),
+            )
+        })?;
+        let player_exposure = self.get_or_init_player_exposure(public).await.map_err(|e| {
+            (
+                nullspace_types::casino::ERROR_INVALID_STATE,
+                format!("Failed to load player exposure: {}", e),
+            )
+        })?;
+
+        bankroll
+            .check_bet_exposure(bet_amount, max_payout_multiplier, player_exposure.current_exposure)
+            .map_err(|e| match e {
+                nullspace_types::casino::ExposureLimitError::SingleBetExceeded {
+                    bet_amount,
+                    max_allowed,
+                } => (
+                    nullspace_types::casino::ERROR_INVALID_BET,
+                    format!(
+                        "Bet amount {} exceeds max allowed {}",
+                        bet_amount, max_allowed
+                    ),
+                ),
+                nullspace_types::casino::ExposureLimitError::PlayerExposureExceeded {
+                    current_exposure,
+                    new_exposure,
+                    max_allowed,
+                } => (
+                    nullspace_types::casino::ERROR_INVALID_BET,
+                    format!(
+                        "Player exposure {} would exceed max {} (current: {})",
+                        new_exposure, max_allowed, current_exposure
+                    ),
+                ),
+                nullspace_types::casino::ExposureLimitError::HouseExposureExceeded {
+                    current_exposure,
+                    new_exposure,
+                    max_allowed,
+                } => (
+                    nullspace_types::casino::ERROR_INVALID_BET,
+                    format!(
+                        "House exposure {} would exceed capacity {} (current: {})",
+                        new_exposure, max_allowed, current_exposure
+                    ),
+                ),
+            })
+    }
+
+    /// Add exposure for a bet that has been accepted.
+    pub(in crate::layer) async fn add_bet_exposure(
+        &mut self,
+        public: &PublicKey,
+        bet_amount: u64,
+        max_payout_multiplier: u64,
+    ) -> anyhow::Result<()> {
+        let mut bankroll = self.get_or_init_house_bankroll().await?;
+        bankroll.add_exposure(bet_amount, max_payout_multiplier);
+        bankroll.last_updated_ts = self.seed_view;
+        self.insert(Key::HouseBankroll, Value::HouseBankroll(bankroll));
+
+        let mut player_exposure = self.get_or_init_player_exposure(public).await?;
+        let bet_exposure = bet_amount.saturating_mul(max_payout_multiplier);
+        player_exposure.current_exposure = player_exposure.current_exposure.saturating_add(bet_exposure);
+        player_exposure.pending_bet_count = player_exposure.pending_bet_count.saturating_add(1);
+        player_exposure.last_bet_ts = self.seed_view;
+        self.insert(
+            Key::PlayerExposure(public.clone()),
+            Value::PlayerExposure(player_exposure),
+        );
+
+        Ok(())
+    }
+
+    /// Release exposure after bet settlement.
+    pub(in crate::layer) async fn release_bet_exposure(
+        &mut self,
+        public: &PublicKey,
+        exposure_amount: u64,
+        payout_amount: u64,
+    ) -> anyhow::Result<()> {
+        let mut bankroll = self.get_or_init_house_bankroll().await?;
+        bankroll.release_exposure(exposure_amount);
+        if payout_amount > 0 {
+            bankroll.record_payout(payout_amount);
+        }
+        bankroll.last_updated_ts = self.seed_view;
+        self.insert(Key::HouseBankroll, Value::HouseBankroll(bankroll));
+
+        let mut player_exposure = self.get_or_init_player_exposure(public).await?;
+        player_exposure.current_exposure = player_exposure.current_exposure.saturating_sub(exposure_amount);
+        player_exposure.pending_bet_count = player_exposure.pending_bet_count.saturating_sub(1);
+        self.insert(
+            Key::PlayerExposure(public.clone()),
+            Value::PlayerExposure(player_exposure),
+        );
+
         Ok(())
     }
 }

@@ -344,11 +344,21 @@
     - Updated bridge handlers: `handle_bridge_withdraw`, `handle_bridge_deposit`, `handle_finalize_bridge_withdrawal` to create ledger entries
     - Withdrawal fulfillment transitions entry status from Pending to Verified
     - 5 integration tests in `ledger_integration_tests.rs` validating ledger updates for deposits, withdrawals, and fulfillments
-- [ ] Add house bankroll/exposure tracking and limit checks
+- [x] Add house bankroll/exposure tracking and limit checks
   - Specs: `specs/sprint-07-payments-admin.md` AC-7.2
   - Tests/backpressure:
     - Programmatic: unit tests for limit enforcement
   - Perceptual: None
+  - **Completed**: Added house bankroll/exposure tracking with limit enforcement:
+    - `HouseBankroll` type (`types/src/casino/economy.rs`): Tracks bankroll, current_exposure, max_exposure_bps, max_single_bet, max_player_exposure, metrics (total_bets_placed, total_amount_wagered, total_payouts)
+    - `PlayerExposure` type: Per-player tracking of current_exposure, pending_bet_count, last_bet_ts
+    - `ExposureLimitError` enum: SingleBetExceeded, PlayerExposureExceeded, HouseExposureExceeded
+    - Key/Value variants: HouseBankroll, PlayerExposure(PublicKey)
+    - `check_exposure_limits()`: Validates bet against 3 limits (single bet, player exposure, house exposure)
+    - `add_bet_exposure()`, `release_bet_exposure()`: Track exposure lifecycle
+    - Integrated into `handle_global_table_submit_bets` and `handle_global_table_settle`
+    - 17 unit tests for HouseBankroll and PlayerExposure types
+    - Tests: `cargo test -p nullspace-types house_bankroll` (14 tests) + `cargo test -p nullspace-types player_exposure` (3 tests)
 - [ ] Build admin ops endpoints for config updates and audit log entries
   - Specs: `specs/sprint-07-payments-admin.md` AC-7.3
   - Tests/backpressure:

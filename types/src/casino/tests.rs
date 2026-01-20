@@ -188,3 +188,173 @@ fn test_tournament_decode_rejects_too_many_players() {
     let err = Tournament::read(&mut &encoded[..]).expect_err("should reject >1000 players");
     assert!(matches!(err, commonware_codec::Error::InvalidLength(_)));
 }
+
+// ============================================================================
+// HouseBankroll Tests - AC-7.2 Exposure Limit Enforcement
+// ============================================================================
+
+#[test]
+fn test_house_bankroll_default() {
+    let bankroll = HouseBankroll::default();
+    assert_eq!(bankroll.bankroll, 0);
+    assert_eq!(bankroll.current_exposure, 0);
+    assert_eq!(bankroll.max_exposure_bps, 5000); // 50%
+    assert_eq!(bankroll.max_single_bet, 10_000);
+    assert_eq!(bankroll.max_player_exposure, 50_000);
+}
+
+#[test]
+fn test_house_bankroll_new_with_initial_funds() {
+    let bankroll = HouseBankroll::new(1_000_000);
+    assert_eq!(bankroll.bankroll, 1_000_000);
+    assert_eq!(bankroll.current_exposure, 0);
+}
+
+#[test]
+fn test_house_bankroll_max_allowed_exposure() {
+    let bankroll = HouseBankroll::new(1_000_000);
+    // 50% of 1M = 500K
+    assert_eq!(bankroll.max_allowed_exposure(), 500_000);
+}
+
+#[test]
+fn test_house_bankroll_available_capacity() {
+    let mut bankroll = HouseBankroll::new(1_000_000);
+    assert_eq!(bankroll.available_capacity(), 500_000);
+
+    bankroll.current_exposure = 200_000;
+    assert_eq!(bankroll.available_capacity(), 300_000);
+}
+
+#[test]
+fn test_house_bankroll_utilization() {
+    let mut bankroll = HouseBankroll::new(1_000_000);
+    assert_eq!(bankroll.utilization_bps(), 0);
+
+    bankroll.current_exposure = 250_000;
+    // 250K / 500K = 50% = 5000 bps
+    assert_eq!(bankroll.utilization_bps(), 5000);
+
+    bankroll.current_exposure = 500_000;
+    assert_eq!(bankroll.utilization_bps(), 10_000); // 100%
+}
+
+#[test]
+fn test_house_bankroll_check_bet_exposure_allows_valid_bet() {
+    let bankroll = HouseBankroll::new(1_000_000);
+    // Bet 1000, max multiplier 30x = 30K exposure, well under 500K limit
+    assert!(bankroll.check_bet_exposure(1_000, 30, 0).is_ok());
+}
+
+#[test]
+fn test_house_bankroll_check_bet_rejects_single_bet_too_large() {
+    let bankroll = HouseBankroll::new(1_000_000);
+    // Default max_single_bet is 10K
+    let result = bankroll.check_bet_exposure(15_000, 30, 0);
+    assert!(matches!(
+        result,
+        Err(ExposureLimitError::SingleBetExceeded { bet_amount: 15_000, max_allowed: 10_000 })
+    ));
+}
+
+#[test]
+fn test_house_bankroll_check_bet_rejects_player_exposure_exceeded() {
+    let bankroll = HouseBankroll::new(1_000_000);
+    // Player already has 45K exposure, trying to add 10K @ 30x = 300K more
+    let result = bankroll.check_bet_exposure(10_000, 30, 45_000);
+    assert!(matches!(
+        result,
+        Err(ExposureLimitError::PlayerExposureExceeded { current_exposure: 45_000, .. })
+    ));
+}
+
+#[test]
+fn test_house_bankroll_check_bet_rejects_house_exposure_exceeded() {
+    let mut bankroll = HouseBankroll::new(100_000);
+    // Max exposure is 50K (50% of 100K)
+    // Current exposure is 40K, trying to add 5K @ 30x = 150K more would exceed
+    bankroll.current_exposure = 40_000;
+    bankroll.max_player_exposure = 1_000_000; // raise player limit to not hit it first
+
+    let result = bankroll.check_bet_exposure(5_000, 30, 0);
+    assert!(matches!(
+        result,
+        Err(ExposureLimitError::HouseExposureExceeded { current_exposure: 40_000, .. })
+    ));
+}
+
+#[test]
+fn test_house_bankroll_add_exposure() {
+    let mut bankroll = HouseBankroll::new(1_000_000);
+    assert_eq!(bankroll.current_exposure, 0);
+    assert_eq!(bankroll.total_bets_placed, 0);
+    assert_eq!(bankroll.total_amount_wagered, 0);
+
+    bankroll.add_exposure(1_000, 30);
+
+    assert_eq!(bankroll.current_exposure, 30_000);
+    assert_eq!(bankroll.total_bets_placed, 1);
+    assert_eq!(bankroll.total_amount_wagered, 1_000);
+}
+
+#[test]
+fn test_house_bankroll_release_exposure() {
+    let mut bankroll = HouseBankroll::new(1_000_000);
+    bankroll.current_exposure = 30_000;
+
+    bankroll.release_exposure(30_000);
+    assert_eq!(bankroll.current_exposure, 0);
+}
+
+#[test]
+fn test_house_bankroll_record_payout() {
+    let mut bankroll = HouseBankroll::new(1_000_000);
+    bankroll.record_payout(50_000);
+
+    assert_eq!(bankroll.total_payouts, 50_000);
+    assert_eq!(bankroll.bankroll, 950_000);
+}
+
+#[test]
+fn test_house_bankroll_add_funds() {
+    let mut bankroll = HouseBankroll::new(1_000_000);
+    bankroll.add_funds(500_000);
+    assert_eq!(bankroll.bankroll, 1_500_000);
+}
+
+#[test]
+fn test_house_bankroll_roundtrip() {
+    let mut bankroll = HouseBankroll::new(1_000_000);
+    bankroll.current_exposure = 150_000;
+    bankroll.total_bets_placed = 100;
+    bankroll.total_amount_wagered = 500_000;
+    bankroll.total_payouts = 450_000;
+    bankroll.last_updated_ts = 12345;
+
+    let encoded = bankroll.encode();
+    let decoded = HouseBankroll::read(&mut &encoded[..]).unwrap();
+
+    assert_eq!(bankroll, decoded);
+}
+
+#[test]
+fn test_player_exposure_default() {
+    let exposure = PlayerExposure::default();
+    assert_eq!(exposure.current_exposure, 0);
+    assert_eq!(exposure.pending_bet_count, 0);
+    assert_eq!(exposure.last_bet_ts, 0);
+}
+
+#[test]
+fn test_player_exposure_roundtrip() {
+    let exposure = PlayerExposure {
+        current_exposure: 50_000,
+        pending_bet_count: 5,
+        last_bet_ts: 12345,
+    };
+
+    let encoded = exposure.encode();
+    let decoded = PlayerExposure::read(&mut &encoded[..]).unwrap();
+
+    assert_eq!(exposure, decoded);
+}

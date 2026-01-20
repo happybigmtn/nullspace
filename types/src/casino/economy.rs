@@ -1321,3 +1321,274 @@ impl EncodeSize for LedgerState {
             + self.last_reconciliation_ts.encode_size()
     }
 }
+
+// ============================================================================
+// House Bankroll Types for AC-7.2: Bankroll/Exposure Tracking and Limits
+// ============================================================================
+
+/// House bankroll state for exposure tracking and limit enforcement.
+/// Tracks the house's available funds, current risk exposure, and configurable limits.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HouseBankroll {
+    /// Total bankroll available for payouts (in chips)
+    pub bankroll: u64,
+    /// Current exposure: sum of maximum potential payouts for all pending bets
+    pub current_exposure: u64,
+    /// Maximum allowed exposure as a percentage of bankroll (basis points, e.g., 5000 = 50%)
+    pub max_exposure_bps: u16,
+    /// Maximum single bet amount allowed
+    pub max_single_bet: u64,
+    /// Maximum exposure per player (to prevent single player from consuming all capacity)
+    pub max_player_exposure: u64,
+    /// Total bets placed (for metrics)
+    pub total_bets_placed: u64,
+    /// Total amount wagered (for metrics)
+    pub total_amount_wagered: u64,
+    /// Total payouts made (for metrics)
+    pub total_payouts: u64,
+    /// Last update timestamp
+    pub last_updated_ts: u64,
+}
+
+impl Default for HouseBankroll {
+    fn default() -> Self {
+        Self {
+            bankroll: 0,
+            current_exposure: 0,
+            max_exposure_bps: 5000,      // 50% of bankroll
+            max_single_bet: 10_000,      // 10k chips max per bet
+            max_player_exposure: 50_000, // 50k chips max exposure per player
+            total_bets_placed: 0,
+            total_amount_wagered: 0,
+            total_payouts: 0,
+            last_updated_ts: 0,
+        }
+    }
+}
+
+impl HouseBankroll {
+    /// Create a new bankroll with initial funds
+    pub fn new(initial_bankroll: u64) -> Self {
+        Self {
+            bankroll: initial_bankroll,
+            ..Default::default()
+        }
+    }
+
+    /// Calculate maximum allowed exposure based on bankroll and limit
+    pub fn max_allowed_exposure(&self) -> u64 {
+        (self.bankroll as u128)
+            .saturating_mul(self.max_exposure_bps as u128)
+            .saturating_div(10_000)
+            .min(u64::MAX as u128) as u64
+    }
+
+    /// Check if a new bet would exceed exposure limits
+    /// Returns Ok(()) if bet is allowed, Err with reason if rejected
+    pub fn check_bet_exposure(
+        &self,
+        bet_amount: u64,
+        max_payout_multiplier: u64,
+        player_current_exposure: u64,
+    ) -> Result<(), ExposureLimitError> {
+        // Check single bet limit
+        if bet_amount > self.max_single_bet {
+            return Err(ExposureLimitError::SingleBetExceeded {
+                bet_amount,
+                max_allowed: self.max_single_bet,
+            });
+        }
+
+        // Calculate new exposure from this bet
+        let bet_exposure = bet_amount.saturating_mul(max_payout_multiplier);
+
+        // Check player exposure limit
+        let new_player_exposure = player_current_exposure.saturating_add(bet_exposure);
+        if new_player_exposure > self.max_player_exposure {
+            return Err(ExposureLimitError::PlayerExposureExceeded {
+                current_exposure: player_current_exposure,
+                new_exposure: new_player_exposure,
+                max_allowed: self.max_player_exposure,
+            });
+        }
+
+        // Check house exposure limit
+        let new_total_exposure = self.current_exposure.saturating_add(bet_exposure);
+        let max_exposure = self.max_allowed_exposure();
+        if new_total_exposure > max_exposure {
+            return Err(ExposureLimitError::HouseExposureExceeded {
+                current_exposure: self.current_exposure,
+                new_exposure: new_total_exposure,
+                max_allowed: max_exposure,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Add exposure for a new bet
+    pub fn add_exposure(&mut self, bet_amount: u64, max_payout_multiplier: u64) {
+        let bet_exposure = bet_amount.saturating_mul(max_payout_multiplier);
+        self.current_exposure = self.current_exposure.saturating_add(bet_exposure);
+        self.total_bets_placed = self.total_bets_placed.saturating_add(1);
+        self.total_amount_wagered = self.total_amount_wagered.saturating_add(bet_amount);
+    }
+
+    /// Release exposure after bet settlement
+    pub fn release_exposure(&mut self, exposure_amount: u64) {
+        self.current_exposure = self.current_exposure.saturating_sub(exposure_amount);
+    }
+
+    /// Record a payout
+    pub fn record_payout(&mut self, payout_amount: u64) {
+        self.total_payouts = self.total_payouts.saturating_add(payout_amount);
+        self.bankroll = self.bankroll.saturating_sub(payout_amount);
+    }
+
+    /// Add funds to bankroll
+    pub fn add_funds(&mut self, amount: u64) {
+        self.bankroll = self.bankroll.saturating_add(amount);
+    }
+
+    /// Calculate available capacity (max exposure - current exposure)
+    pub fn available_capacity(&self) -> u64 {
+        self.max_allowed_exposure().saturating_sub(self.current_exposure)
+    }
+
+    /// Calculate utilization rate (current exposure / max exposure) in basis points
+    pub fn utilization_bps(&self) -> u16 {
+        let max_exposure = self.max_allowed_exposure();
+        if max_exposure == 0 {
+            return 0;
+        }
+        ((self.current_exposure as u128)
+            .saturating_mul(10_000)
+            .saturating_div(max_exposure as u128)
+            .min(10_000)) as u16
+    }
+}
+
+/// Errors returned when bet validation fails due to exposure limits
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExposureLimitError {
+    /// Single bet amount exceeds maximum allowed
+    SingleBetExceeded { bet_amount: u64, max_allowed: u64 },
+    /// Player's total exposure would exceed their limit
+    PlayerExposureExceeded {
+        current_exposure: u64,
+        new_exposure: u64,
+        max_allowed: u64,
+    },
+    /// House's total exposure would exceed capacity
+    HouseExposureExceeded {
+        current_exposure: u64,
+        new_exposure: u64,
+        max_allowed: u64,
+    },
+}
+
+impl Write for HouseBankroll {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.bankroll.write(writer);
+        self.current_exposure.write(writer);
+        self.max_exposure_bps.write(writer);
+        self.max_single_bet.write(writer);
+        self.max_player_exposure.write(writer);
+        self.total_bets_placed.write(writer);
+        self.total_amount_wagered.write(writer);
+        self.total_payouts.write(writer);
+        self.last_updated_ts.write(writer);
+    }
+}
+
+impl Read for HouseBankroll {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            bankroll: u64::read(reader)?,
+            current_exposure: u64::read(reader)?,
+            max_exposure_bps: u16::read(reader)?,
+            max_single_bet: u64::read(reader)?,
+            max_player_exposure: u64::read(reader)?,
+            total_bets_placed: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            total_amount_wagered: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            total_payouts: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            last_updated_ts: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+        })
+    }
+}
+
+impl EncodeSize for HouseBankroll {
+    fn encode_size(&self) -> usize {
+        self.bankroll.encode_size()
+            + self.current_exposure.encode_size()
+            + self.max_exposure_bps.encode_size()
+            + self.max_single_bet.encode_size()
+            + self.max_player_exposure.encode_size()
+            + self.total_bets_placed.encode_size()
+            + self.total_amount_wagered.encode_size()
+            + self.total_payouts.encode_size()
+            + self.last_updated_ts.encode_size()
+    }
+}
+
+/// Per-player exposure tracking for limit enforcement.
+/// Stored per player to track their individual exposure against limits.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct PlayerExposure {
+    /// Current total exposure (sum of max potential payouts)
+    pub current_exposure: u64,
+    /// Number of pending bets
+    pub pending_bet_count: u32,
+    /// Last bet timestamp
+    pub last_bet_ts: u64,
+}
+
+impl Write for PlayerExposure {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.current_exposure.write(writer);
+        self.pending_bet_count.write(writer);
+        self.last_bet_ts.write(writer);
+    }
+}
+
+impl Read for PlayerExposure {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            current_exposure: u64::read(reader)?,
+            pending_bet_count: u32::read(reader)?,
+            last_bet_ts: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+        })
+    }
+}
+
+impl EncodeSize for PlayerExposure {
+    fn encode_size(&self) -> usize {
+        self.current_exposure.encode_size()
+            + self.pending_bet_count.encode_size()
+            + self.last_bet_ts.encode_size()
+    }
+}

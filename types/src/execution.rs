@@ -140,6 +140,10 @@ mod tags {
         // Ledger (32-33)
         pub const LEDGER_STATE: u8 = 32;
         pub const LEDGER_ENTRY: u8 = 33;
+
+        // Bankroll/Exposure (34-35)
+        pub const HOUSE_BANKROLL: u8 = 34;
+        pub const PLAYER_EXPOSURE: u8 = 35;
     }
 
     pub mod value {
@@ -188,6 +192,10 @@ mod tags {
         // Ledger (32-33)
         pub const LEDGER_STATE: u8 = 32;
         pub const LEDGER_ENTRY: u8 = 33;
+
+        // Bankroll/Exposure (34-35)
+        pub const HOUSE_BANKROLL: u8 = 34;
+        pub const PLAYER_EXPOSURE: u8 = 35;
     }
 
     pub mod event {
@@ -1572,6 +1580,10 @@ pub enum Key {
     // Ledger (Tags 32-33)
     LedgerState,
     LedgerEntry(u64),
+
+    // Bankroll/Exposure (Tags 34-35)
+    HouseBankroll,
+    PlayerExposure(PublicKey),
 }
 
 impl Write for Key {
@@ -1651,6 +1663,13 @@ impl Write for Key {
                 tags::key::LEDGER_ENTRY.write(writer);
                 id.write(writer);
             }
+
+            // Bankroll/Exposure
+            Self::HouseBankroll => tags::key::HOUSE_BANKROLL.write(writer),
+            Self::PlayerExposure(pk) => {
+                tags::key::PLAYER_EXPOSURE.write(writer);
+                pk.write(writer);
+            }
         }
     }
 }
@@ -1704,6 +1723,10 @@ impl Read for Key {
             tags::key::LEDGER_STATE => Self::LedgerState,
             tags::key::LEDGER_ENTRY => Self::LedgerEntry(u64::read(reader)?),
 
+            // Bankroll/Exposure
+            tags::key::HOUSE_BANKROLL => Self::HouseBankroll,
+            tags::key::PLAYER_EXPOSURE => Self::PlayerExposure(PublicKey::read(reader)?),
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -1749,6 +1772,10 @@ impl EncodeSize for Key {
                 // Ledger
                 Self::LedgerState => 0,
                 Self::LedgerEntry(_) => u64::SIZE,
+
+                // Bankroll/Exposure
+                Self::HouseBankroll => 0,
+                Self::PlayerExposure(_) => PublicKey::SIZE,
         }
     }
 }
@@ -1809,6 +1836,10 @@ pub enum Value {
     // Ledger (Tags 32-33)
     LedgerState(crate::casino::LedgerState),
     LedgerEntry(crate::casino::LedgerEntry),
+
+    // Bankroll/Exposure (Tags 34-35)
+    HouseBankroll(crate::casino::HouseBankroll),
+    PlayerExposure(crate::casino::PlayerExposure),
 }
 
 impl Write for Value {
@@ -1930,6 +1961,16 @@ impl Write for Value {
                 tags::value::LEDGER_ENTRY.write(writer);
                 entry.write(writer);
             }
+
+            // Bankroll/Exposure
+            Self::HouseBankroll(bankroll) => {
+                tags::value::HOUSE_BANKROLL.write(writer);
+                bankroll.write(writer);
+            }
+            Self::PlayerExposure(exposure) => {
+                tags::value::PLAYER_EXPOSURE.write(writer);
+                exposure.write(writer);
+            }
         }
     }
 }
@@ -2011,6 +2052,14 @@ impl Read for Value {
                 Self::LedgerEntry(crate::casino::LedgerEntry::read(reader)?)
             }
 
+            // Bankroll/Exposure
+            tags::value::HOUSE_BANKROLL => {
+                Self::HouseBankroll(crate::casino::HouseBankroll::read(reader)?)
+            }
+            tags::value::PLAYER_EXPOSURE => {
+                Self::PlayerExposure(crate::casino::PlayerExposure::read(reader)?)
+            }
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -2059,6 +2108,10 @@ impl EncodeSize for Value {
                 // Ledger
                 Self::LedgerState(state) => state.encode_size(),
                 Self::LedgerEntry(entry) => entry.encode_size(),
+
+                // Bankroll/Exposure
+                Self::HouseBankroll(bankroll) => bankroll.encode_size(),
+                Self::PlayerExposure(exposure) => exposure.encode_size(),
             }
     }
 }
