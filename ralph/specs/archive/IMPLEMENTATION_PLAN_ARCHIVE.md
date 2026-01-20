@@ -149,3 +149,12 @@ Completed work items moved from `IMPLEMENTATION_PLAN.md`.
 
 **Files Reviewed**:
 - `execution/src/round_scheduler.rs`
+
+### Sprint 02: RNG commit-reveal pipeline ✅
+
+- [x] Commit-reveal primitives with hash-chain derivation
+- [x] Verification helpers for commit/reveal slices
+- [x] Unit coverage for determinism, verification, and chain replay
+
+**Files Reviewed**:
+- `execution/src/rng_pipeline.rs`

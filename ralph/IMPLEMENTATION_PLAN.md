@@ -7,12 +7,6 @@
 ## Sprint 01 - Foundations and Local Dev
 
 ## Sprint 02 - Core Table Engine and RNG (Single Game)
-- [x] Implement RNG commit, lock, reveal pipeline with hash chain verification
-  - Specs: `specs/sprint-02-core-table-engine.md` AC-2.2
-  - Tests/backpressure:
-    - Programmatic: `cargo test -p nullspace-execution`
-  - Perceptual: None
-  - Note: Implemented `execution/src/rng_pipeline.rs` with `CommitRevealPair`, `HashChain`, and verification functions. Provides commit-reveal scheme where `commit = hash(reveal)` and `reveal = hash(master_secret || round_id)`. Includes 17 unit tests covering determinism, verification, entropy distribution, overflow safety, and hash chain replay from persisted secret.
 - [x] Implement bet validation and settlement logic for flagship game
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.3
   - Tests/backpressure:
