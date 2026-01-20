@@ -1343,6 +1343,106 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "balance": bal
             })
         }
+        // AC-7.5: Added support for ledger and exposure types
+        Value::LedgerState(state) => {
+            serde_json::json!({
+                "type": "LedgerState",
+                "next_entry_id": state.next_entry_id,
+                "total_deposits": state.total_deposits,
+                "total_withdrawal_requests": state.total_withdrawal_requests,
+                "total_withdrawals_fulfilled": state.total_withdrawals_fulfilled,
+                "pending_reconciliation_count": state.pending_reconciliation_count
+            })
+        }
+        Value::LedgerEntry(entry) => {
+            serde_json::json!({
+                "type": "LedgerEntry",
+                "id": entry.id,
+                "entry_type": match entry.entry_type {
+                    nullspace_types::casino::LedgerEntryType::Deposit => "Deposit",
+                    nullspace_types::casino::LedgerEntryType::WithdrawalRequest => "WithdrawalRequest",
+                    nullspace_types::casino::LedgerEntryType::WithdrawalFulfilled => "WithdrawalFulfilled",
+                },
+                "player": hex(&entry.player.encode()),
+                "amount": entry.amount,
+                "created_ts": entry.created_ts,
+                "chain_ref": hex(&entry.chain_ref),
+                "balance_after": entry.balance_after,
+                "reconciliation_status": match entry.reconciliation_status {
+                    nullspace_types::casino::ReconciliationStatus::Pending => "Pending",
+                    nullspace_types::casino::ReconciliationStatus::Verified => "Verified",
+                    nullspace_types::casino::ReconciliationStatus::Failed => "Failed",
+                }
+            })
+        }
+        Value::HouseBankroll(bankroll) => {
+            serde_json::json!({
+                "type": "HouseBankroll",
+                "bankroll": bankroll.bankroll,
+                "current_exposure": bankroll.current_exposure,
+                "max_exposure_bps": bankroll.max_exposure_bps,
+                "max_single_bet": bankroll.max_single_bet,
+                "max_player_exposure": bankroll.max_player_exposure,
+                "total_bets_placed": bankroll.total_bets_placed,
+                "total_amount_wagered": bankroll.total_amount_wagered,
+                "total_payouts": bankroll.total_payouts
+            })
+        }
+        Value::PlayerExposure(exposure) => {
+            serde_json::json!({
+                "type": "PlayerExposure",
+                "current_exposure": exposure.current_exposure,
+                "pending_bet_count": exposure.pending_bet_count,
+                "last_bet_ts": exposure.last_bet_ts
+            })
+        }
+        Value::AuditLogState(state) => {
+            serde_json::json!({
+                "type": "AuditLogState",
+                "next_entry_id": state.next_entry_id,
+                "total_entries": state.total_entries
+            })
+        }
+        Value::AuditLogEntry(entry) => {
+            serde_json::json!({
+                "type": "AuditLogEntry",
+                "id": entry.id,
+                "action_type": entry.action_type as u8,
+                "admin": hex(&entry.admin.encode()),
+                "timestamp": entry.timestamp,
+                "reason": String::from_utf8_lossy(&entry.reason)
+            })
+        }
+        Value::ResponsibleGamingConfig(config) => {
+            serde_json::json!({
+                "type": "ResponsibleGamingConfig",
+                "default_daily_wager_cap": config.default_daily_wager_cap,
+                "default_weekly_wager_cap": config.default_weekly_wager_cap,
+                "default_monthly_wager_cap": config.default_monthly_wager_cap,
+                "default_daily_loss_cap": config.default_daily_loss_cap,
+                "default_weekly_loss_cap": config.default_weekly_loss_cap,
+                "default_monthly_loss_cap": config.default_monthly_loss_cap
+            })
+        }
+        Value::PlayerGamingLimits(limits) => {
+            serde_json::json!({
+                "type": "PlayerGamingLimits",
+                "daily_wager_cap": limits.daily_wager_cap,
+                "weekly_wager_cap": limits.weekly_wager_cap,
+                "monthly_wager_cap": limits.monthly_wager_cap,
+                "daily_loss_cap": limits.daily_loss_cap,
+                "weekly_loss_cap": limits.weekly_loss_cap,
+                "monthly_loss_cap": limits.monthly_loss_cap,
+                "daily_wagered": limits.daily_wagered,
+                "weekly_wagered": limits.weekly_wagered,
+                "monthly_wagered": limits.monthly_wagered,
+                "daily_net_loss": limits.daily_net_loss,
+                "weekly_net_loss": limits.weekly_net_loss,
+                "monthly_net_loss": limits.monthly_net_loss,
+                "self_exclusion_until": limits.self_exclusion_until,
+                "cooldown_until": limits.cooldown_until
+            })
+        }
     };
 
     to_object(&json)

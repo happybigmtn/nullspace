@@ -393,11 +393,19 @@
     - Integration: `check_exposure_limits()` now checks responsible gaming limits FIRST; `add_bet_exposure()` records wagers; `release_bet_exposure()` records settlements with net_result
     - 27 unit tests in `types/src/casino/tests.rs` covering defaults, roundtrip encoding, effective caps, period resets, wager/loss cap enforcement, self-exclusion, cooldown, and error variants
     - Tests: `cargo test -p nullspace-types casino::tests` (57 tests), `cargo test -p nullspace-execution` (511 tests)
-- [ ] Update web client to show limit errors and exposure warnings
+- [x] Update web client to show limit errors and exposure warnings
   - Specs: `specs/sprint-07-payments-admin.md` AC-7.5
   - Tests/backpressure:
     - Programmatic: `pnpm -C website test`
   - Perceptual: None
+  - **Completed**: Added comprehensive limit error and exposure warning display:
+    - `limitTypes.ts`: TypeScript types mirroring Rust backend (`ExposureLimitError`, `ResponsibleGamingError`, `ExtendedBetValidationError`), warning level calculation, format helpers, error message generation
+    - `LimitErrorDisplay.tsx`: Component for rendering limit errors with color-coded severity (amber for exposure limits, red for severe/exclusion), structured data display (amounts, caps, percentages), progress bars for wager/loss caps, appropriate retry/dismiss actions
+    - `ExposureWarningBanner.tsx`: Proactive warning display showing exposure, wager caps, loss caps approaching limits with progress bars, condensed mode for inline display, self-exclusion/cooldown status
+    - Updated `index.ts` exports for all new types and components
+    - Added Value variant handlers in `website/wasm/src/lib.rs` for LedgerState, LedgerEntry, HouseBankroll, PlayerExposure, AuditLogState, AuditLogEntry, ResponsibleGamingConfig, PlayerGamingLimits
+    - Tests: 96 new tests (57 LimitErrorDisplay + 39 ExposureWarningBanner) covering all error types, color schemes, accessibility, condensed mode, AC-7.5 compliance
+    - Tests: `npx vitest run` (525 tests passing)
 
 ## Sprint 08 - Mobile Client
 - [ ] Implement wallet connection and session persistence on mobile
