@@ -7,12 +7,6 @@
 ## Sprint 01 - Foundations and Local Dev
 
 ## Sprint 02 - Core Table Engine and RNG (Single Game)
-- [x] Implement bet validation and settlement logic for flagship game
-  - Specs: `specs/sprint-02-core-table-engine.md` AC-2.3
-  - Tests/backpressure:
-    - Programmatic: `cargo test -p nullspace-execution`
-  - Perceptual: None
-  - Note: Baccarat selected as flagship game. Full implementation includes bet validation (`BetType::try_from`, `clamp_and_validate_bet_amount`), settlement logic (`calculate_bet_payout` for all 10 bet types), and payout calculations per Wizard of Odds paytables. 50+ golden tests verify exact payouts for all bet types including Player/Banker (1:1), Tie (9:1), Pairs (12:1), Lucky 6, Dragon Bonus, Panda 8, and Perfect Pair. Fixed unused assignment warning in place_bet handler.
 - [ ] Add append-only event log writer and snapshot loader
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.4
   - Tests/backpressure:

@@ -680,20 +680,22 @@ impl CasinoGame for Baccarat {
                 let amount = clamp_and_validate_bet_amount(amount)?;
 
                 // Check if bet type already exists - if so, add to it
-                let mut deducted = 0u64;
-                if let Some(existing) = state.bets.iter_mut().find(|b| b.bet_type == bet_type) {
+                let deducted = if let Some(existing) =
+                    state.bets.iter_mut().find(|b| b.bet_type == bet_type)
+                {
                     let new_amount =
                         existing.amount.saturating_add(amount).min(MAX_BET_AMOUNT);
-                    deducted = new_amount.saturating_sub(existing.amount);
+                    let added = new_amount.saturating_sub(existing.amount);
                     existing.amount = new_amount;
+                    added
                 } else {
                     // Check max bets limit
                     if state.bets.len() >= limits::BACCARAT_MAX_BETS {
                         return Err(GameError::InvalidMove);
                     }
                     state.bets.push(BaccaratBet { bet_type, amount });
-                    deducted = amount;
-                }
+                    amount
+                };
 
                 session.state_blob = serialize_state(&state);
                 Ok(GameResult::ContinueWithUpdate {

@@ -158,3 +158,13 @@ Completed work items moved from `IMPLEMENTATION_PLAN.md`.
 
 **Files Reviewed**:
 - `execution/src/rng_pipeline.rs`
+
+### Sprint 02: Baccarat bet validation + settlement ✅
+
+- [x] Baccarat selected as flagship game with full bet validation
+- [x] Settlement + payout calculations cover all supported bet types
+- [x] Golden test coverage for payout invariants
+
+**Files Reviewed/Updated**:
+- `execution/src/casino/baccarat.rs`
+- `execution/src/casino/integration_tests.rs` (baccarat coverage)
