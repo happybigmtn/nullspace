@@ -24,6 +24,7 @@
    curl -sS http://127.0.0.1:9100/metrics | egrep 'mempool_pending_total|txs_considered_total|proposed_empty_blocks_with_candidates'
    ```
    - If `mempool_pending_total > 0` but `txs_considered_total == 0`, the mempool queue is out of sync and no candidates are being proposed.
+   - If `txs_considered_total > 0` but `proposed_empty_blocks_with_candidates_total` keeps increasing and logs mention `rejected_nonce`, the simulator likely accepted a future nonce (node rejects mismatched nonces and proposes empty blocks).
 
 3. Check browser console for CORS errors:
    - If you see requests to `https://indexer.testnet.regenesis.dev/*` blocked by CORS from `https://testnet.regenesis.dev`,
@@ -35,6 +36,8 @@
 - Deploy the new node image to staging (via `deploy-staging.yml`) so proposers always see candidates.
 - Web client base URL guard: `website/src/api/client.js` now auto-routes `indexer.*.regenesis.dev` to `/api` when running on `*.regenesis.dev`.
   This avoids CORS failures and ensures `/submit` hits the gateway.
+- Simulator enforces exact nonce matching in `simulator/src/submission.rs`; reject `tx.nonce != expected_nonce` with `nonce_too_low`/`nonce_too_high`.
+  This prevents future-nonce transactions from sitting in mempool while validators reject them.
 
 If you intentionally want to use the indexer directly in the browser, you must enable CORS on the indexer host.
 

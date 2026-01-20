@@ -605,6 +605,14 @@ pub(super) async fn submit(
                         "nonce_too_low:{}:tx_nonce={}:expected={}",
                         public_key_hex, tx_nonce, expected_nonce
                     ),
+                    crate::submission::SubmitError::NonceTooHigh {
+                        public_key_hex,
+                        tx_nonce,
+                        expected_nonce,
+                    } => format!(
+                        "nonce_too_high:{}:tx_nonce={}:expected={}",
+                        public_key_hex, tx_nonce, expected_nonce
+                    ),
                 };
                 (StatusCode::BAD_REQUEST, message).into_response()
             }

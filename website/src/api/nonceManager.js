@@ -408,7 +408,7 @@ export class NonceManager {
 
   /**
    * Extract expected nonce from backend error strings like:
-   * "nonce_too_low:...:expected=15" or "expected: 15"
+   * "nonce_too_low:...:expected=15", "nonce_too_high:...:expected=15", or "expected: 15"
    * @param {string} message
    * @returns {number} expected nonce or NaN
    * @private

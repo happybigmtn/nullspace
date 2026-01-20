@@ -32,6 +32,12 @@ pub enum SubmitError {
         tx_nonce: u64,
         expected_nonce: u64,
     },
+    /// Transaction nonce is above the expected next nonce (AC-4.3)
+    NonceTooHigh {
+        public_key_hex: String,
+        tx_nonce: u64,
+        expected_nonce: u64,
+    },
 }
 
 pub async fn apply_submission(
@@ -77,15 +83,29 @@ pub async fn apply_submission(
             // This provides immediate feedback to clients about rejected transactions
             for tx in &txs {
                 let expected_nonce = get_account_nonce(&simulator, &tx.public).await;
-                if tx.nonce < expected_nonce {
+                if tx.nonce != expected_nonce {
                     let public_key_hex = hex(&tx.public.encode());
+                    if tx.nonce < expected_nonce {
+                        tracing::warn!(
+                            public_key = %public_key_hex,
+                            tx_nonce = tx.nonce,
+                            expected_nonce,
+                            "rejecting transaction: nonce too low"
+                        );
+                        return Err(SubmitError::NonceTooLow {
+                            public_key_hex,
+                            tx_nonce: tx.nonce,
+                            expected_nonce,
+                        });
+                    }
+
                     tracing::warn!(
                         public_key = %public_key_hex,
                         tx_nonce = tx.nonce,
                         expected_nonce,
-                        "rejecting transaction: nonce too low"
+                        "rejecting transaction: nonce too high"
                     );
-                    return Err(SubmitError::NonceTooLow {
+                    return Err(SubmitError::NonceTooHigh {
                         public_key_hex,
                         tx_nonce: tx.nonce,
                         expected_nonce,
@@ -367,7 +387,7 @@ fn log_admin_transactions(txs: &[Transaction]) {
 /// Query account nonce from simulator state (AC-4.3)
 ///
 /// Returns the expected next nonce for the account. For new accounts that don't
-/// exist in state yet, returns 0 (any nonce >= 0 is valid for new accounts).
+/// exist in state yet, returns 0 (the first transaction must use nonce 0).
 async fn get_account_nonce(simulator: &Simulator, public_key: &PublicKey) -> u64 {
     let account_key = Sha256::hash(&Key::Account(public_key.clone()).encode());
     match simulator.query_state(&account_key).await {
