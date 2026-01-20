@@ -301,11 +301,18 @@
     - Updated test fixture data in `simulator/src/lib.rs` to include `game_type` for all test bets and payouts
     - Added Test 12 to `test_explorer_round_endpoints` verifying `game_type` is correctly set on all indexed bets and payouts
     - All 9 explorer/aggregation tests passing including per-game query filtering
-- [ ] Update web client for multi-game UI and routing
+- [x] Update web client for multi-game UI and routing
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.5
   - Tests/backpressure:
     - Programmatic: `pnpm -C website test`
   - Perceptual: None
+  - **Completed**: Added `GameSwitch.test.tsx` with 53 tests validating AC-6.5 compliance:
+    - All 10 game types (+ NONE) properly defined in GameType enum
+    - CommandPalette displays, filters, and searches all games correctly
+    - Mock game state factory covers all game-specific fields (blackjackStack, rouletteZeroRule, crapsBets, etc.)
+    - Game-specific view components exist for all 10 games (BlackjackView, RouletteView, CrapsView, etc.)
+    - ActiveGame.tsx conditionally renders game-specific layouts based on gameState.type
+    - Tests: `pnpm -C website test` (429 tests passing)
 - [ ] Add regression tests for flagship game outcomes and encoding
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.6
   - Tests/backpressure:
