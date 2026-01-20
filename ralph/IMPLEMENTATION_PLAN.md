@@ -465,11 +465,20 @@
     - Tests: 78 unit tests (41 useReadOnlyMode + 37 ReadOnlyBanner) covering state derivation, message generation, transition tracking, action handlers, accessibility, animation states, and AC-8.4 compliance
 
 ## Sprint 09 - Production Readiness
-- [ ] Add load test harness for gateway and engine
+- [x] Add load test harness for gateway and engine
   - Specs: `specs/sprint-09-production-readiness.md` AC-9.1
   - Tests/backpressure:
     - Programmatic: load test report with pass/fail thresholds
   - Perceptual: None
+  - **Completed**: Added comprehensive load test harness (`scripts/load-test.sh`) with:
+    - Gateway WebSocket stress test (configurable connections, P99 latency targets, success rate thresholds)
+    - Engine HTTP API load test (configurable RPS, P99 latency, error rate thresholds)
+    - JSON report artifact output (`load-test-report.json`) with pass/fail status
+    - CLI options: `--gateway-only`, `--engine-only`, `--quick`, `--report FILE`, `--verbose`
+    - Environment variable configuration for all thresholds
+    - Graceful handling of unavailable services
+    - Added npm scripts: `pnpm load-test`, `pnpm load-test:quick`, `pnpm load-test:gateway`, `pnpm load-test:engine`
+    - Gateway-specific scripts: `pnpm -C gateway load-test`, `pnpm -C gateway load-test:1k`
 - [ ] Define dashboards and alert thresholds for critical services
   - Specs: `specs/sprint-09-production-readiness.md` AC-9.2
   - Tests/backpressure:

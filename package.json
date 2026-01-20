@@ -10,6 +10,10 @@
     "test": "turbo test",
     "test:all": "pnpm test && cargo test --workspace && (cd evm && npm test)",
     "coverage:all": "node scripts/coverage-all.mjs",
+    "load-test": "./scripts/load-test.sh",
+    "load-test:quick": "./scripts/load-test.sh --quick",
+    "load-test:gateway": "./scripts/load-test.sh --gateway-only",
+    "load-test:engine": "./scripts/load-test.sh --engine-only",
     "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {

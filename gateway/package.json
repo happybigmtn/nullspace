@@ -16,6 +16,8 @@
     "test:stress:ci": "STRESS_CONNECTIONS=100 RUN_STRESS=true vitest run tests/stress/websocket-stress.test.ts",
     "test:fanout": "RUN_FANOUT=true vitest run tests/stress/broadcast-fanout.test.ts",
     "test:fanout:1k": "FANOUT_CLIENTS=1000 RUN_FANOUT=true vitest run tests/stress/broadcast-fanout.test.ts",
+    "load-test": "RUN_STRESS=true RUN_FANOUT=true vitest run tests/stress/ --reporter=verbose",
+    "load-test:1k": "STRESS_CONNECTIONS=1000 FANOUT_CLIENTS=1000 RUN_STRESS=true RUN_FANOUT=true vitest run tests/stress/ --reporter=verbose",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
