@@ -7,6 +7,7 @@ export default defineConfig({
       'src/components/__tests__/**/*.test.{ts,tsx,js,jsx}',
       'src/components/casino/3d/physics/**/*.test.{ts,tsx,js,jsx}',
       'src/components/casino/3d/cards/**/*.test.{ts,tsx,js,jsx}',
+      'src/hooks/__tests__/**/*.test.{ts,tsx,js,jsx}',
       'src/security/**/*.test.{ts,tsx,js,jsx}',
       'src/services/games/**/*.test.{ts,tsx,js,jsx}',
       'src/utils/**/*.test.{ts,tsx,js,jsx}',

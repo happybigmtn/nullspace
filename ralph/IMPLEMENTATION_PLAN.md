@@ -214,11 +214,19 @@
   - Added `useBetSubmission` hook (`website/src/hooks/useBetSubmission.ts`) for submission state management
   - Added `validateBetSlip` pure function for reusable validation logic
   - Tests: 45 BetSlipWithConfirmation tests + 26 validation logic tests (205 total tests passing)
-- [ ] Render real-time outcomes and totals from WebSocket updates
+- [x] Render real-time outcomes and totals from WebSocket updates
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.4
   - Tests/backpressure:
     - Programmatic: `pnpm -C website test`
   - Perceptual: None
+  - **Completed**: Added real-time outcome and settlement display infrastructure:
+    - `useRoundOutcome` hook (`website/src/hooks/useRoundOutcome.ts`): Subscribes to `outcome`, `player_settled`, `bet_accepted`, and `finalized` events. Tracks round outcome (dice, totals, RNG data), player settlement (payout, result), pending bets, and recent outcome history. Includes helper functions for bet type labels, amount formatting, and top totals calculation.
+    - `RoundOutcomeDisplay` component (`website/src/components/casino/RoundOutcomeDisplay.tsx`): Renders dice faces with dots, dice total, point display (with "Just set" badge), bet totals breakdown (top N by amount), and round info with RNG commit hash.
+    - `SettlementResultDisplay` component: Shows win/loss/push result with payout amount, bet count, wagered amount, and updated balance. Uses emerald (win), amber (push), and mono (loss) color schemes.
+    - `RoundResultPanel` component: Combined panel showing both outcome and settlement.
+    - `useRoundResultDisplay` hook (`website/src/hooks/useRoundResultDisplay.ts`): Integrates `useRoundOutcome` with existing `ResultDisplay` for animated reveals. Auto-shows result on settlement, calculates celebration intensity.
+    - Updated `vitest.config.ts` to include `src/hooks/__tests__/**/*.test.{ts,tsx,js,jsx}`
+    - 96 new unit tests (54 component + 42 hook) covering dice display, point display, totals breakdown, settlement results, accessibility (role, aria-live, aria-label), helper functions, and AC-5.4 compliance.
 - [ ] Add fairness verification panel for commit/reveal values
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.5
   - Tests/backpressure:
