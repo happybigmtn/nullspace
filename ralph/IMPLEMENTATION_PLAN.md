@@ -5,12 +5,6 @@
 **Scope**: Sprint breakdown for full Nullspace platform delivery.
 
 ## Sprint 01 - Foundations and Local Dev
-- [x] Add deterministic seed/time-scaling config parsing for simulator and node
-  - Specs: `specs/sprint-01-foundations.md` AC-1.1, AC-1.2
-  - Tests/backpressure:
-    - Programmatic: `cargo test -p nullspace-simulator`
-  - Perceptual: None
-  - Note: Already implemented in `simulator/src/state.rs` (SimulatorConfig) and `simulator/src/main.rs` (Args parsing + validation)
 - [x] Add local bootstrap guardrails (missing env/config checks, port reuse handling)
   - Specs: `specs/sprint-01-foundations.md` AC-1.1, AC-1.5
   - Tests/backpressure:
@@ -56,11 +50,12 @@
     - Programmatic: `cargo test -p nullspace-execution`
   - Perceptual: None
   - Note: Implemented `execution/src/rng_pipeline.rs` with `CommitRevealPair`, `HashChain`, and verification functions. Provides commit-reveal scheme where `commit = hash(reveal)` and `reveal = hash(master_secret || round_id)`. Includes 17 unit tests covering determinism, verification, entropy distribution, overflow safety, and hash chain replay from persisted secret.
-- [ ] Implement bet validation and settlement logic for flagship game
+- [x] Implement bet validation and settlement logic for flagship game
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.3
   - Tests/backpressure:
-    - Programmatic: `cargo test -p execution`
+    - Programmatic: `cargo test -p nullspace-execution`
   - Perceptual: None
+  - Note: Baccarat selected as flagship game. Full implementation includes bet validation (`BetType::try_from`, `clamp_and_validate_bet_amount`), settlement logic (`calculate_bet_payout` for all 10 bet types), and payout calculations per Wizard of Odds paytables. 50+ golden tests verify exact payouts for all bet types including Player/Banker (1:1), Tie (9:1), Pairs (12:1), Lucky 6, Dragon Bonus, Panda 8, and Perfect Pair. Fixed unused assignment warning in place_bet handler.
 - [ ] Add append-only event log writer and snapshot loader
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.4
   - Tests/backpressure:
