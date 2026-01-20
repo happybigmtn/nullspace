@@ -187,11 +187,18 @@
     - `useCasinoConnection.ts`: Browser online/offline events, WebSocket state management, vault subscriptions
     - Added 40 unit tests (17 WalletPill + 23 ConnectionStatus) covering all status states, accessibility, and real-time update behavior
     - Updated `vitest.config.ts` to include `src/components/__tests__/**/*.test.{ts,tsx}` pattern
-- [ ] Build table view with countdown and phase labels from gateway updates
+- [x] Build table view with countdown and phase labels from gateway updates
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.2, AC-PQ.1
   - Tests/backpressure:
     - Programmatic: `pnpm -C website test`
   - Perceptual: AC-PQ.1
+  - **Completed**: Added `useRoundPhase` hook (`website/src/hooks/useRoundPhase.ts`) and `RoundPhaseDisplay` component (`website/src/components/casino/RoundPhaseDisplay.tsx`):
+    - `useRoundPhase` hook: Subscribes to gateway round events (`round_opened`, `locked`, `outcome`, `finalized`), tracks phase (BETTING, LOCKED, REVEALING, SETTLING, FINALIZED, IDLE) and countdown, includes server time sync for 250ms accuracy
+    - `useServerTimeSync` hook: Calculates server time offset from clock_sync messages
+    - `RoundPhaseDisplay` component: Inline phase indicator with countdown timer, urgency styling below threshold, compact mode
+    - `TablePhaseHeader` component: Full-width header variant with round ID and larger countdown
+    - `formatCountdown` utility: Formats milliseconds to M:SS with ceiling rounding
+    - 47 unit tests covering phase labels, countdown display, loading state, accessibility, urgency, compact mode, AC-PQ.1 compliance
 - [ ] Implement bet slip, validation, and confirmation flow
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.3
   - Tests/backpressure:
