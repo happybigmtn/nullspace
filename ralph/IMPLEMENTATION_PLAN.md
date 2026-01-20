@@ -5,12 +5,6 @@
 **Scope**: Sprint breakdown for full Nullspace platform delivery.
 
 ## Sprint 01 - Foundations and Local Dev
-- [x] Add faucet helper for funding test wallets
-  - Specs: `specs/sprint-01-foundations.md` AC-1.3
-  - Tests/backpressure:
-    - Programmatic: `pnpm -C tests/integration test:faucet`
-  - Perceptual: None
-  - Note: Implemented scripts/faucet.sh and scripts/faucet.mjs for CLI usage; integration tests in tests/integration/faucet.test.ts verify fund flow. Uses CasinoRegister + CasinoDeposit instructions.
 - [x] Add config schema validation for gateway and services
   - Specs: `specs/sprint-01-foundations.md` AC-1.2
   - Tests/backpressure:

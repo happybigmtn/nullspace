@@ -96,3 +96,14 @@ Completed work items moved from `IMPLEMENTATION_PLAN.md`.
 - `scripts/agent-up.sh` (port reuse checks, bootstrap prerequisites)
 - `scripts/agent-loop.sh` (local stack orchestration)
 - `scripts/health-check.sh` (endpoint + metric checks)
+
+### Sprint 01: Faucet helper for test wallets ✅
+
+- [x] Added CLI wrapper for funding new or existing wallets
+- [x] Added faucet implementation with register + deposit flow
+- [x] Integration coverage for faucet funding path
+
+**Files Reviewed**:
+- `scripts/faucet.sh` (CLI wrapper, health check, error handling)
+- `scripts/faucet.mjs` (register + deposit flow)
+- `tests/integration/faucet.test.ts` (funding integration tests)
