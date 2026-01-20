@@ -67,6 +67,12 @@ mod state;
 pub use layer::Layer;
 pub use state::{nonce, Adb, Noncer, PrepareError, State, Status};
 pub use casino::{GameError, GameResult, GameRng, init_game, process_game_move};
+pub use casino::registry::{
+    GameRegistry, GameConfig, GameInfo, GameCategory,
+    BaccaratConfig, BlackjackConfig, CasinoWarConfig, CrapsConfig,
+    HiLoConfig, RouletteConfig, RouletteVariant, SicBoConfig, SicBoPaytable,
+    ThreeCardConfig, UltimateHoldemConfig, VideoPokerConfig, VideoPokerVariant,
+};
 pub use round_scheduler::{PhaseConfig, RoundScheduler, TransitionResult, view_to_ms, ms_to_view, MS_PER_VIEW};
 pub use rng_pipeline::{
     CommitRevealError, CommitRevealPair, HashChain, COMMIT_REVEAL_LEN,

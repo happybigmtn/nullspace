@@ -264,11 +264,22 @@
     - Golden vector tests validate exact byte encoding
     - v1/v2 parity tests verify identical outcomes
     - All 480 execution tests pass (including 11 new v2 tests)
-- [ ] Add game registry and per-game configuration loading
+- [x] Add game registry and per-game configuration loading
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.2
   - Tests/backpressure:
     - Programmatic: `cargo test -p execution`
   - Perceptual: None
+  - **Completed**: Added `registry` module (`execution/src/casino/registry.rs`) with:
+    - `GameRegistry` struct for centralized game management
+    - `GameConfig` enum with per-game configuration (10 variants)
+    - `GameInfo` struct with display metadata (name, description, category, house edge)
+    - `GameCategory` enum (Cards, Table, Poker) for UI grouping
+    - Per-game config structs: `BlackjackConfig`, `RouletteConfig`, `SicBoConfig`, `BaccaratConfig`, `CrapsConfig`, `HiLoConfig`, `CasinoWarConfig`, `ThreeCardConfig`, `UltimateHoldemConfig`, `VideoPokerConfig`
+    - Variant enums: `RouletteVariant` (European, LaPartage, EnPrison, EnPrisonDouble, American), `SicBoPaytable`, `VideoPokerVariant`
+    - Config serialization/deserialization with `to_bytes()`/`from_bytes()` for persistence
+    - Active/inactive game filtering
+    - 14 unit tests covering registry operations, config roundtrips, and variant handling
+    - Tests: `cargo test -p nullspace-execution registry::` (14 tests passing)
 - [ ] Update gateway routing to include game id in subscriptions and bet intents
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.3
   - Tests/backpressure:

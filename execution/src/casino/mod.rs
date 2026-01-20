@@ -11,6 +11,8 @@
 //! - Sic Bo
 //! - Craps
 //! - Casino War
+//!
+//! The [`registry`] module provides centralized game configuration and metadata.
 
 pub mod baccarat;
 pub mod blackjack;
@@ -33,6 +35,7 @@ mod batch_boundary_tests;
 pub(crate) mod logging;
 pub mod limits;
 pub(crate) mod payload;
+pub mod registry;
 pub mod roulette;
 pub(crate) mod serialization;
 pub mod sic_bo;
