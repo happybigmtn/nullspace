@@ -42,9 +42,35 @@ type AggregationCertificate = Certificate<AggregationScheme, Digest>;
 type StateOp = variable::Operation<Digest, Value>;
 type EventOp = keyless::Operation<Output>;
 
+/// Simple health response for basic liveness checks
 #[derive(Serialize)]
 struct HealthzResponse {
     ok: bool,
+}
+
+/// Detailed health response for monitoring dashboards (AC-4.6)
+#[derive(Serialize)]
+struct DetailedHealthResponse {
+    healthy: bool,
+    ready: bool,
+    indexed_blocks: usize,
+    indexed_rounds: usize,
+    indexed_accounts: usize,
+    persistence_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    persistence_queue_depth: Option<u64>,
+    fanout_enabled: bool,
+    cache_enabled: bool,
+    ws_connections: usize,
+    version: &'static str,
+}
+
+/// Readiness response for Kubernetes readiness probes
+#[derive(Serialize)]
+struct ReadyResponse {
+    ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<&'static str>,
 }
 
 #[derive(Deserialize)]
@@ -66,8 +92,61 @@ struct AccountResponse {
     balance: u64,
 }
 
+/// Basic health check endpoint - always returns ok if service can respond (AC-4.6)
+/// Used for simple liveness checks and load balancer health probes.
 pub(super) async fn healthz() -> Response {
     Json(HealthzResponse { ok: true }).into_response()
+}
+
+/// Liveness probe endpoint - returns 200 if the service is alive (AC-4.6)
+/// Kubernetes uses this to determine if the service should be restarted.
+pub(super) async fn livez() -> Response {
+    Json(HealthzResponse { ok: true }).into_response()
+}
+
+/// Readiness probe endpoint - returns 200 if service is ready to receive traffic (AC-4.6)
+/// Kubernetes uses this to determine if the service should receive traffic.
+pub(super) async fn readyz(AxumState(simulator): AxumState<Arc<Simulator>>) -> Response {
+    let status = simulator.health_status().await;
+    if status.ready {
+        (StatusCode::OK, Json(ReadyResponse { ready: true, reason: None })).into_response()
+    } else {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ReadyResponse {
+                ready: false,
+                reason: Some("not_initialized"),
+            }),
+        )
+            .into_response()
+    }
+}
+
+/// Detailed health status endpoint for monitoring dashboards (AC-4.6)
+/// Returns comprehensive health information including indexer state and dependencies.
+pub(super) async fn health(AxumState(simulator): AxumState<Arc<Simulator>>) -> Response {
+    let status = simulator.health_status().await;
+    let response = DetailedHealthResponse {
+        healthy: status.healthy,
+        ready: status.ready,
+        indexed_blocks: status.indexed_blocks,
+        indexed_rounds: status.indexed_rounds,
+        indexed_accounts: status.indexed_accounts,
+        persistence_enabled: status.persistence_enabled,
+        persistence_queue_depth: status.persistence_queue_depth,
+        fanout_enabled: status.fanout_enabled,
+        cache_enabled: status.cache_enabled,
+        ws_connections: status.ws_connections,
+        version: status.version,
+    };
+
+    let http_status = if status.healthy {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+
+    (http_status, Json(response)).into_response()
 }
 
 pub(super) async fn config(AxumState(simulator): AxumState<Arc<Simulator>>) -> Response {

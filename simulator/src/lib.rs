@@ -95,6 +95,33 @@ pub struct WsMetricsSnapshot {
     pub connection_reject_per_ip: u64,
 }
 
+/// Health status for monitoring endpoints (AC-4.6)
+#[derive(Clone, Debug, Serialize)]
+pub struct HealthStatus {
+    /// Overall health status
+    pub healthy: bool,
+    /// Service is ready to receive traffic
+    pub ready: bool,
+    /// Indexed block count
+    pub indexed_blocks: usize,
+    /// Indexed round count (global table rounds)
+    pub indexed_rounds: usize,
+    /// Number of indexed accounts
+    pub indexed_accounts: usize,
+    /// Explorer persistence enabled
+    pub persistence_enabled: bool,
+    /// Persistence queue depth (if enabled)
+    pub persistence_queue_depth: Option<u64>,
+    /// Fanout (Redis pubsub) enabled
+    pub fanout_enabled: bool,
+    /// Cache (Redis) enabled
+    pub cache_enabled: bool,
+    /// Current WebSocket connections
+    pub ws_connections: usize,
+    /// Service version (from Cargo.toml)
+    pub version: &'static str,
+}
+
 impl WsMetrics {
     pub fn snapshot(&self) -> WsMetricsSnapshot {
         WsMetricsSnapshot {
@@ -590,6 +617,49 @@ impl Simulator {
 
     pub(crate) fn system_metrics_snapshot(&self) -> SystemMetricsSnapshot {
         self.system_metrics.snapshot()
+    }
+
+    /// Returns current health status for monitoring (AC-4.6)
+    pub async fn health_status(&self) -> HealthStatus {
+        let explorer = self.explorer.read().await;
+        let ws_connections = self
+            .ws_connections
+            .lock()
+            .map(|tracker| tracker.total)
+            .unwrap_or(0);
+        let persistence_queue_depth = self
+            .explorer_metrics
+            .persistence_queue_depth
+            .load(Ordering::Relaxed);
+
+        let indexed_blocks = explorer.indexed_blocks.len();
+        let indexed_rounds = explorer.indexed_rounds.len();
+        let indexed_accounts = explorer.accounts.len();
+        let persistence_enabled = self.explorer_persistence.is_some();
+        let fanout_enabled = self.fanout.is_some();
+        let cache_enabled = self.cache.is_some();
+
+        // Service is healthy if it can respond
+        // Service is ready if it has indexed at least one block or persistence is working
+        let ready = indexed_blocks > 0 || !persistence_enabled;
+
+        HealthStatus {
+            healthy: true, // If we can respond, we're alive
+            ready,
+            indexed_blocks,
+            indexed_rounds,
+            indexed_accounts,
+            persistence_enabled,
+            persistence_queue_depth: if persistence_enabled {
+                Some(persistence_queue_depth)
+            } else {
+                None
+            },
+            fanout_enabled,
+            cache_enabled,
+            ws_connections,
+            version: env!("CARGO_PKG_VERSION"),
+        }
     }
 
     pub(crate) fn try_acquire_ws_connection(
@@ -3411,6 +3481,73 @@ mod tests {
             // ✓ Source database persistence works
             // ✓ Backfill function handles unreachable source gracefully
             // ✓ Backfill endpoint data format is correct (via explorer iteration)
+        });
+    }
+
+    /// AC-4.6: Test health status endpoint functionality
+    #[tokio::test]
+    async fn test_health_status() {
+        let (_, network_identity) = create_network_keypair();
+        let simulator = Arc::new(Simulator::new(network_identity));
+
+        // Get initial health status
+        let status = simulator.health_status().await;
+
+        // Verify health status fields
+        assert!(status.healthy, "Service should be healthy");
+        // Ready should be true when persistence is disabled (default config)
+        assert!(status.ready, "Service should be ready when persistence is disabled");
+        assert_eq!(status.indexed_blocks, 0, "No blocks indexed yet");
+        assert_eq!(status.indexed_rounds, 0, "No rounds indexed yet");
+        assert_eq!(status.indexed_accounts, 0, "No accounts indexed yet");
+        assert!(!status.persistence_enabled, "Persistence disabled by default");
+        assert!(status.persistence_queue_depth.is_none(), "No queue depth when persistence disabled");
+        assert!(!status.fanout_enabled, "Fanout disabled by default");
+        assert!(!status.cache_enabled, "Cache disabled by default");
+        assert_eq!(status.ws_connections, 0, "No WS connections");
+        assert!(!status.version.is_empty(), "Version should be set");
+    }
+
+    /// AC-4.6: Test health status with indexed data
+    #[test]
+    fn test_health_status_with_indexed_data() {
+        let executor = cw_tokio::Runner::new(cw_tokio::Config::default());
+        executor.start(|context| async move {
+            let (network_secret, network_identity) = create_network_keypair();
+            let simulator = Arc::new(Simulator::new(network_identity));
+            let (mut state, mut events) = create_adbs(&context).await;
+
+            // Create and execute a block
+            let (private, _public) = create_account_keypair(1);
+            let tx = Transaction::sign(
+                &private,
+                0,
+                Instruction::CasinoRegister {
+                    name: "Player1".to_string(),
+                },
+            );
+
+            let (_, summary) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                1,
+                vec![tx],
+            )
+            .await;
+
+            // Submit the data
+            let (state_digests, events_digests) = summary.verify(&network_identity).unwrap();
+            simulator.submit_events(summary.clone(), events_digests).await;
+            simulator.submit_state(summary, state_digests).await;
+
+            // Check health status now shows indexed data
+            let status = simulator.health_status().await;
+            assert!(status.healthy, "Service should be healthy");
+            assert!(status.ready, "Service should be ready");
+            assert_eq!(status.indexed_blocks, 1, "One block should be indexed");
+            assert!(status.indexed_accounts > 0, "Accounts should be indexed");
         });
     }
 }

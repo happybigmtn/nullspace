@@ -156,6 +156,9 @@ impl Api {
 
         let router = Router::new()
             .route("/healthz", get(http::healthz))
+            .route("/livez", get(http::livez))
+            .route("/readyz", get(http::readyz))
+            .route("/health", get(http::health))
             .route("/config", get(http::config))
             .route("/presence/global-table", post(http::global_table_presence))
             .route("/metrics/ws", get(http::ws_metrics))

@@ -160,11 +160,20 @@
       - Source database persistence works
       - Backfill function handles unreachable source gracefully
       - Backfill endpoint data format is correct
-- [ ] Expose health and metrics endpoints
+- [x] Expose health and metrics endpoints
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.6
   - Tests/backpressure:
     - Programmatic: `./scripts/health-check.sh`
   - Perceptual: None
+  - **Completed**: Added comprehensive health endpoints in `simulator/src/api/http.rs`:
+    - `GET /healthz` - Basic liveness check (returns `{"ok": true}`)
+    - `GET /livez` - Kubernetes liveness probe
+    - `GET /readyz` - Kubernetes readiness probe (checks if service is initialized)
+    - `GET /health` - Detailed health status with indexed blocks/rounds/accounts, persistence status, fanout/cache enabled, WS connections, and version
+    - Existing metrics endpoints preserved: `/metrics/ws`, `/metrics/http`, `/metrics/system`, `/metrics/explorer`, `/metrics/updates`, `/metrics/prometheus`
+  - Added `HealthStatus` struct in `lib.rs` with health_status() method on Simulator
+  - Updated `scripts/health-check.sh` to test all new health endpoints
+  - Added 2 unit tests: `test_health_status` and `test_health_status_with_indexed_data`
 
 ## Sprint 05 - Web Client MVP
 - [ ] Implement wallet connect and network status indicators

@@ -136,11 +136,14 @@ check_local_stack() {
     echo "Started at: $(date)"
     echo ""
 
-    # Simulator
+    # Simulator/Indexer (AC-4.6: health and metrics endpoints)
     if [ "$SKIP_SIMULATOR" != "1" ]; then
-        echo "Simulator:"
+        echo "Simulator/Indexer:"
         check_port_listening "simulator" "$SIMULATOR_PORT" || true
         check_endpoint "simulator /healthz" "http://127.0.0.1:$SIMULATOR_PORT/healthz" || true
+        check_endpoint "simulator /livez" "http://127.0.0.1:$SIMULATOR_PORT/livez" || true
+        check_endpoint "simulator /readyz" "http://127.0.0.1:$SIMULATOR_PORT/readyz" || true
+        check_endpoint "simulator /health" "http://127.0.0.1:$SIMULATOR_PORT/health" || true
         check_process "simulator" "/tmp/localnet.pid" || true
         echo ""
     fi
