@@ -127,3 +127,16 @@ Completed work items moved from `IMPLEMENTATION_PLAN.md`.
 **Files Reviewed/Updated**:
 - `docs/agents/local-development.md`
 - `AGENTS.md` (reference to local dev guide)
+
+### Sprint 01: Correlation ID propagation ✅
+
+- [x] Gateway generates/propagates trace IDs and includes them in responses
+- [x] Submit client forwards request IDs as `x-request-id`
+- [x] Simulator echoes request IDs on key endpoints
+
+**Files Reviewed**:
+- `gateway/src/index.ts` (trace ID handling)
+- `gateway/src/backend/http.ts` (x-request-id forwarding)
+- `gateway/src/logger.ts` (requestId logging context)
+- `simulator/src/api/mod.rs` (request_id middleware)
+- `tests/integration/correlation-id.test.ts` (propagation checks)
