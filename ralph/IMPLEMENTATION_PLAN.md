@@ -497,11 +497,20 @@
       - Alert threshold coverage for critical metrics
       - Prometheus scrape config and Alertmanager receivers
     - Tests: `./scripts/validate-observability.sh` (all validations passing)
-- [ ] Write and test disaster recovery runbook using snapshots
+- [x] Write and test disaster recovery runbook using snapshots
   - Specs: `specs/sprint-09-production-readiness.md` AC-9.3
   - Tests/backpressure:
     - Programmatic: recovery drill logs from `scripts/health-check.sh` or runbook script
   - Perceptual: None
+  - **Completed**: Added `ralph/scripts/disaster-recovery.sh` runbook with:
+    - `snapshot` command: Creates tar.gz snapshots of SQLite/PostgreSQL explorer persistence with metadata
+    - `restore` command: Restores from snapshots with backup of existing data, requires --confirm
+    - `validate` command: Validates state integrity (simulator health, indexed counts, DB integrity, snapshot comparison)
+    - `drill` command: Runs full 5-phase recovery drill (pre-validation, snapshot, disaster sim, restore, post-validation)
+    - `status` command: Shows current DR status (simulator health, persistence backend, snapshot inventory, drill history)
+    - Drill logs include "DRILL RESULT: PASSED/FAILED" for automated verification
+    - Supports both SQLite and PostgreSQL backends via environment variables
+    - Non-destructive by default (DRILL_PERFORM_RESTORE=1 for actual restore)
 - [ ] Add fuzz/property tests for gateway parsing and execution rules
   - Specs: `specs/sprint-09-production-readiness.md` AC-9.4
   - Tests/backpressure:
