@@ -192,7 +192,7 @@ while true; do
     fi
 
     # Check for completion signal
-    if grep -qE '<promise>COMPLETE</promise>|all tasks complete|plan complete' "$RAWFILE" 2>/dev/null; then
+    if grep -qE '<promise>COMPLETE</promise>' "$RAWFILE" 2>/dev/null; then
         echo -e "${GREEN}✅ All tasks complete!${NC}"
         break
     fi

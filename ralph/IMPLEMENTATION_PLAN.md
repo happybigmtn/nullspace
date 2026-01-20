@@ -50,11 +50,12 @@
     - Programmatic: `cargo test -p nullspace-execution`
   - Perceptual: None
   - Note: Implemented `execution/src/round_scheduler.rs` with `RoundScheduler` struct, `PhaseConfig`, and `TransitionResult` types. Provides pure state machine logic for phase transitions (Betting→Locked→Rolling→Payout→Cooldown) with deterministic clock based on view*MS_PER_VIEW. Includes 20 unit tests covering phase transitions, timing validation, overflow protection, and full round cycles.
-- [ ] Implement RNG commit, lock, reveal pipeline with hash chain verification
+- [x] Implement RNG commit, lock, reveal pipeline with hash chain verification
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.2
   - Tests/backpressure:
-    - Programmatic: `cargo test -p execution`
+    - Programmatic: `cargo test -p nullspace-execution`
   - Perceptual: None
+  - Note: Implemented `execution/src/rng_pipeline.rs` with `CommitRevealPair`, `HashChain`, and verification functions. Provides commit-reveal scheme where `commit = hash(reveal)` and `reveal = hash(master_secret || round_id)`. Includes 17 unit tests covering determinism, verification, entropy distribution, overflow safety, and hash chain replay from persisted secret.
 - [ ] Implement bet validation and settlement logic for flagship game
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.3
   - Tests/backpressure:

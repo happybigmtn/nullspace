@@ -48,6 +48,7 @@
 //! ```
 
 pub mod casino;
+pub mod rng_pipeline;
 pub mod round_scheduler;
 pub mod state_transition;
 
@@ -65,6 +66,10 @@ pub use layer::Layer;
 pub use state::{nonce, Adb, Noncer, PrepareError, State, Status};
 pub use casino::{GameError, GameResult, GameRng, init_game, process_game_move};
 pub use round_scheduler::{PhaseConfig, RoundScheduler, TransitionResult, view_to_ms, ms_to_view, MS_PER_VIEW};
+pub use rng_pipeline::{
+    CommitRevealError, CommitRevealPair, HashChain, COMMIT_REVEAL_LEN,
+    compute_commit, generate_commit_reveal, verify_commit_reveal, verify_commit_reveal_slices,
+};
 
 #[cfg(any(test, feature = "mocks"))]
 pub use state::Memory;
