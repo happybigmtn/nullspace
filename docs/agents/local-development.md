@@ -19,11 +19,11 @@ Before running the local stack, ensure you have:
 For most development work, use the mock backend for deterministic testing:
 
 ```bash
-cd ralph
-./scripts/agent-loop.sh
+cd /home/r/Coding/nullspace
+SMOKE_BACKEND=mock ./scripts/agent-loop.sh
 ```
 
-This validates environment, checks ports, and delegates to the parent `scripts/agent-loop.sh`.
+This runs the end-to-end agent loop with a deterministic mock backend by default.
 
 ### Full Stack Bootstrap
 
@@ -51,17 +51,18 @@ Configure the stack with environment variables:
 | `E2E_SEED` | `1` | Seed for mock backend determinism |
 | `FAST` | `0` | Skip heavy test suites (website unit tests only) |
 | `KEEP_UP` | `1` | Leave services running after tests |
-| `SKIP_PORT_CHECK` | `0` | Skip port availability validation |
 | `WEB_PORT` | `3000` | Website dev server port |
-| `GATEWAY_PORT` | `9010` | Gateway port |
-| `AUTH_PORT` | `4000` | Auth service port |
-| `SIMULATOR_PORT` | `8080` | Simulator/validator port |
-| `CONVEX_PORT` | `3210` | Convex backend port |
+| `CONFIG_DIR` | `configs/local` | Validator config directory |
+| `NODES` | `1` | Number of validators to start |
+| `SKIP_LOCALNET` | `0` | Skip simulator + validators + Convex bootstrap |
+| `SKIP_AUTH` | `0` | Skip auth service |
+| `SKIP_GATEWAY` | `0` | Skip gateway service |
+| `SKIP_WEBSITE` | `0` | Skip website dev server |
 
-Example with custom ports:
+Example with custom website port:
 
 ```bash
-WEB_PORT=3001 GATEWAY_PORT=9011 ./scripts/agent-up.sh
+WEB_PORT=3001 ./scripts/agent-up.sh
 ```
 
 ### Selective Service Startup
@@ -114,17 +115,11 @@ Output shows public key, private key, and balance changes.
 Validate the running stack:
 
 ```bash
-# Full health check (ports, endpoints, processes)
 ./scripts/health-check.sh
-
-# Quick check (ports only)
-./scripts/health-check.sh --quick
-
-# Check specific services
-SKIP_AUTH=1 SKIP_WEBSITE=1 ./scripts/health-check.sh
 ```
 
-Returns non-zero on any failure (AC-1.5).
+Returns non-zero on any failure (AC-1.5). Configure metrics endpoints via
+`NODE_METRICS_URLS` and `METRICS_AUTH_TOKEN` if needed.
 
 ## Troubleshooting
 
@@ -148,11 +143,6 @@ Returns non-zero on any failure (AC-1.5).
    ```bash
    lsof -i :3000  # Find PID
    kill <PID>
-   ```
-
-4. Skip port check (risky):
-   ```bash
-   SKIP_PORT_CHECK=1 ./scripts/agent-up.sh
    ```
 
 ### Docker Daemon Not Running

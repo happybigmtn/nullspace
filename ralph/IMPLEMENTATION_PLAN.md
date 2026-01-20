@@ -5,12 +5,6 @@
 **Scope**: Sprint breakdown for full Nullspace platform delivery.
 
 ## Sprint 01 - Foundations and Local Dev
-- [x] Update docs for bootstrap, teardown, and troubleshooting
-  - Specs: `specs/sprint-01-foundations.md` AC-1.4
-  - Tests/backpressure:
-    - Programmatic: N/A (manual doc verification)
-  - Perceptual: None
-  - Note: Created `docs/agents/local-development.md` with comprehensive bootstrap, teardown, and troubleshooting documentation. Updated `AGENTS.md` to reference the new guide.
 - [x] Add correlation id propagation across gateway -> engine -> indexer logs
   - Specs: `specs/sprint-01-foundations.md` AC-1.6
   - Tests/backpressure:

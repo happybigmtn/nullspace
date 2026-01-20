@@ -117,3 +117,13 @@ Completed work items moved from `IMPLEMENTATION_PLAN.md`.
 **Files Reviewed**:
 - `gateway/src/config/validation.ts` (validation rules)
 - `gateway/tests/unit/config-validation.test.ts` (unit test coverage)
+
+### Sprint 01: Local development docs ✅
+
+- [x] Documented bootstrap, teardown, and troubleshooting steps
+- [x] Updated guidance to match current scripts and supported env vars
+- [x] Referenced faucet and health-check workflows
+
+**Files Reviewed/Updated**:
+- `docs/agents/local-development.md`
+- `AGENTS.md` (reference to local dev guide)
