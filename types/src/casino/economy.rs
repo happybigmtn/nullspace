@@ -1086,3 +1086,238 @@ impl EncodeSize for AmmPool {
             + self.bootstrap_finalized_ts.encode_size()
     }
 }
+
+// ============================================================================
+// Ledger Entry Types for AC-7.1: Deposit/Withdraw Reconciliation
+// ============================================================================
+
+/// Type of ledger entry for deposit/withdrawal tracking.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LedgerEntryType {
+    /// Deposit from EVM chain to L2
+    Deposit = 0,
+    /// Withdrawal request from L2 to EVM chain
+    WithdrawalRequest = 1,
+    /// Withdrawal fulfilled (relayer executed on EVM)
+    WithdrawalFulfilled = 2,
+}
+
+impl Write for LedgerEntryType {
+    fn write(&self, writer: &mut impl BufMut) {
+        (*self as u8).write(writer);
+    }
+}
+
+impl Read for LedgerEntryType {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let value = u8::read(reader)?;
+        match value {
+            0 => Ok(Self::Deposit),
+            1 => Ok(Self::WithdrawalRequest),
+            2 => Ok(Self::WithdrawalFulfilled),
+            _ => Err(Error::InvalidEnum(value)),
+        }
+    }
+}
+
+impl EncodeSize for LedgerEntryType {
+    fn encode_size(&self) -> usize {
+        u8::SIZE
+    }
+}
+
+/// Reconciliation status for chain state verification.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ReconciliationStatus {
+    /// Entry not yet reconciled against chain state
+    #[default]
+    Pending = 0,
+    /// Entry verified against EVM chain state
+    Verified = 1,
+    /// Entry failed reconciliation (mismatch detected)
+    Failed = 2,
+}
+
+impl Write for ReconciliationStatus {
+    fn write(&self, writer: &mut impl BufMut) {
+        (*self as u8).write(writer);
+    }
+}
+
+impl Read for ReconciliationStatus {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let value = u8::read(reader)?;
+        match value {
+            0 => Ok(Self::Pending),
+            1 => Ok(Self::Verified),
+            2 => Ok(Self::Failed),
+            _ => Err(Error::InvalidEnum(value)),
+        }
+    }
+}
+
+impl EncodeSize for ReconciliationStatus {
+    fn encode_size(&self) -> usize {
+        u8::SIZE
+    }
+}
+
+/// Ledger entry for deposit/withdrawal audit trail.
+/// Each entry tracks a single balance-affecting operation with chain state reconciliation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LedgerEntry {
+    /// Unique sequential ID for this ledger entry
+    pub id: u64,
+    /// Type of ledger operation
+    pub entry_type: LedgerEntryType,
+    /// Player affected by this entry
+    pub player: PublicKey,
+    /// Amount of RNG tokens
+    pub amount: u64,
+    /// Timestamp when entry was created (L2 block time)
+    pub created_ts: u64,
+    /// EVM chain reference (tx hash or block hash, variable length)
+    pub chain_ref: Vec<u8>,
+    /// Reconciliation status against EVM chain state
+    pub reconciliation_status: ReconciliationStatus,
+    /// Timestamp of last reconciliation attempt
+    pub reconciled_ts: u64,
+    /// Running balance after this entry (for audit)
+    pub balance_after: u64,
+    /// Related withdrawal ID (for WithdrawalRequest/WithdrawalFulfilled types)
+    pub withdrawal_id: Option<u64>,
+}
+
+impl Write for LedgerEntry {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.id.write(writer);
+        self.entry_type.write(writer);
+        self.player.write(writer);
+        self.amount.write(writer);
+        self.created_ts.write(writer);
+        self.chain_ref.write(writer);
+        self.reconciliation_status.write(writer);
+        self.reconciled_ts.write(writer);
+        self.balance_after.write(writer);
+        self.withdrawal_id.write(writer);
+    }
+}
+
+impl Read for LedgerEntry {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            id: u64::read(reader)?,
+            entry_type: LedgerEntryType::read(reader)?,
+            player: PublicKey::read(reader)?,
+            amount: u64::read(reader)?,
+            created_ts: u64::read(reader)?,
+            chain_ref: Vec::<u8>::read_range(reader, 0..=64)?,
+            reconciliation_status: ReconciliationStatus::read(reader)?,
+            reconciled_ts: u64::read(reader)?,
+            balance_after: u64::read(reader)?,
+            withdrawal_id: Option::<u64>::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for LedgerEntry {
+    fn encode_size(&self) -> usize {
+        self.id.encode_size()
+            + self.entry_type.encode_size()
+            + self.player.encode_size()
+            + self.amount.encode_size()
+            + self.created_ts.encode_size()
+            + self.chain_ref.encode_size()
+            + self.reconciliation_status.encode_size()
+            + self.reconciled_ts.encode_size()
+            + self.balance_after.encode_size()
+            + self.withdrawal_id.encode_size()
+    }
+}
+
+/// Aggregated ledger state for reconciliation tracking.
+/// Tracks totals and unreconciled entries for efficient chain state verification.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct LedgerState {
+    /// Next ledger entry ID (auto-increment)
+    pub next_entry_id: u64,
+    /// Total deposits credited to L2
+    pub total_deposits: u64,
+    /// Total withdrawal requests initiated
+    pub total_withdrawal_requests: u64,
+    /// Total withdrawals fulfilled on chain
+    pub total_withdrawals_fulfilled: u64,
+    /// Count of entries pending reconciliation
+    pub pending_reconciliation_count: u64,
+    /// Count of entries that failed reconciliation
+    pub failed_reconciliation_count: u64,
+    /// Last successfully reconciled entry ID
+    pub last_reconciled_id: u64,
+    /// Timestamp of last reconciliation run
+    pub last_reconciliation_ts: u64,
+}
+
+impl Write for LedgerState {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.next_entry_id.write(writer);
+        self.total_deposits.write(writer);
+        self.total_withdrawal_requests.write(writer);
+        self.total_withdrawals_fulfilled.write(writer);
+        self.pending_reconciliation_count.write(writer);
+        self.failed_reconciliation_count.write(writer);
+        self.last_reconciled_id.write(writer);
+        self.last_reconciliation_ts.write(writer);
+    }
+}
+
+impl Read for LedgerState {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            next_entry_id: u64::read(reader)?,
+            total_deposits: u64::read(reader)?,
+            total_withdrawal_requests: u64::read(reader)?,
+            total_withdrawals_fulfilled: u64::read(reader)?,
+            pending_reconciliation_count: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            failed_reconciliation_count: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            last_reconciled_id: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            last_reconciliation_ts: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+        })
+    }
+}
+
+impl EncodeSize for LedgerState {
+    fn encode_size(&self) -> usize {
+        self.next_entry_id.encode_size()
+            + self.total_deposits.encode_size()
+            + self.total_withdrawal_requests.encode_size()
+            + self.total_withdrawals_fulfilled.encode_size()
+            + self.pending_reconciliation_count.encode_size()
+            + self.failed_reconciliation_count.encode_size()
+            + self.last_reconciled_id.encode_size()
+            + self.last_reconciliation_ts.encode_size()
+    }
+}

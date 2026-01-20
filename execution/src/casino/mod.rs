@@ -32,6 +32,8 @@ mod bridge_abi_tests;
 mod protocol_round_trip_tests;
 #[cfg(test)]
 mod batch_boundary_tests;
+#[cfg(test)]
+mod ledger_integration_tests;
 pub(crate) mod logging;
 pub mod limits;
 pub(crate) mod payload;

@@ -164,11 +164,37 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         let player_balances = nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
-        self.insert(Key::CasinoPlayer(public.clone()), Value::CasinoPlayer(player));
+        self.insert(Key::CasinoPlayer(public.clone()), Value::CasinoPlayer(player.clone()));
         self.insert(Key::BridgeState, Value::BridgeState(bridge.clone()));
         self.insert(
             Key::BridgeWithdrawal(withdrawal_id),
             Value::BridgeWithdrawal(withdrawal),
+        );
+
+        // Create ledger entry for withdrawal request
+        let mut ledger = self.get_or_init_ledger_state().await?;
+        let ledger_entry_id = ledger.next_entry_id;
+        ledger.next_entry_id = ledger.next_entry_id.saturating_add(1);
+        ledger.total_withdrawal_requests = ledger.total_withdrawal_requests.saturating_add(amount);
+        ledger.pending_reconciliation_count = ledger.pending_reconciliation_count.saturating_add(1);
+
+        let ledger_entry = nullspace_types::casino::LedgerEntry {
+            id: ledger_entry_id,
+            entry_type: nullspace_types::casino::LedgerEntryType::WithdrawalRequest,
+            player: public.clone(),
+            amount,
+            created_ts: requested_ts,
+            chain_ref: destination.to_vec(),
+            reconciliation_status: nullspace_types::casino::ReconciliationStatus::Pending,
+            reconciled_ts: 0,
+            balance_after: player.balances.chips,
+            withdrawal_id: Some(withdrawal_id),
+        };
+
+        self.insert(Key::LedgerState, Value::LedgerState(ledger));
+        self.insert(
+            Key::LedgerEntry(ledger_entry_id),
+            Value::LedgerEntry(ledger_entry),
         );
 
         Ok(vec![Event::BridgeWithdrawalRequested {
@@ -232,12 +258,38 @@ impl<'a, S: State> Layer<'a, S> {
         let mut bridge = self.get_or_init_bridge_state().await?;
         bridge.total_deposited = bridge.total_deposited.saturating_add(amount);
 
+        // Create ledger entry for deposit
+        let now = current_time_sec(self.seed_view);
+        let mut ledger = self.get_or_init_ledger_state().await?;
+        let ledger_entry_id = ledger.next_entry_id;
+        ledger.next_entry_id = ledger.next_entry_id.saturating_add(1);
+        ledger.total_deposits = ledger.total_deposits.saturating_add(amount);
+        ledger.pending_reconciliation_count = ledger.pending_reconciliation_count.saturating_add(1);
+
+        let ledger_entry = nullspace_types::casino::LedgerEntry {
+            id: ledger_entry_id,
+            entry_type: nullspace_types::casino::LedgerEntryType::Deposit,
+            player: recipient.clone(),
+            amount,
+            created_ts: now,
+            chain_ref: source.to_vec(),
+            reconciliation_status: nullspace_types::casino::ReconciliationStatus::Pending,
+            reconciled_ts: 0,
+            balance_after: player.balances.chips,
+            withdrawal_id: None,
+        };
+
         let player_balances = nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
         self.insert(
             Key::CasinoPlayer(recipient.clone()),
             Value::CasinoPlayer(player),
         );
         self.insert(Key::BridgeState, Value::BridgeState(bridge.clone()));
+        self.insert(Key::LedgerState, Value::LedgerState(ledger));
+        self.insert(
+            Key::LedgerEntry(ledger_entry_id),
+            Value::LedgerEntry(ledger_entry),
+        );
 
         Ok(vec![Event::BridgeDepositCredited {
             admin: public.clone(),
@@ -307,6 +359,37 @@ impl<'a, S: State> Layer<'a, S> {
         self.insert(
             Key::BridgeWithdrawal(withdrawal_id),
             Value::BridgeWithdrawal(withdrawal.clone()),
+        );
+
+        // Create ledger entry for withdrawal fulfillment (chain reconciliation)
+        let mut ledger = self.get_or_init_ledger_state().await?;
+        let ledger_entry_id = ledger.next_entry_id;
+        ledger.next_entry_id = ledger.next_entry_id.saturating_add(1);
+        ledger.total_withdrawals_fulfilled = ledger
+            .total_withdrawals_fulfilled
+            .saturating_add(withdrawal.amount);
+        ledger.last_reconciled_id = ledger_entry_id;
+        ledger.last_reconciliation_ts = now;
+        // Decrement pending count (the original request is now reconciled)
+        ledger.pending_reconciliation_count = ledger.pending_reconciliation_count.saturating_sub(1);
+
+        let ledger_entry = nullspace_types::casino::LedgerEntry {
+            id: ledger_entry_id,
+            entry_type: nullspace_types::casino::LedgerEntryType::WithdrawalFulfilled,
+            player: withdrawal.player.clone(),
+            amount: withdrawal.amount,
+            created_ts: now,
+            chain_ref: source.to_vec(),
+            reconciliation_status: nullspace_types::casino::ReconciliationStatus::Verified,
+            reconciled_ts: now,
+            balance_after: 0, // Balance already deducted at request time
+            withdrawal_id: Some(withdrawal_id),
+        };
+
+        self.insert(Key::LedgerState, Value::LedgerState(ledger));
+        self.insert(
+            Key::LedgerEntry(ledger_entry_id),
+            Value::LedgerEntry(ledger_entry),
         );
 
         let bridge = self.get_or_init_bridge_state().await?;

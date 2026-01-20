@@ -136,6 +136,10 @@ mod tags {
         pub const GLOBAL_TABLE_CONFIG: u8 = 29;
         pub const GLOBAL_TABLE_ROUND: u8 = 30;
         pub const GLOBAL_TABLE_PLAYER_SESSION: u8 = 31;
+
+        // Ledger (32-33)
+        pub const LEDGER_STATE: u8 = 32;
+        pub const LEDGER_ENTRY: u8 = 33;
     }
 
     pub mod value {
@@ -180,6 +184,10 @@ mod tags {
         pub const GLOBAL_TABLE_CONFIG: u8 = 29;
         pub const GLOBAL_TABLE_ROUND: u8 = 30;
         pub const GLOBAL_TABLE_PLAYER_SESSION: u8 = 31;
+
+        // Ledger (32-33)
+        pub const LEDGER_STATE: u8 = 32;
+        pub const LEDGER_ENTRY: u8 = 33;
     }
 
     pub mod event {
@@ -245,6 +253,11 @@ mod tags {
         pub const GLOBAL_TABLE_OUTCOME: u8 = 64;
         pub const GLOBAL_TABLE_PLAYER_SETTLED: u8 = 65;
         pub const GLOBAL_TABLE_FINALIZED: u8 = 66;
+
+        // Ledger events (70-72)
+        pub const LEDGER_ENTRY_CREATED: u8 = 70;
+        pub const LEDGER_RECONCILED: u8 = 71;
+        pub const LEDGER_RECONCILIATION_FAILED: u8 = 72;
     }
 }
 
@@ -1555,6 +1568,10 @@ pub enum Key {
     GlobalTableConfig(crate::casino::GameType),
     GlobalTableRound(crate::casino::GameType),
     GlobalTablePlayerSession(crate::casino::GameType, PublicKey),
+
+    // Ledger (Tags 32-33)
+    LedgerState,
+    LedgerEntry(u64),
 }
 
 impl Write for Key {
@@ -1627,6 +1644,13 @@ impl Write for Key {
                 game_type.write(writer);
                 pk.write(writer);
             }
+
+            // Ledger
+            Self::LedgerState => tags::key::LEDGER_STATE.write(writer),
+            Self::LedgerEntry(id) => {
+                tags::key::LEDGER_ENTRY.write(writer);
+                id.write(writer);
+            }
         }
     }
 }
@@ -1676,6 +1700,10 @@ impl Read for Key {
                 Self::GlobalTablePlayerSession(game_type, player)
             }
 
+            // Ledger
+            tags::key::LEDGER_STATE => Self::LedgerState,
+            tags::key::LEDGER_ENTRY => Self::LedgerEntry(u64::read(reader)?),
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -1717,6 +1745,10 @@ impl EncodeSize for Key {
                 Self::GlobalTableConfig(_) => u8::SIZE,
                 Self::GlobalTableRound(_) => u8::SIZE,
                 Self::GlobalTablePlayerSession(_, _) => u8::SIZE + PublicKey::SIZE,
+
+                // Ledger
+                Self::LedgerState => 0,
+                Self::LedgerEntry(_) => u64::SIZE,
         }
     }
 }
@@ -1773,6 +1805,10 @@ pub enum Value {
     GlobalTableConfig(crate::casino::GlobalTableConfig),
     GlobalTableRound(crate::casino::GlobalTableRound),
     GlobalTablePlayerSession(crate::casino::GlobalTablePlayerSession),
+
+    // Ledger (Tags 32-33)
+    LedgerState(crate::casino::LedgerState),
+    LedgerEntry(crate::casino::LedgerEntry),
 }
 
 impl Write for Value {
@@ -1884,6 +1920,16 @@ impl Write for Value {
                 tags::value::GLOBAL_TABLE_PLAYER_SESSION.write(writer);
                 session.write(writer);
             }
+
+            // Ledger
+            Self::LedgerState(state) => {
+                tags::value::LEDGER_STATE.write(writer);
+                state.write(writer);
+            }
+            Self::LedgerEntry(entry) => {
+                tags::value::LEDGER_ENTRY.write(writer);
+                entry.write(writer);
+            }
         }
     }
 }
@@ -1957,6 +2003,14 @@ impl Read for Value {
                 crate::casino::GlobalTablePlayerSession::read(reader)?,
             ),
 
+            // Ledger
+            tags::value::LEDGER_STATE => {
+                Self::LedgerState(crate::casino::LedgerState::read(reader)?)
+            }
+            tags::value::LEDGER_ENTRY => {
+                Self::LedgerEntry(crate::casino::LedgerEntry::read(reader)?)
+            }
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -2001,6 +2055,10 @@ impl EncodeSize for Value {
                 Self::GlobalTableConfig(config) => config.encode_size(),
                 Self::GlobalTableRound(round) => round.encode_size(),
                 Self::GlobalTablePlayerSession(session) => session.encode_size(),
+
+                // Ledger
+                Self::LedgerState(state) => state.encode_size(),
+                Self::LedgerEntry(entry) => entry.encode_size(),
             }
     }
 }

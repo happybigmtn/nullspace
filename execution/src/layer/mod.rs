@@ -643,6 +643,15 @@ impl<'a, S: State> Layer<'a, S> {
         })
     }
 
+    async fn get_or_init_ledger_state(
+        &mut self,
+    ) -> Result<nullspace_types::casino::LedgerState> {
+        Ok(match self.get(Key::LedgerState).await? {
+            Some(Value::LedgerState(state)) => state,
+            _ => nullspace_types::casino::LedgerState::default(),
+        })
+    }
+
     async fn get_lp_balance(&self, public: &PublicKey) -> Result<u64> {
         Ok(match self.get(Key::LpBalance(public.clone())).await? {
             Some(Value::LpBalance(bal)) => bal,

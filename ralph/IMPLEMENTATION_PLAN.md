@@ -330,11 +330,20 @@
     - Tests: `cargo test -p nullspace-execution regression` (17 tests), all baccarat tests (75 tests), full suite (511 tests)
 
 ## Sprint 07 - Payments, Treasury, and Admin Ops
-- [ ] Implement deposit/withdraw ledger reconciliation against chain state
+- [x] Implement deposit/withdraw ledger reconciliation against chain state
   - Specs: `specs/sprint-07-payments-admin.md` AC-7.1
   - Tests/backpressure:
     - Programmatic: integration tests for ledger updates
   - Perceptual: None
+  - **Completed**: Added ledger reconciliation types and logic:
+    - `LedgerEntryType` enum (Deposit, WithdrawalRequest, WithdrawalFulfilled)
+    - `ReconciliationStatus` enum (Pending, Verified, Failed)
+    - `LedgerEntry` struct with full audit trail (player, amount, chain_ref, timestamps, balance_after, withdrawal_id)
+    - `LedgerState` struct for aggregate tracking (total deposits, withdrawal requests, fulfilled, pending count)
+    - New Key/Value variants: `LedgerState`, `LedgerEntry(u64)`
+    - Updated bridge handlers: `handle_bridge_withdraw`, `handle_bridge_deposit`, `handle_finalize_bridge_withdrawal` to create ledger entries
+    - Withdrawal fulfillment transitions entry status from Pending to Verified
+    - 5 integration tests in `ledger_integration_tests.rs` validating ledger updates for deposits, withdrawals, and fulfillments
 - [ ] Add house bankroll/exposure tracking and limit checks
   - Specs: `specs/sprint-07-payments-admin.md` AC-7.2
   - Tests/backpressure:
