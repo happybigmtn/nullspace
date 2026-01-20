@@ -441,11 +441,17 @@
     - iOS/Android safe area insets for gesture navigation compatibility
     - Added `vitest` test runner to mobile package with 48 tests (45 TouchBetControls + 3 index)
     - Tests validate touch target sizes, accessibility requirements, and AC-PQ.2 compliance
-- [ ] Add WebSocket reconnect strategy and offline detection
+- [x] Add WebSocket reconnect strategy and offline detection
   - Specs: `specs/sprint-08-mobile-client.md` AC-8.3
   - Tests/backpressure:
     - Programmatic: integration tests simulating network drop
   - Perceptual: None
+  - **Completed**: Added network-aware WebSocket reconnection infrastructure:
+    - `useNetworkStatus` hook (`mobile/src/hooks/useNetworkStatus.ts`): Health check polling (10s interval), threshold-based status transitions (online/unstable/offline at 0/2/5 failures), AppState integration for battery-efficient background handling, debouncing for stable status
+    - `useWebSocketReconnect` hook (`mobile/src/hooks/useWebSocketReconnect.ts`): Coordinates WebSocket reconnection with network state, triggers immediate reconnect when network returns, provides countdown timer for next attempt, tracks disconnected duration, exposes reconnectNow/resetAndReconnect actions
+    - Combined status states: connected, connecting, reconnecting, offline, failed, disconnected
+    - Exponential backoff (1s→30s max) inherited from useWebSocket, network-aware to avoid wasteful retries during outages
+    - Tests: 43 integration tests covering network drop scenarios, status derivation, exponential backoff, countdown timer, AC-8.3 compliance
 - [ ] Add read-only mode with banner messaging
   - Specs: `specs/sprint-08-mobile-client.md` AC-8.4
   - Tests/backpressure:

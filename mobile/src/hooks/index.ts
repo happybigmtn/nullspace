@@ -40,3 +40,16 @@ export type {
   WalletConnectionState,
   WalletConnectionActions,
 } from './useWalletConnection';
+// Network status and WebSocket reconnection (AC-8.3)
+export { useNetworkStatus, NETWORK_STATUS_CONSTANTS } from './useNetworkStatus';
+export type {
+  NetworkStatus,
+  NetworkStatusState,
+  NetworkStatusActions,
+} from './useNetworkStatus';
+export { useWebSocketReconnect } from './useWebSocketReconnect';
+export type {
+  ReconnectStatus,
+  ReconnectState,
+  ReconnectActions,
+} from './useWebSocketReconnect';
