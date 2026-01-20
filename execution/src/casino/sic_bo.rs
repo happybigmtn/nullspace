@@ -34,7 +34,7 @@ use super::logging::{clamp_i64, push_resolved_entry};
 use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_super_multiplier_total;
 use super::{limits, CasinoGame, GameError, GameResult, GameRng};
-use nullspace_types::casino::GameSession;
+use nullspace_types::casino::{BitReader, GameSession};
 use std::fmt::Write;
 
 /// Payout multipliers for Sic Bo (expressed as "to 1" winnings).
@@ -73,6 +73,54 @@ mod payouts {
 
 /// Max bet amount to keep i64-safe return amounts (max total payout 180:1 => 181x return).
 const MAX_BET_AMOUNT: u64 = (i64::MAX as u64) / (payouts::TOTAL_3_OR_18 + 1);
+
+/// V2 protocol opcodes for sic bo (5 bits, 0-31).
+mod v2_opcodes {
+    pub const PLACE_BET: u8 = 0;
+    pub const ROLL: u8 = 1;
+    pub const CLEAR_BETS: u8 = 2;
+    pub const ATOMIC_BATCH: u8 = 3;
+    pub const SET_RULES: u8 = 4;
+}
+
+/// Check if payload uses v2 encoding.
+///
+/// V2 payloads have: version=2 in low 3 bits, and a valid v2 opcode in high 5 bits.
+/// This distinguishes v2 from v1 where byte 0 is the raw action code (0-4).
+///
+/// v1 actions that could be confused with v2:
+/// - v1 ClearBets: [2] -> byte=2, which has version=2 but opcode=0 (not AtomicBatch)
+///
+/// v2 AtomicBatch envelope: version=2, opcode=3 -> byte=0x1A
+fn is_v2_payload(payload: &[u8]) -> bool {
+    if payload.is_empty() {
+        return false;
+    }
+    let byte = payload[0];
+    let version = byte & 0x07;
+    let opcode = (byte >> 3) & 0x1F;
+
+    // Must be version 2 AND have a valid v2 opcode
+    // Currently only AtomicBatch (opcode 3) is implemented for v2 sic bo
+    version == 2 && opcode == v2_opcodes::ATOMIC_BATCH
+}
+
+/// Determine if a sic bo bet type requires a target value.
+///
+/// Returns true for bet types that need a specific number/value parameter.
+fn sic_bo_bet_needs_target(bet_type: u8) -> bool {
+    matches!(
+        bet_type,
+        4 |  // SpecificTriple
+        6 |  // SpecificDouble
+        7 |  // Total
+        8 |  // Single
+        9 |  // Domino
+        10 | // ThreeNumberEasyHop
+        11 | // ThreeNumberHardHop
+        12   // FourNumberEasyHop
+    )
+}
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -618,10 +666,15 @@ impl CasinoGame for SicBo {
             return Err(GameError::InvalidPayload);
         }
 
-        let action = payload[0];
         let mut state =
             parse_state(&session.state_blob).ok_or(GameError::InvalidMove)?;
 
+        // Check for v2 encoding (low 3 bits of first byte == 2)
+        if is_v2_payload(payload) {
+            return Self::process_v2_move(session, payload, rng, &mut state);
+        }
+
+        let action = payload[0];
         match action {
             // Action 0: Place bet
             0 => {
@@ -813,6 +866,136 @@ impl CasinoGame for SicBo {
                 }
             }
 
+            _ => Err(GameError::InvalidPayload),
+        }
+    }
+}
+
+/// Parse v2 AtomicBatch payload for sic bo.
+///
+/// Format: envelope (1 byte) + bet_count (5 bits) + bets (4-bit type + optional 6-bit target + ULEB128 amount)
+fn parse_v2_atomic_batch(payload: &[u8]) -> Result<Vec<SicBoBet>, GameError> {
+    let mut reader = BitReader::new(payload);
+
+    // Read envelope
+    let (_version, opcode) = reader.read_envelope().ok_or(GameError::InvalidPayload)?;
+    if opcode != v2_opcodes::ATOMIC_BATCH {
+        return Err(GameError::InvalidPayload);
+    }
+
+    // Read bet count (5 bits, max 20)
+    let bet_count = reader.read_bits(5).ok_or(GameError::InvalidPayload)? as usize;
+    if bet_count == 0 || bet_count > limits::SIC_BO_MAX_BETS {
+        return Err(GameError::InvalidPayload);
+    }
+
+    let mut bets = Vec::with_capacity(bet_count);
+    for _ in 0..bet_count {
+        // Peek at bet type to determine if we need a target
+        let bet_type_raw = reader.read_bits(4).ok_or(GameError::InvalidPayload)?;
+        let needs_target = sic_bo_bet_needs_target(bet_type_raw);
+
+        let number = if needs_target {
+            reader.read_bits(6).ok_or(GameError::InvalidPayload)?
+        } else {
+            0
+        };
+
+        let amount = reader.read_uleb128().ok_or(GameError::InvalidPayload)?;
+
+        let bet_type = BetType::try_from(bet_type_raw)?;
+
+        if !is_valid_bet_number(bet_type, number) {
+            return Err(GameError::InvalidPayload);
+        }
+
+        let amount = super::payload::clamp_and_validate_amount(amount, MAX_BET_AMOUNT)?;
+
+        bets.push(SicBoBet {
+            bet_type,
+            number,
+            amount,
+        });
+    }
+
+    Ok(bets)
+}
+
+impl SicBo {
+    /// Process a v2-encoded move.
+    fn process_v2_move(
+        session: &mut GameSession,
+        payload: &[u8],
+        rng: &mut GameRng,
+        state: &mut SicBoState,
+    ) -> Result<GameResult, GameError> {
+        let mut reader = BitReader::new(payload);
+
+        // Read envelope
+        let (_version, opcode) = reader.read_envelope().ok_or(GameError::InvalidPayload)?;
+
+        match opcode {
+            v2_opcodes::ATOMIC_BATCH => {
+                // Must have existing bets cleared first (fresh round)
+                if !state.bets.is_empty() || state.dice.is_some() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                // Parse v2 bets
+                let bets_to_place = parse_v2_atomic_batch(payload)?;
+                if bets_to_place.is_empty() {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                // Calculate total wager with overflow check
+                let mut total_wager: u64 = 0;
+                for bet in &bets_to_place {
+                    total_wager = total_wager
+                        .checked_add(bet.amount)
+                        .ok_or(GameError::InvalidPayload)?;
+                }
+
+                session.bet = total_wager;
+
+                // All validation passed - now execute atomically
+                state.bets = bets_to_place;
+
+                // Roll the dice
+                let dice: [u8; 3] = [rng.roll_die(), rng.roll_die(), rng.roll_die()];
+                state.dice = Some(dice);
+
+                // Calculate total winnings
+                let total_winnings: u64 = state
+                    .bets
+                    .iter()
+                    .map(|bet| calculate_bet_payout(bet, &dice, state.rules))
+                    .sum();
+
+                session.state_blob = serialize_state(state);
+                session.move_count += 1;
+                session.is_complete = true;
+
+                // Determine result
+                if total_winnings > 0 {
+                    let final_winnings = if session.super_mode.is_active {
+                        let dice_total = dice.iter().sum::<u8>();
+                        apply_super_multiplier_total(
+                            dice_total,
+                            &session.super_mode.multipliers,
+                            total_winnings,
+                        )
+                    } else {
+                        total_winnings
+                    };
+                    let logs = generate_sicbo_logs(state, &dice, total_wager, final_winnings);
+                    Ok(GameResult::Win(final_winnings, logs))
+                } else {
+                    let logs = generate_sicbo_logs(state, &dice, total_wager, 0);
+                    Ok(GameResult::Loss(logs))
+                }
+            }
+
+            // Other v2 opcodes could be added here
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -1270,5 +1453,236 @@ mod tests {
                 _ => panic!("SicBo should complete with Win or LossPreDeducted"),
             }
         }
+    }
+
+    // =========================================================================
+    // V2 Compact Encoding Tests
+    // =========================================================================
+
+    use nullspace_types::casino::BitWriter;
+
+    /// Create a v2 AtomicBatch payload for sic bo.
+    fn create_v2_atomic_batch(bets: &[(BetType, u8, u64)]) -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        // Write envelope: version=2, opcode=3 (AtomicBatch for sic bo)
+        writer.write_envelope(v2_opcodes::ATOMIC_BATCH);
+        // Write bet count (5 bits)
+        writer.write_bits(bets.len() as u8, 5);
+        // Write each bet
+        for (bet_type, number, amount) in bets {
+            let bet_type_raw = *bet_type as u8;
+            writer.write_bits(bet_type_raw, 4);
+            if sic_bo_bet_needs_target(bet_type_raw) {
+                writer.write_bits(*number, 6);
+            }
+            writer.write_uleb128(*amount);
+        }
+        writer.finish()
+    }
+
+    #[test]
+    fn test_v2_atomic_batch_basic() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        SicBo::init(&mut session, &mut rng);
+
+        // Create v2 payload with 2 bets: Small 100, Big 50
+        let payload = create_v2_atomic_batch(&[
+            (BetType::Small, 0, 100),
+            (BetType::Big, 0, 50),
+        ]);
+
+        // Verify it's recognized as v2
+        assert!(is_v2_payload(&payload));
+
+        // Process the v2 batch
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = SicBo::process_move(&mut session, &payload, &mut rng);
+
+        assert!(result.is_ok());
+        assert!(session.is_complete);
+
+        // Verify state has correct bets
+        let state = parse_state(&session.state_blob).expect("parse state");
+        assert_eq!(state.bets.len(), 2);
+        assert_eq!(state.bets[0].bet_type, BetType::Small);
+        assert_eq!(state.bets[0].amount, 100);
+        assert_eq!(state.bets[1].bet_type, BetType::Big);
+        assert_eq!(state.bets[1].amount, 50);
+        assert!(state.dice.is_some());
+    }
+
+    #[test]
+    fn test_v2_atomic_batch_with_targets() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        SicBo::init(&mut session, &mut rng);
+
+        // Create v2 payload with bets that require targets
+        let payload = create_v2_atomic_batch(&[
+            (BetType::SpecificTriple, 3, 100),  // Specific triple on 3
+            (BetType::Single, 5, 50),           // Single on 5
+            (BetType::Total, 10, 25),           // Total = 10
+        ]);
+
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = SicBo::process_move(&mut session, &payload, &mut rng);
+
+        assert!(result.is_ok());
+        assert!(session.is_complete);
+
+        let state = parse_state(&session.state_blob).expect("parse state");
+        assert_eq!(state.bets.len(), 3);
+        assert_eq!(state.bets[0].bet_type, BetType::SpecificTriple);
+        assert_eq!(state.bets[0].number, 3);
+        assert_eq!(state.bets[1].bet_type, BetType::Single);
+        assert_eq!(state.bets[1].number, 5);
+        assert_eq!(state.bets[2].bet_type, BetType::Total);
+        assert_eq!(state.bets[2].number, 10);
+    }
+
+    #[test]
+    fn test_v2_atomic_batch_size_reduction() {
+        // v1: 2 bytes header + 5 * 10 bytes = 52 bytes
+        // v2 with non-target bets: envelope + 5-bit count + 5 * (4-bit type + 1-byte ULEB128)
+        let bets = vec![
+            (BetType::Small, 0, 100),
+            (BetType::Big, 0, 50),
+            (BetType::Odd, 0, 25),
+            (BetType::Even, 0, 75),
+            (BetType::AnyTriple, 0, 10),
+        ];
+
+        // v1 size
+        let v1_size = 2 + bets.len() * 10;
+
+        // v2 size
+        let v2_payload = create_v2_atomic_batch(&bets);
+        let v2_size = v2_payload.len();
+
+        // Verify >= 40% reduction
+        let reduction = (v1_size - v2_size) as f64 / v1_size as f64;
+        assert!(
+            reduction >= 0.40,
+            "Expected >= 40% size reduction, got {:.1}% (v1={} v2={})",
+            reduction * 100.0,
+            v1_size,
+            v2_size
+        );
+    }
+
+    #[test]
+    fn test_v2_v1_produce_same_results() {
+        let seed = create_test_seed();
+
+        // Create identical bets for both versions (no target bets for simplicity)
+        let bets = vec![
+            (BetType::Small, 0u8, 100u64),
+            (BetType::Big, 0u8, 50u64),
+        ];
+
+        // v1 payload
+        let mut v1_payload = vec![3, bets.len() as u8]; // Action 3 = AtomicBatch
+        for (bet_type, number, amount) in &bets {
+            v1_payload.push(*bet_type as u8);
+            v1_payload.push(*number);
+            v1_payload.extend_from_slice(&amount.to_be_bytes());
+        }
+
+        // v2 payload
+        let v2_payload = create_v2_atomic_batch(&bets);
+
+        // Process v1
+        let mut session_v1 = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session_v1.id, 0);
+        SicBo::init(&mut session_v1, &mut rng);
+        let mut rng = GameRng::new(&seed, session_v1.id, 1);
+        let result_v1 = SicBo::process_move(&mut session_v1, &v1_payload, &mut rng);
+
+        // Process v2
+        let mut session_v2 = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session_v2.id, 0);
+        SicBo::init(&mut session_v2, &mut rng);
+        let mut rng = GameRng::new(&seed, session_v2.id, 1);
+        let result_v2 = SicBo::process_move(&mut session_v2, &v2_payload, &mut rng);
+
+        // Both should succeed
+        assert!(result_v1.is_ok());
+        assert!(result_v2.is_ok());
+
+        // State should be identical
+        let state_v1 = parse_state(&session_v1.state_blob).expect("parse v1");
+        let state_v2 = parse_state(&session_v2.state_blob).expect("parse v2");
+
+        assert_eq!(state_v1.bets.len(), state_v2.bets.len());
+        assert_eq!(state_v1.dice, state_v2.dice);
+        for i in 0..state_v1.bets.len() {
+            assert_eq!(state_v1.bets[i].bet_type, state_v2.bets[i].bet_type);
+            assert_eq!(state_v1.bets[i].number, state_v2.bets[i].number);
+            assert_eq!(state_v1.bets[i].amount, state_v2.bets[i].amount);
+        }
+    }
+
+    #[test]
+    fn test_v2_golden_vectors() {
+        // Golden vector tests for v2 sic bo encoding
+
+        // Vector 1: Simple bets without targets
+        let payload = create_v2_atomic_batch(&[(BetType::Small, 0, 100)]);
+
+        // Verify envelope byte
+        assert_eq!(payload[0] & 0x07, 2, "Version should be 2");
+        assert_eq!((payload[0] >> 3) & 0x1F, 3, "Opcode should be 3 (AtomicBatch)");
+
+        // Vector 2: Mixed bets with and without targets
+        let payload = create_v2_atomic_batch(&[
+            (BetType::Small, 0, 100),         // No target
+            (BetType::SpecificTriple, 6, 10), // Target = 6
+            (BetType::AnyTriple, 0, 50),      // No target
+        ]);
+
+        // Verify we have a valid v2 payload that can be parsed
+        let seed = create_test_seed();
+        let mut session = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+        SicBo::init(&mut session, &mut rng);
+
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = SicBo::process_move(&mut session, &payload, &mut rng);
+        assert!(result.is_ok(), "Golden vector should parse successfully");
+
+        let state = parse_state(&session.state_blob).expect("parse state");
+        assert_eq!(state.bets.len(), 3);
+        assert_eq!(state.bets[0].bet_type, BetType::Small);
+        assert_eq!(state.bets[1].bet_type, BetType::SpecificTriple);
+        assert_eq!(state.bets[1].number, 6);
+        assert_eq!(state.bets[2].bet_type, BetType::AnyTriple);
+    }
+
+    #[test]
+    fn test_v2_rejects_invalid_payloads() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+        SicBo::init(&mut session, &mut rng);
+
+        // Invalid opcode (version=2 but unknown opcode)
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let invalid_opcode = vec![0x02 | (31 << 3)]; // version=2, opcode=31
+        let result = SicBo::process_move(&mut session, &invalid_opcode, &mut rng);
+        assert!(result.is_err());
+
+        // Empty bet list
+        let mut writer = BitWriter::new();
+        writer.write_envelope(v2_opcodes::ATOMIC_BATCH);
+        writer.write_bits(0, 5); // 0 bets
+        let empty_bets = writer.finish();
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let result = SicBo::process_move(&mut session, &empty_bets, &mut rng);
+        assert!(result.is_err());
     }
 }

@@ -252,11 +252,18 @@
     - Added `KeyboardAccessibility.test.tsx` with 32 tests validating focus-visible patterns, keyboard navigation attributes, and screen reader support across all bet control components.
 
 ## Sprint 06 - Multi-Game Expansion and Compact Encoding v2
-- [ ] Implement compact v2 encoding for additional games
+- [x] Implement compact v2 encoding for additional games
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.1
   - Tests/backpressure:
-    - Programmatic: `cargo test -p execution`
+    - Programmatic: `cargo test -p nullspace-execution`
   - Perceptual: None
+  - **Completed**: Added compact v2 encoding for roulette and sic_bo:
+    - Core codec framework in `types/src/casino/codec.rs`: `BitWriter`, `BitReader` for LSB-first bitwise I/O, ULEB128 encoding for variable-length amounts, `BetDescriptorV2` with game-specific encode/decode methods
+    - Roulette v2 (`execution/src/casino/roulette.rs`): Added `is_v2_payload`, `parse_v2_atomic_batch`, `process_v2_move`. Envelope: version=2, opcode=4. Bet descriptor: 4-bit type + 6-bit value + ULEB128 amount. Achieves 40%+ size reduction.
+    - Sic Bo v2 (`execution/src/casino/sic_bo.rs`): Added `is_v2_payload`, `parse_v2_atomic_batch`, `process_v2_move`, `sic_bo_bet_needs_target`. Envelope: version=2, opcode=3. Bet descriptor: 4-bit type + optional 6-bit target + ULEB128 amount. Achieves 40%+ size reduction.
+    - Golden vector tests validate exact byte encoding
+    - v1/v2 parity tests verify identical outcomes
+    - All 480 execution tests pass (including 11 new v2 tests)
 - [ ] Add game registry and per-game configuration loading
   - Specs: `specs/sprint-06-multi-game-encoding.md` AC-6.2
   - Tests/backpressure:

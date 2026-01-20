@@ -12,7 +12,10 @@ mod leaderboard;
 mod player;
 mod tournament;
 
-pub use codec::{read_string, string_encode_size, write_string};
+pub use codec::{
+    read_string, string_encode_size, write_string, BetDescriptorV2, BitReader, BitWriter,
+    V2_PROTOCOL_VERSION,
+};
 pub use constants::*;
 pub use economy::*;
 pub use game::*;

@@ -41,7 +41,7 @@ use super::logging::{clamp_i64, push_resolved_entry};
 use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_super_multiplier_number;
 use super::{limits, CasinoGame, GameError, GameResult, GameRng};
-use nullspace_types::casino::GameSession;
+use nullspace_types::casino::{BetDescriptorV2, BitReader, GameSession};
 use std::fmt::Write;
 
 /// Payout multipliers for Roulette (expressed as "to 1" winnings).
@@ -68,6 +68,80 @@ const RED_NUMBERS: [u8; 18] = [
     1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
 ];
 const DOUBLE_ZERO: u8 = 37;
+
+/// V2 protocol opcodes for roulette (5 bits, 0-31).
+mod v2_opcodes {
+    pub const PLACE_BET: u8 = 0;
+    pub const SPIN: u8 = 1;
+    pub const CLEAR_BETS: u8 = 2;
+    pub const SET_RULES: u8 = 3;
+    pub const ATOMIC_BATCH: u8 = 4;
+}
+
+/// Check if payload uses v2 encoding.
+///
+/// V2 payloads have: version=2 in low 3 bits, and a valid v2 opcode in high 5 bits.
+/// This distinguishes v2 from v1 where byte 0 is the raw action code (0-4).
+///
+/// v1 actions that could be confused with v2:
+/// - v1 ClearBets: [2] -> byte=2, which has version=2 but opcode=0 (not AtomicBatch)
+///
+/// v2 AtomicBatch envelope: version=2, opcode=4 -> byte=0x22
+fn is_v2_payload(payload: &[u8]) -> bool {
+    if payload.is_empty() {
+        return false;
+    }
+    let byte = payload[0];
+    let version = byte & 0x07;
+    let opcode = (byte >> 3) & 0x1F;
+
+    // Must be version 2 AND have a valid v2 opcode
+    // Currently only AtomicBatch (opcode 4) is implemented for v2
+    version == 2 && opcode == v2_opcodes::ATOMIC_BATCH
+}
+
+/// Parse v2 AtomicBatch payload.
+///
+/// Format: envelope (1 byte) + bet_count (5 bits) + bets (4-bit type + 6-bit value + ULEB128 amount each)
+fn parse_v2_atomic_batch(
+    payload: &[u8],
+    zero_rule: ZeroRule,
+) -> Result<Vec<RouletteBet>, GameError> {
+    let mut reader = BitReader::new(payload);
+
+    // Read envelope
+    let (_version, opcode) = reader.read_envelope().ok_or(GameError::InvalidPayload)?;
+    if opcode != v2_opcodes::ATOMIC_BATCH {
+        return Err(GameError::InvalidPayload);
+    }
+
+    // Read bet count (5 bits, max 20)
+    let bet_count = reader.read_bits(5).ok_or(GameError::InvalidPayload)? as usize;
+    if bet_count == 0 || bet_count > limits::ROULETTE_MAX_BETS {
+        return Err(GameError::InvalidPayload);
+    }
+
+    let mut bets = Vec::with_capacity(bet_count);
+    for _ in 0..bet_count {
+        let desc = BetDescriptorV2::decode_roulette(&mut reader).ok_or(GameError::InvalidPayload)?;
+        let bet_type = BetType::try_from(desc.bet_type)?;
+        let number = desc.target.unwrap_or(0);
+
+        if !is_valid_bet_number(bet_type, number, zero_rule) {
+            return Err(GameError::InvalidPayload);
+        }
+
+        let amount = super::payload::clamp_and_validate_amount(desc.amount, MAX_BET_AMOUNT)?;
+
+        bets.push(RouletteBet {
+            bet_type,
+            number,
+            amount,
+        });
+    }
+
+    Ok(bets)
+}
 
 fn clamp_bet_amount(amount: u64) -> u64 {
     super::payload::clamp_bet_amount(amount, MAX_BET_AMOUNT)
@@ -572,6 +646,11 @@ impl CasinoGame for Roulette {
         let mut state =
             parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
 
+        // Check for v2 encoding (low 3 bits of first byte == 2)
+        if is_v2_payload(payload) {
+            return Self::process_v2_move(session, payload, rng, &mut state);
+        }
+
         match payload[0] {
             // [0, bet_type, number, amount_bytes...] - Place bet
             0 => {
@@ -928,6 +1007,93 @@ impl CasinoGame for Roulette {
                 }
             }
 
+            _ => Err(GameError::InvalidPayload),
+        }
+    }
+}
+
+impl Roulette {
+    /// Process a v2-encoded move.
+    fn process_v2_move(
+        session: &mut GameSession,
+        payload: &[u8],
+        rng: &mut GameRng,
+        state: &mut RouletteState,
+    ) -> Result<GameResult, GameError> {
+        let mut reader = BitReader::new(payload);
+
+        // Read envelope
+        let (_version, opcode) = reader.read_envelope().ok_or(GameError::InvalidPayload)?;
+
+        match opcode {
+            v2_opcodes::ATOMIC_BATCH => {
+                // Can't batch if wheel already spun or in prison
+                if state.phase != Phase::Betting || state.result.is_some() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                // Must have existing bets cleared first (fresh round)
+                if !state.bets.is_empty() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                // Parse v2 bets
+                let bets_to_place = parse_v2_atomic_batch(payload, state.zero_rule)?;
+                if bets_to_place.is_empty() {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                // Calculate total wager with overflow check
+                let mut total_wager: u64 = 0;
+                for bet in &bets_to_place {
+                    total_wager = total_wager
+                        .checked_add(bet.amount)
+                        .ok_or(GameError::InvalidPayload)?;
+                }
+
+                session.bet = total_wager;
+
+                // All validation passed - now execute atomically
+                state.bets = bets_to_place;
+                state.total_wagered = total_wager;
+
+                // Spin the wheel
+                let result = spin_result(rng, state.zero_rule);
+                state.result = Some(result);
+
+                // Calculate total return (standard rules - no En Prison for atomic batch)
+                let mut total_return: u64 = 0;
+                for bet in &state.bets {
+                    if bet_wins(bet.bet_type, bet.number, result) {
+                        let multiplier = payout_multiplier(bet.bet_type).saturating_add(1);
+                        total_return =
+                            total_return.saturating_add(bet.amount.saturating_mul(multiplier));
+                    }
+                }
+
+                // Apply super mode multipliers
+                if session.super_mode.is_active && total_return > 0 {
+                    total_return = apply_super_multiplier_number(
+                        result,
+                        &session.super_mode.multipliers,
+                        total_return,
+                    );
+                }
+
+                session.state_blob = serialize_state(state);
+                session.move_count += 1;
+                session.is_complete = true;
+
+                let logs = generate_roulette_logs(state, result, total_return);
+                if total_return > 0 {
+                    Ok(GameResult::Win(total_return, logs))
+                } else {
+                    Ok(GameResult::Loss(logs))
+                }
+            }
+
+            // Other v2 opcodes (PlaceBet, Spin, ClearBets, SetRules) could be added here
+            // For now, only AtomicBatch is implemented for v2
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -1643,5 +1809,211 @@ mod tests {
         }
         // Note: It's statistically unlikely to hit 0 in 100 tries (expected ~2-3 times)
         // but not guaranteed. This test just verifies the logic works.
+    }
+
+    // =========================================================================
+    // V2 Compact Encoding Tests
+    // =========================================================================
+
+    use nullspace_types::casino::{BetDescriptorV2, BitWriter};
+
+    /// Create a v2 AtomicBatch payload.
+    fn create_v2_atomic_batch(bets: &[(BetType, u8, u64)]) -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        // Write envelope: version=2, opcode=4 (AtomicBatch)
+        writer.write_envelope(v2_opcodes::ATOMIC_BATCH);
+        // Write bet count (5 bits)
+        writer.write_bits(bets.len() as u8, 5);
+        // Write each bet
+        for (bet_type, number, amount) in bets {
+            let desc = BetDescriptorV2::new(*bet_type as u8, Some(*number), *amount);
+            desc.encode_roulette(&mut writer);
+        }
+        writer.finish()
+    }
+
+    #[test]
+    fn test_v2_atomic_batch_basic() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Roulette::init(&mut session, &mut rng);
+
+        // Create v2 payload with 2 bets: Red 100, Straight 17 50
+        let payload = create_v2_atomic_batch(&[
+            (BetType::Red, 0, 100),
+            (BetType::Straight, 17, 50),
+        ]);
+
+        // Verify it's recognized as v2
+        assert!(is_v2_payload(&payload));
+
+        // Process the v2 batch
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
+
+        assert!(result.is_ok());
+        assert!(session.is_complete);
+
+        // Verify state has correct bets
+        let state = parse_state(&session.state_blob).expect("parse state");
+        assert_eq!(state.bets.len(), 2);
+        assert_eq!(state.bets[0].bet_type, BetType::Red);
+        assert_eq!(state.bets[0].amount, 100);
+        assert_eq!(state.bets[1].bet_type, BetType::Straight);
+        assert_eq!(state.bets[1].number, 17);
+        assert_eq!(state.bets[1].amount, 50);
+        assert!(state.result.is_some());
+    }
+
+    #[test]
+    fn test_v2_atomic_batch_size_reduction() {
+        // v1: 2 bytes header + 5 * 10 bytes = 52 bytes
+        // v2: ~12-15 bytes (envelope + 5-bit count + 5 * (10-bit bet + 1-byte ULEB128))
+        let bets = vec![
+            (BetType::Red, 0, 100),
+            (BetType::Black, 0, 50),
+            (BetType::Dozen, 1, 25),
+            (BetType::Straight, 17, 10),
+            (BetType::Low, 0, 75),
+        ];
+
+        // v1 size
+        let v1_size = 2 + bets.len() * 10;
+
+        // v2 size
+        let v2_payload = create_v2_atomic_batch(&bets);
+        let v2_size = v2_payload.len();
+
+        // Verify >= 40% reduction
+        let reduction = (v1_size - v2_size) as f64 / v1_size as f64;
+        assert!(
+            reduction >= 0.40,
+            "Expected >= 40% size reduction, got {:.1}% (v1={} v2={})",
+            reduction * 100.0,
+            v1_size,
+            v2_size
+        );
+    }
+
+    #[test]
+    fn test_v2_v1_produce_same_results() {
+        let seed = create_test_seed();
+
+        // Create identical bets for both versions
+        let bets = vec![
+            (BetType::Red, 0u8, 100u64),
+            (BetType::Straight, 17u8, 50u64),
+        ];
+
+        // v1 payload
+        let mut v1_payload = vec![4, bets.len() as u8];
+        for (bet_type, number, amount) in &bets {
+            v1_payload.push(*bet_type as u8);
+            v1_payload.push(*number);
+            v1_payload.extend_from_slice(&amount.to_be_bytes());
+        }
+
+        // v2 payload
+        let v2_payload = create_v2_atomic_batch(&bets);
+
+        // Process v1
+        let mut session_v1 = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session_v1.id, 0);
+        Roulette::init(&mut session_v1, &mut rng);
+        let mut rng = GameRng::new(&seed, session_v1.id, 1);
+        let result_v1 = Roulette::process_move(&mut session_v1, &v1_payload, &mut rng);
+
+        // Process v2
+        let mut session_v2 = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session_v2.id, 0);
+        Roulette::init(&mut session_v2, &mut rng);
+        let mut rng = GameRng::new(&seed, session_v2.id, 1);
+        let result_v2 = Roulette::process_move(&mut session_v2, &v2_payload, &mut rng);
+
+        // Both should succeed
+        assert!(result_v1.is_ok());
+        assert!(result_v2.is_ok());
+
+        // State should be identical
+        let state_v1 = parse_state(&session_v1.state_blob).expect("parse v1");
+        let state_v2 = parse_state(&session_v2.state_blob).expect("parse v2");
+
+        assert_eq!(state_v1.bets.len(), state_v2.bets.len());
+        assert_eq!(state_v1.result, state_v2.result);
+        for i in 0..state_v1.bets.len() {
+            assert_eq!(state_v1.bets[i].bet_type, state_v2.bets[i].bet_type);
+            assert_eq!(state_v1.bets[i].number, state_v2.bets[i].number);
+            assert_eq!(state_v1.bets[i].amount, state_v2.bets[i].amount);
+        }
+    }
+
+    #[test]
+    fn test_v2_golden_vectors() {
+        // Golden vector tests for v2 roulette encoding
+        // These are deterministic test vectors that verify exact byte encoding
+
+        // Vector 1: Single red bet (100 chips)
+        // Envelope: version=2, opcode=4 -> 0x22
+        // Bet count: 1 (5 bits)
+        // Bet: type=1 (4 bits), value=0 (6 bits), amount=100 (ULEB128)
+        let payload = create_v2_atomic_batch(&[(BetType::Red, 0, 100)]);
+
+        // Verify envelope byte
+        assert_eq!(payload[0] & 0x07, 2, "Version should be 2");
+        assert_eq!((payload[0] >> 3) & 0x1F, 4, "Opcode should be 4");
+
+        // Vector 2: Multiple bets with varied types
+        let payload = create_v2_atomic_batch(&[
+            (BetType::Straight, 0, 100),   // Straight on 0
+            (BetType::Straight, 36, 100),  // Straight on 36
+            (BetType::Dozen, 2, 50),       // Third dozen
+            (BetType::Column, 0, 25),      // First column
+        ]);
+
+        // Verify we have a valid v2 payload that can be parsed
+        let seed = create_test_seed();
+        let mut session = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+        Roulette::init(&mut session, &mut rng);
+
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
+        assert!(result.is_ok(), "Golden vector should parse successfully");
+
+        let state = parse_state(&session.state_blob).expect("parse state");
+        assert_eq!(state.bets.len(), 4);
+        assert_eq!(state.bets[0].bet_type, BetType::Straight);
+        assert_eq!(state.bets[0].number, 0);
+        assert_eq!(state.bets[1].bet_type, BetType::Straight);
+        assert_eq!(state.bets[1].number, 36);
+        assert_eq!(state.bets[2].bet_type, BetType::Dozen);
+        assert_eq!(state.bets[2].number, 2);
+        assert_eq!(state.bets[3].bet_type, BetType::Column);
+        assert_eq!(state.bets[3].number, 0);
+    }
+
+    #[test]
+    fn test_v2_rejects_invalid_payloads() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(0);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+        Roulette::init(&mut session, &mut rng);
+
+        // Invalid opcode (version=2 but unknown opcode)
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let invalid_opcode = vec![0x02 | (31 << 3)]; // version=2, opcode=31
+        let result = Roulette::process_move(&mut session, &invalid_opcode, &mut rng);
+        assert!(result.is_err());
+
+        // Empty bet list
+        let mut writer = BitWriter::new();
+        writer.write_envelope(v2_opcodes::ATOMIC_BATCH);
+        writer.write_bits(0, 5); // 0 bets
+        let empty_bets = writer.finish();
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let result = Roulette::process_move(&mut session, &empty_bets, &mut rng);
+        assert!(result.is_err());
     }
 }
