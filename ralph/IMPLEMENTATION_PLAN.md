@@ -70,11 +70,19 @@
     - Session cleanup on disconnect
     - Added 16 unit tests + integration test for rate limit exceed behavior
     - Tests: `pnpm -C gateway test` (142 tests passing)
-- [ ] Implement engine forwarding with retries and idempotency keys
+- [x] Implement engine forwarding with retries and idempotency keys
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.5
   - Tests/backpressure:
     - Programmatic: integration tests for duplicate bet intents
   - Perceptual: None
+  - **Completed**: Added `EngineForwarder` class (`src/backend/engine-forwarder.ts`) with:
+    - Idempotency key generation and tracking (per-session scoped)
+    - Retry logic with exponential backoff (configurable max retries, backoff delays)
+    - Duplicate bet intent detection via request hashing
+    - Automatic TTL-based cleanup of idempotency entries
+    - Session cleanup on disconnect
+    - Tests: 38 unit tests + 7 integration tests for duplicate bet intent handling
+    - Tests: `pnpm -C gateway test` (187 tests passing)
 - [ ] Add presence and clock sync broadcasting
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.6
   - Tests/backpressure:
