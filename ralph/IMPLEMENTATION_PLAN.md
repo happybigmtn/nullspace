@@ -199,11 +199,21 @@
     - `TablePhaseHeader` component: Full-width header variant with round ID and larger countdown
     - `formatCountdown` utility: Formats milliseconds to M:SS with ceiling rounding
     - 47 unit tests covering phase labels, countdown display, loading state, accessibility, urgency, compact mode, AC-PQ.1 compliance
-- [ ] Implement bet slip, validation, and confirmation flow
+- [x] Implement bet slip, validation, and confirmation flow
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.3
   - Tests/backpressure:
     - Programmatic: `pnpm -C website test`
   - Perceptual: None
+  - **Completed**: Added `BetSlipWithConfirmation` component (`website/src/components/casino/shared/BetSlipWithConfirmation.tsx`) with:
+    - Pre-submission validation (balance check, bet amount, game phase, connection status)
+    - Confirmation step with countdown timer before submission
+    - Clear error state display with retry capability for retryable errors
+    - Loading states during validation and submission
+    - Typed error codes: INSUFFICIENT_FUNDS, INVALID_AMOUNT, PHASE_LOCKED, CONNECTION_ERROR, SUBMISSION_FAILED, VALIDATION_FAILED
+    - Accessibility: ARIA roles, live regions, keyboard navigation
+  - Added `useBetSubmission` hook (`website/src/hooks/useBetSubmission.ts`) for submission state management
+  - Added `validateBetSlip` pure function for reusable validation logic
+  - Tests: 45 BetSlipWithConfirmation tests + 26 validation logic tests (205 total tests passing)
 - [ ] Render real-time outcomes and totals from WebSocket updates
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.4
   - Tests/backpressure:
