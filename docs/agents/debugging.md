@@ -38,6 +38,17 @@
   This avoids CORS failures and ensures `/submit` hits the gateway.
 - Simulator enforces exact nonce matching in `simulator/src/submission.rs`; reject `tx.nonce != expected_nonce` with `nonce_too_low`/`nonce_too_high`.
   This prevents future-nonce transactions from sitting in mempool while validators reject them.
+- If staging uses the local `nullspace-simulator:bypass` image, re-tag the latest GHCR image to that name and restart the container
+  so nonce fixes (and other updates) are actually picked up:
+  ```bash
+  ssh -i ~/.ssh/id_ed25519_hetzner root@5.161.67.36 \
+    "docker pull ghcr.io/happybigmtn/nullspace-simulator:sha-<commit> && \
+     docker tag ghcr.io/happybigmtn/nullspace-simulator:sha-<commit> nullspace-simulator:bypass && \
+     docker rm -f nullspace-simulator && \
+     docker run -d --name nullspace-simulator --network host \
+       -v /etc/nullspace:/etc/nullspace:ro -v /var/lib/nullspace:/var/lib/nullspace \
+       nullspace-simulator:bypass --host 0.0.0.0 --port 8080 --identity <hex> ..."
+  ```
 
 If you intentionally want to use the indexer directly in the browser, you must enable CORS on the indexer host.
 
