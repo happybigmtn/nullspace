@@ -479,11 +479,24 @@
     - Graceful handling of unavailable services
     - Added npm scripts: `pnpm load-test`, `pnpm load-test:quick`, `pnpm load-test:gateway`, `pnpm load-test:engine`
     - Gateway-specific scripts: `pnpm -C gateway load-test`, `pnpm -C gateway load-test:1k`
-- [ ] Define dashboards and alert thresholds for critical services
+- [x] Define dashboards and alert thresholds for critical services
   - Specs: `specs/sprint-09-production-readiness.md` AC-9.2
   - Tests/backpressure:
     - Programmatic: dashboard config validation or lint
   - Perceptual: None
+  - **Completed**: Added observability configuration infrastructure:
+    - Copied 3 critical Grafana dashboards from archive: `nullspace-slo.json` (14 panels), `nullspace-simulator.json` (20 panels), `nullspace-gateway.json` (16 panels)
+    - Added queue depth panels to simulator dashboard (WebSocket Queue Depth, Queue Full Events)
+    - Copied alert rules (16 alerts: 2 critical, 14 warning) covering latency SLOs, error rates, queue backpressure
+    - Copied Prometheus config (scrape jobs: simulator, auth, gateway, node) and Alertmanager config (Slack + PagerDuty receivers)
+    - Created `scripts/validate-observability.sh` validation script that verifies:
+      - JSON syntax for all dashboards
+      - Required fields (uid, title, panels) in dashboards
+      - AC-9.2 metrics coverage (latency, error rates, queue depth)
+      - YAML syntax and structure for alerts (groups, rules, severity labels, annotations)
+      - Alert threshold coverage for critical metrics
+      - Prometheus scrape config and Alertmanager receivers
+    - Tests: `./scripts/validate-observability.sh` (all validations passing)
 - [ ] Write and test disaster recovery runbook using snapshots
   - Specs: `specs/sprint-09-production-readiness.md` AC-9.3
   - Tests/backpressure:
