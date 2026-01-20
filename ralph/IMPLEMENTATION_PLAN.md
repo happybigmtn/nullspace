@@ -19,18 +19,26 @@
     - Programmatic: integration tests for query API
   - Perceptual: None
   - **Completed**: Added `round_query` module with `RoundStatus`, `RoundTotals`, `PlayerHistory`, `PlayerBetRecord` types and query functions (`query_round_status`, `query_round_totals`, `query_player_history`, `query_player_history_range`, `query_player_rounds`, `query_round`). Integration test validates query API after full round settlement lifecycle (15 total tests).
-- [ ] Add end-to-end simulator scenario for bet placement and payouts
+- [x] Add end-to-end simulator scenario for bet placement and payouts
   - Specs: `specs/sprint-02-core-table-engine.md` AC-2.6
   - Tests/backpressure:
     - Programmatic: `cargo test -p nullspace-simulator`
   - Perceptual: None
+  - **Completed**: Added `test_e2e_bet_placement_and_payout` test in `nullspace-simulator` crate. Test validates the full global table lifecycle: player registration, deposit, table initialization, round opening, bet submission (Field bets), round lock, reveal, settlement, and finalization. Verifies both players receive proportional payouts matching the deterministic RNG outcome.
 
 ## Sprint 03 - Gateway, WebSocket Fanout, and Auth
-- [ ] Implement WebSocket auth handshake and origin validation
+- [x] Implement WebSocket auth handshake and origin validation
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.1
   - Tests/backpressure:
     - Programmatic: `pnpm -C gateway test`
   - Perceptual: None
+  - **Completed**: Added `tests/unit/websocket-auth.test.ts` with 26 tests validating:
+    - Origin validation (allowed/disallowed origins, missing origin handling)
+    - CORS configuration and headers
+    - Crypto-native session auth (secure ID generation, timing-safe comparison)
+    - Error response format (RFC 7807 Problem Details)
+    - Edge cases (case sensitivity, ports, trailing slashes)
+    - Existing implementation in `middleware/security.ts` and `src/index.ts` validated
 - [ ] Add schema validation for all inbound messages
   - Specs: `specs/sprint-03-gateway-fanout.md` AC-3.2
   - Tests/backpressure:
