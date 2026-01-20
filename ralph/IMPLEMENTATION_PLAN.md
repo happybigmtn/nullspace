@@ -176,11 +176,17 @@
   - Added 2 unit tests: `test_health_status` and `test_health_status_with_indexed_data`
 
 ## Sprint 05 - Web Client MVP
-- [ ] Implement wallet connect and network status indicators
+- [x] Implement wallet connect and network status indicators
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.1
   - Tests/backpressure:
     - Programmatic: `pnpm -C website test`
   - Perceptual: None
+  - **Completed**: Existing `WalletPill.tsx` and `ConnectionStatus.tsx` components already implement wallet connect and network status with real-time updates:
+    - `WalletPill.tsx`: Shows balance (RNG, vUSDT, Credits), connection indicator, vault status, offline detection
+    - `ConnectionStatus.tsx`: Real-time status (connected/connecting/offline/error/vault_locked/missing_identity), retry mechanism, vault unlock modal, animated state transitions
+    - `useCasinoConnection.ts`: Browser online/offline events, WebSocket state management, vault subscriptions
+    - Added 40 unit tests (17 WalletPill + 23 ConnectionStatus) covering all status states, accessibility, and real-time update behavior
+    - Updated `vitest.config.ts` to include `src/components/__tests__/**/*.test.{ts,tsx}` pattern
 - [ ] Build table view with countdown and phase labels from gateway updates
   - Specs: `specs/sprint-05-web-client-mvp.md` AC-5.2, AC-PQ.1
   - Tests/backpressure:

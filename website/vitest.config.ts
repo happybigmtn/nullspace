@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: [
+      'src/components/__tests__/**/*.test.{ts,tsx,js,jsx}',
       'src/components/casino/3d/physics/**/*.test.{ts,tsx,js,jsx}',
       'src/components/casino/3d/cards/**/*.test.{ts,tsx,js,jsx}',
       'src/security/**/*.test.{ts,tsx,js,jsx}',
