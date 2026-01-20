@@ -197,14 +197,34 @@ export const useStartGame = ({
             } else {
               const account = await clientRef.current.getAccount(publicKeyBytesRef.current).catch(() => null);
               const accountNonce = Number(account?.nonce ?? 0);
-              hasRegisteredRef.current = false;
-              const keyId = getCasinoKeyIdForStorage();
-              if (keyId) {
-                localStorage.removeItem(`casino_registered_${keyId}`);
+              const accountChips = Number(account?.balance ?? 0);
+              const accountExists = Number.isFinite(accountNonce) && accountNonce > 0;
+
+              if (accountExists) {
+                playerExistsOnChain = true;
+                hasRegisteredRef.current = true;
+                const keyId = getCasinoKeyIdForStorage();
+                if (keyId) {
+                  localStorage.setItem(`casino_registered_${keyId}`, 'true');
+                }
+                setIsRegistered(true);
+                setStats(prev => ({
+                  ...prev,
+                  chips: accountChips > 0 ? accountChips : prev.chips,
+                }));
+                logDebug('[useStartGame] Casino player lookup missing, but account nonce > 0; treating as registered', {
+                  accountNonce: Number.isFinite(accountNonce) ? accountNonce : 'unknown',
+                });
+              } else {
+                hasRegisteredRef.current = false;
+                const keyId = getCasinoKeyIdForStorage();
+                if (keyId) {
+                  localStorage.removeItem(`casino_registered_${keyId}`);
+                }
+                logDebug('[useStartGame] Casino player missing; treating as unregistered', {
+                  accountNonce: Number.isFinite(accountNonce) ? accountNonce : 'unknown',
+                });
               }
-              logDebug('[useStartGame] Casino player missing; treating as unregistered', {
-                accountNonce: Number.isFinite(accountNonce) ? accountNonce : 'unknown',
-              });
             }
           }
         } catch (e) {

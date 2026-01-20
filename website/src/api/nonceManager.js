@@ -775,6 +775,9 @@ export class NonceManager {
               if (expected > localNonce) {
                 logDebug(`[NonceManager] Nonce mismatch: bumping local nonce ${localNonce} -> ${expected}`);
                 this.setNonce(expected);
+              } else if (expected < localNonce) {
+                logDebug(`[NonceManager] Nonce regression detected: resetting local nonce ${localNonce} -> ${expected}`);
+                this.setNonce(expected);
               }
               if (expected > 0) {
                 this.cleanupConfirmedTransactions(expected - 1);

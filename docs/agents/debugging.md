@@ -26,16 +26,25 @@
    - If `mempool_pending_total > 0` but `txs_considered_total == 0`, the mempool queue is out of sync and no candidates are being proposed.
    - If `txs_considered_total > 0` but `proposed_empty_blocks_with_candidates_total` keeps increasing and logs mention `rejected_nonce`, the simulator likely accepted a future nonce (node rejects mismatched nonces and proposes empty blocks).
 
-3. Check browser console for CORS errors:
-   - If you see requests to `https://indexer.testnet.regenesis.dev/*` blocked by CORS from `https://testnet.regenesis.dev`,
-     the web client is pointing at the indexer directly and cannot submit transactions.
-   - Fix by routing through the gateway or same-origin `/api` proxy (see Permanent Fix below).
+3. Check gateway + validator logs for nonce mismatches:
+   ```bash
+   ssh -i ~/.ssh/id_ed25519_hetzner root@178.156.212.135 "docker logs --since=10m nullspace-gateway | tail -n 200"
+   ssh -i ~/.ssh/id_ed25519_hetzner root@5.161.124.82 "docker logs --since=10m nullspace-node-0 | grep -E 'rejected_nonce|DuplicateNonce' | tail -n 50"
+   ```
+   - `nonce_too_high:expected=0` from gateway + `rejected_nonce` in validators means client local nonce is ahead of chain state (often after chain reset or stale localStorage).
+  - If you see requests to `https://indexer.testnet.regenesis.dev/*` blocked by CORS from `https://testnet.regenesis.dev`,
+    the web client is pointing at the indexer directly and cannot submit transactions.
+  - Fix by routing through the gateway or same-origin `/api` proxy (see Permanent Fix below).
 
 **Permanent Fix**
 - Mempool self-healing was added in `node/src/application/mempool.rs`: if the queue is empty or stale while tracked transactions exist, rebuild the queue and retry `peek_batch`.
 - Deploy the new node image to staging (via `deploy-staging.yml`) so proposers always see candidates.
 - Web client base URL guard: `website/src/api/client.js` now auto-routes `indexer.*.regenesis.dev` to `/api` when running on `*.regenesis.dev`.
   This avoids CORS failures and ensures `/submit` hits the gateway.
+- Nonce recovery: `website/src/api/nonceManager.js` resets local nonce *downward* on `nonce_too_high` errors and clears pending txs.
+  This prevents perpetual “waiting for chain” when the chain nonce resets or localStorage is stale.
+- Registration fallback: `website/src/hooks/terminalGame/actions/useStartGame.ts` treats `account.nonce > 0` as registered if the casino player lookup returns null.
+  This prevents re-register loops when the player exists on-chain but the UI key lookup is stale.
 - Simulator enforces exact nonce matching in `simulator/src/submission.rs`; reject `tx.nonce != expected_nonce` with `nonce_too_low`/`nonce_too_high`.
   This prevents future-nonce transactions from sitting in mempool while validators reject them.
 - If staging uses the local `nullspace-simulator:bypass` image, re-tag the latest GHCR image to that name and restart the container
@@ -87,6 +96,7 @@ If you intentionally want to use the indexer directly in the browser, you must e
 2. If clients have a backlog of pending txs, clear local pending state:
    - Web console: remove `casino_tx_*` and `casino_nonce_*` from `localStorage`, or
    - Call the nonce manager recovery path (`forceSyncFromChain`) from UI tooling.
+   - Confirm with `/account/<pubkey>` that the chain nonce matches local.
 3. If console shows CORS errors for `indexer.testnet.regenesis.dev`, verify `VITE_URL` and the web base URL:
    - Prefer `/api` (same-origin) or `https://api.testnet.regenesis.dev` for web builds.
    - Redeploy the website with corrected build args.
