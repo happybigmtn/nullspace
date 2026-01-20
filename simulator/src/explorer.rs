@@ -149,7 +149,7 @@ pub struct ExplorerState {
     /// Payouts indexed by round for efficient round lookup
     pub(super) payouts_by_round: HashMap<(String, u64), Vec<IndexedPayout>>,
     /// Recent rounds ordered by block height for pagination
-    rounds_by_height: BTreeMap<u64, Vec<(String, u64)>>,
+    pub(super) rounds_by_height: BTreeMap<u64, Vec<(String, u64)>>,
     account_last_seen: HashMap<PublicKey, u64>,
     game_events_last_seen: HashMap<PublicKey, u64>,
     account_lru: VecDeque<(PublicKey, u64)>,
@@ -1647,4 +1647,227 @@ pub(crate) async fn get_round_payouts(
     })
     .await
     .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Aggregated Metrics Endpoints (AC-4.4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Aggregated statistics for volume, house edge, and payouts
+#[derive(Clone, Debug, Serialize)]
+pub struct AggregatedStats {
+    /// Total volume wagered across all rounds
+    pub total_volume: u64,
+    /// Total payouts disbursed across all rounds
+    pub total_payouts: i64,
+    /// House edge as a percentage (positive = house profit, negative = house loss)
+    /// Calculated as: (total_volume - total_payouts) / total_volume * 100
+    pub house_edge_percent: f64,
+    /// Net house profit (total_volume - total_payouts)
+    pub house_profit: i64,
+    /// Number of rounds included in the aggregation
+    pub round_count: usize,
+    /// Number of bets included in the aggregation
+    pub bet_count: usize,
+    /// Number of unique players
+    pub player_count: usize,
+    /// Average bet size
+    pub avg_bet_size: f64,
+    /// Average payout per round
+    pub avg_payout_per_round: f64,
+    /// Win rate (percentage of rounds with positive total payout)
+    pub player_win_rate_percent: f64,
+}
+
+/// Per-game statistics breakdown
+#[derive(Clone, Debug, Serialize)]
+pub struct GameStats {
+    pub game_type: String,
+    #[serde(flatten)]
+    pub stats: AggregatedStats,
+}
+
+/// Query parameters for aggregated stats
+#[derive(Deserialize)]
+pub(crate) struct AggregationQuery {
+    /// Filter by game type (e.g. "Craps", "Blackjack")
+    game_type: Option<String>,
+    /// Only include rounds opened at or after this block height
+    from_height: Option<u64>,
+    /// Only include rounds opened at or before this block height
+    to_height: Option<u64>,
+    /// Whether to include per-game breakdown (default: false)
+    breakdown: Option<bool>,
+}
+
+/// Compute aggregated stats from indexed rounds
+pub(crate) fn compute_aggregated_stats(
+    explorer: &ExplorerState,
+    game_type_filter: Option<&str>,
+    from_height: Option<u64>,
+    to_height: Option<u64>,
+) -> AggregatedStats {
+    let mut total_volume: u64 = 0;
+    let mut total_payouts: i64 = 0;
+    let mut round_count: usize = 0;
+    let mut bet_count: usize = 0;
+    let mut rounds_with_player_profit: usize = 0;
+    let mut unique_players: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for ((gt, _round_id), round) in explorer.indexed_rounds.iter() {
+        // Apply game_type filter
+        if let Some(filter) = game_type_filter {
+            if !gt.eq_ignore_ascii_case(filter) {
+                continue;
+            }
+        }
+
+        // Apply height filters
+        if let Some(from) = from_height {
+            if round.opened_at_height < from {
+                continue;
+            }
+        }
+        if let Some(to) = to_height {
+            if round.opened_at_height > to {
+                continue;
+            }
+        }
+
+        // Only include finalized rounds for accurate stats
+        if round.phase != "Finalized" {
+            continue;
+        }
+
+        total_volume += round.total_bet_amount;
+        total_payouts += round.total_payout_amount;
+        round_count += 1;
+        bet_count += round.bet_count;
+
+        // Track if players profited in this round
+        if round.total_payout_amount > round.total_bet_amount as i64 {
+            rounds_with_player_profit += 1;
+        }
+
+        // Collect unique players from bets
+        let round_key = (gt.clone(), round.round_id);
+        if let Some(bets) = explorer.bets_by_round.get(&round_key) {
+            for bet in bets {
+                unique_players.insert(bet.player.clone());
+            }
+        }
+    }
+
+    let house_edge_percent = if total_volume > 0 {
+        let house_profit = total_volume as i64 - total_payouts;
+        (house_profit as f64 / total_volume as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let house_profit = total_volume as i64 - total_payouts;
+
+    let avg_bet_size = if bet_count > 0 {
+        total_volume as f64 / bet_count as f64
+    } else {
+        0.0
+    };
+
+    let avg_payout_per_round = if round_count > 0 {
+        total_payouts as f64 / round_count as f64
+    } else {
+        0.0
+    };
+
+    let player_win_rate_percent = if round_count > 0 {
+        (rounds_with_player_profit as f64 / round_count as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    AggregatedStats {
+        total_volume,
+        total_payouts,
+        house_edge_percent,
+        house_profit,
+        round_count,
+        bet_count,
+        player_count: unique_players.len(),
+        avg_bet_size,
+        avg_payout_per_round,
+        player_win_rate_percent,
+    }
+}
+
+/// Get all unique game types from indexed rounds
+pub(crate) fn get_unique_game_types(explorer: &ExplorerState) -> Vec<String> {
+    let mut game_types: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (gt, _) in explorer.indexed_rounds.keys() {
+        game_types.insert(gt.clone());
+    }
+    let mut result: Vec<String> = game_types.into_iter().collect();
+    result.sort();
+    result
+}
+
+/// Get aggregated statistics for volume, house edge, and payouts
+pub(crate) async fn get_aggregated_stats(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Query(params): Query<AggregationQuery>,
+) -> impl IntoResponse {
+    let game_type_filter = params.game_type.clone();
+    let from_height = params.from_height;
+    let to_height = params.to_height;
+    let include_breakdown = params.breakdown.unwrap_or(false);
+
+    let cache_key = format!(
+        "stats:game_type={:?}:from={:?}:to={:?}:breakdown={}",
+        game_type_filter, from_height, to_height, include_breakdown
+    );
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        async move {
+            let explorer = simulator.explorer.read().await;
+
+            // Compute overall stats
+            let overall = compute_aggregated_stats(
+                &explorer,
+                game_type_filter.as_deref(),
+                from_height,
+                to_height,
+            );
+
+            if include_breakdown && game_type_filter.is_none() {
+                // Compute per-game breakdown
+                let game_types = get_unique_game_types(&explorer);
+                let breakdown: Vec<GameStats> = game_types
+                    .into_iter()
+                    .map(|gt| {
+                        let stats = compute_aggregated_stats(
+                            &explorer,
+                            Some(&gt),
+                            from_height,
+                            to_height,
+                        );
+                        GameStats {
+                            game_type: gt,
+                            stats,
+                        }
+                    })
+                    .filter(|gs| gs.stats.round_count > 0) // Only include games with data
+                    .collect();
+
+                json!({
+                    "overall": overall,
+                    "by_game": breakdown
+                })
+            } else {
+                json!({
+                    "overall": overall
+                })
+            }
+        }
+    })
+    .await
 }

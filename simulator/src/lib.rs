@@ -2793,4 +2793,426 @@ mod tests {
             }
         });
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Aggregation Stats Tests (AC-4.4)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// Create fixture data for aggregation tests - directly manipulates ExplorerState
+    fn create_aggregation_fixture(explorer: &mut ExplorerState) {
+        use crate::explorer::{IndexedBet, IndexedPayout, IndexedRound};
+
+        // Round 1: Craps - House wins (more wagered than paid out)
+        let round1 = IndexedRound {
+            game_type: "Craps".to_string(),
+            round_id: 1,
+            phase: "Finalized".to_string(),
+            opened_at_height: 100,
+            locked_at_height: Some(101),
+            outcome_at_height: Some(102),
+            finalized_at_height: Some(103),
+            d1: 3,
+            d2: 4,
+            total_bet_amount: 1000,
+            total_payout_amount: 800,
+            bet_count: 3,
+            player_count: 2,
+        };
+        let bets1 = vec![
+            IndexedBet {
+                player: "player_a".to_string(),
+                round_id: 1,
+                bet_type: 0,
+                target: 7,
+                amount: 500,
+                block_height: 100,
+            },
+            IndexedBet {
+                player: "player_a".to_string(),
+                round_id: 1,
+                bet_type: 0,
+                target: 8,
+                amount: 200,
+                block_height: 100,
+            },
+            IndexedBet {
+                player: "player_b".to_string(),
+                round_id: 1,
+                bet_type: 0,
+                target: 7,
+                amount: 300,
+                block_height: 100,
+            },
+        ];
+        let payouts1 = vec![
+            IndexedPayout {
+                player: "player_a".to_string(),
+                round_id: 1,
+                payout: 500,
+                block_height: 103,
+            },
+            IndexedPayout {
+                player: "player_b".to_string(),
+                round_id: 1,
+                payout: 300,
+                block_height: 103,
+            },
+        ];
+
+        explorer
+            .indexed_rounds
+            .insert(("Craps".to_string(), 1), round1);
+        explorer
+            .bets_by_round
+            .insert(("Craps".to_string(), 1), bets1);
+        explorer
+            .payouts_by_round
+            .insert(("Craps".to_string(), 1), payouts1);
+        explorer
+            .rounds_by_height
+            .entry(100)
+            .or_default()
+            .push(("Craps".to_string(), 1));
+
+        // Round 2: Craps - Players win (more paid out than wagered)
+        let round2 = IndexedRound {
+            game_type: "Craps".to_string(),
+            round_id: 2,
+            phase: "Finalized".to_string(),
+            opened_at_height: 200,
+            locked_at_height: Some(201),
+            outcome_at_height: Some(202),
+            finalized_at_height: Some(203),
+            d1: 5,
+            d2: 6,
+            total_bet_amount: 500,
+            total_payout_amount: 700,
+            bet_count: 2,
+            player_count: 1,
+        };
+        let bets2 = vec![
+            IndexedBet {
+                player: "player_a".to_string(),
+                round_id: 2,
+                bet_type: 0,
+                target: 11,
+                amount: 300,
+                block_height: 200,
+            },
+            IndexedBet {
+                player: "player_a".to_string(),
+                round_id: 2,
+                bet_type: 0,
+                target: 7,
+                amount: 200,
+                block_height: 200,
+            },
+        ];
+        let payouts2 = vec![IndexedPayout {
+            player: "player_a".to_string(),
+            round_id: 2,
+            payout: 700,
+            block_height: 203,
+        }];
+
+        explorer
+            .indexed_rounds
+            .insert(("Craps".to_string(), 2), round2);
+        explorer
+            .bets_by_round
+            .insert(("Craps".to_string(), 2), bets2);
+        explorer
+            .payouts_by_round
+            .insert(("Craps".to_string(), 2), payouts2);
+        explorer
+            .rounds_by_height
+            .entry(200)
+            .or_default()
+            .push(("Craps".to_string(), 2));
+
+        // Round 3: Blackjack - House wins big
+        let round3 = IndexedRound {
+            game_type: "Blackjack".to_string(),
+            round_id: 1,
+            phase: "Finalized".to_string(),
+            opened_at_height: 300,
+            locked_at_height: Some(301),
+            outcome_at_height: Some(302),
+            finalized_at_height: Some(303),
+            d1: 0,
+            d2: 0,
+            total_bet_amount: 2000,
+            total_payout_amount: 1000,
+            bet_count: 4,
+            player_count: 2,
+        };
+        let bets3 = vec![
+            IndexedBet {
+                player: "player_b".to_string(),
+                round_id: 1,
+                bet_type: 0,
+                target: 0,
+                amount: 1000,
+                block_height: 300,
+            },
+            IndexedBet {
+                player: "player_c".to_string(),
+                round_id: 1,
+                bet_type: 0,
+                target: 0,
+                amount: 500,
+                block_height: 300,
+            },
+            IndexedBet {
+                player: "player_c".to_string(),
+                round_id: 1,
+                bet_type: 0,
+                target: 0,
+                amount: 300,
+                block_height: 300,
+            },
+            IndexedBet {
+                player: "player_c".to_string(),
+                round_id: 1,
+                bet_type: 0,
+                target: 0,
+                amount: 200,
+                block_height: 300,
+            },
+        ];
+        let payouts3 = vec![
+            IndexedPayout {
+                player: "player_b".to_string(),
+                round_id: 1,
+                payout: 600,
+                block_height: 303,
+            },
+            IndexedPayout {
+                player: "player_c".to_string(),
+                round_id: 1,
+                payout: 400,
+                block_height: 303,
+            },
+        ];
+
+        explorer
+            .indexed_rounds
+            .insert(("Blackjack".to_string(), 1), round3);
+        explorer
+            .bets_by_round
+            .insert(("Blackjack".to_string(), 1), bets3);
+        explorer
+            .payouts_by_round
+            .insert(("Blackjack".to_string(), 1), payouts3);
+        explorer
+            .rounds_by_height
+            .entry(300)
+            .or_default()
+            .push(("Blackjack".to_string(), 1));
+
+        // Round 4: Betting phase (not finalized - should be excluded from stats)
+        let round4 = IndexedRound {
+            game_type: "Craps".to_string(),
+            round_id: 3,
+            phase: "Betting".to_string(),
+            opened_at_height: 400,
+            locked_at_height: None,
+            outcome_at_height: None,
+            finalized_at_height: None,
+            d1: 0,
+            d2: 0,
+            total_bet_amount: 100,
+            total_payout_amount: 0,
+            bet_count: 1,
+            player_count: 1,
+        };
+
+        explorer
+            .indexed_rounds
+            .insert(("Craps".to_string(), 3), round4);
+        explorer
+            .rounds_by_height
+            .entry(400)
+            .or_default()
+            .push(("Craps".to_string(), 3));
+    }
+
+    #[test]
+    fn test_aggregation_overall_stats() {
+        use crate::explorer::compute_aggregated_stats;
+
+        let mut explorer = ExplorerState::default();
+        create_aggregation_fixture(&mut explorer);
+
+        // Test overall stats (all games, all time)
+        let stats = compute_aggregated_stats(&explorer, None, None, None);
+
+        // Expected: Round 1 (1000/800) + Round 2 (500/700) + Round 3 (2000/1000)
+        // Note: Round 4 is excluded because it's not finalized
+        assert_eq!(stats.total_volume, 3500, "Total volume should be 1000+500+2000=3500");
+        assert_eq!(stats.total_payouts, 2500, "Total payouts should be 800+700+1000=2500");
+        assert_eq!(stats.house_profit, 1000, "House profit should be 3500-2500=1000");
+        assert_eq!(stats.round_count, 3, "Should count 3 finalized rounds");
+        assert_eq!(stats.bet_count, 9, "Total bets should be 3+2+4=9");
+        assert_eq!(stats.player_count, 3, "Unique players: player_a, player_b, player_c");
+
+        // House edge = (3500-2500)/3500 * 100 = 28.57%
+        assert!(
+            (stats.house_edge_percent - 28.57).abs() < 0.1,
+            "House edge should be ~28.57%, got {}",
+            stats.house_edge_percent
+        );
+
+        // Player win rate: 1 out of 3 rounds had player profit (round 2)
+        assert!(
+            (stats.player_win_rate_percent - 33.33).abs() < 0.1,
+            "Player win rate should be ~33.33%, got {}",
+            stats.player_win_rate_percent
+        );
+    }
+
+    #[test]
+    fn test_aggregation_filter_by_game_type() {
+        use crate::explorer::compute_aggregated_stats;
+
+        let mut explorer = ExplorerState::default();
+        create_aggregation_fixture(&mut explorer);
+
+        // Test Craps only (should include rounds 1 and 2, exclude round 3 Blackjack and round 4 unfinalized)
+        let craps_stats = compute_aggregated_stats(&explorer, Some("Craps"), None, None);
+        assert_eq!(craps_stats.total_volume, 1500, "Craps volume: 1000+500=1500");
+        assert_eq!(craps_stats.total_payouts, 1500, "Craps payouts: 800+700=1500");
+        assert_eq!(craps_stats.house_profit, 0, "Craps house profit: 1500-1500=0");
+        assert_eq!(craps_stats.round_count, 2, "Should count 2 finalized Craps rounds");
+
+        // Test Blackjack only
+        let blackjack_stats = compute_aggregated_stats(&explorer, Some("Blackjack"), None, None);
+        assert_eq!(blackjack_stats.total_volume, 2000, "Blackjack volume: 2000");
+        assert_eq!(blackjack_stats.total_payouts, 1000, "Blackjack payouts: 1000");
+        assert_eq!(blackjack_stats.house_profit, 1000, "Blackjack house profit: 1000");
+        assert_eq!(blackjack_stats.round_count, 1, "Should count 1 finalized Blackjack round");
+
+        // Test case-insensitivity
+        let craps_lower = compute_aggregated_stats(&explorer, Some("craps"), None, None);
+        assert_eq!(craps_lower.round_count, 2, "Case-insensitive filter should work");
+    }
+
+    #[test]
+    fn test_aggregation_filter_by_height_range() {
+        use crate::explorer::compute_aggregated_stats;
+
+        let mut explorer = ExplorerState::default();
+        create_aggregation_fixture(&mut explorer);
+
+        // Test from_height filter (heights 200+)
+        let from_200_stats = compute_aggregated_stats(&explorer, None, Some(200), None);
+        assert_eq!(
+            from_200_stats.round_count, 2,
+            "Should include rounds 2 (height 200) and 3 (height 300)"
+        );
+        assert_eq!(from_200_stats.total_volume, 2500, "Volume: 500+2000=2500");
+
+        // Test to_height filter (heights up to 200)
+        let to_200_stats = compute_aggregated_stats(&explorer, None, None, Some(200));
+        assert_eq!(
+            to_200_stats.round_count, 2,
+            "Should include rounds 1 (height 100) and 2 (height 200)"
+        );
+        assert_eq!(to_200_stats.total_volume, 1500, "Volume: 1000+500=1500");
+
+        // Test both from and to (heights 150-250)
+        let range_stats = compute_aggregated_stats(&explorer, None, Some(150), Some(250));
+        assert_eq!(range_stats.round_count, 1, "Should include only round 2 (height 200)");
+        assert_eq!(range_stats.total_volume, 500, "Volume: 500");
+    }
+
+    #[test]
+    fn test_aggregation_combined_filters() {
+        use crate::explorer::compute_aggregated_stats;
+
+        let mut explorer = ExplorerState::default();
+        create_aggregation_fixture(&mut explorer);
+
+        // Test Craps + from_height 150 (should only get round 2)
+        let filtered_stats = compute_aggregated_stats(&explorer, Some("Craps"), Some(150), None);
+        assert_eq!(filtered_stats.round_count, 1, "Should include only Craps round 2");
+        assert_eq!(filtered_stats.total_volume, 500);
+        assert_eq!(filtered_stats.total_payouts, 700);
+    }
+
+    #[test]
+    fn test_aggregation_empty_results() {
+        use crate::explorer::compute_aggregated_stats;
+
+        let mut explorer = ExplorerState::default();
+        create_aggregation_fixture(&mut explorer);
+
+        // Non-existent game type
+        let no_game = compute_aggregated_stats(&explorer, Some("Roulette"), None, None);
+        assert_eq!(no_game.round_count, 0, "No rounds for Roulette");
+        assert_eq!(no_game.total_volume, 0);
+        assert_eq!(no_game.house_edge_percent, 0.0, "Zero division should return 0");
+
+        // Height range with no rounds
+        let no_range = compute_aggregated_stats(&explorer, None, Some(500), Some(600));
+        assert_eq!(no_range.round_count, 0, "No rounds in height range 500-600");
+    }
+
+    #[test]
+    fn test_aggregation_excludes_non_finalized() {
+        use crate::explorer::compute_aggregated_stats;
+
+        let mut explorer = ExplorerState::default();
+        create_aggregation_fixture(&mut explorer);
+
+        // Verify that round 4 (Betting phase) is excluded
+        let craps_stats = compute_aggregated_stats(&explorer, Some("Craps"), None, None);
+
+        // If non-finalized round was included, we'd have 3 rounds with 1600 volume
+        assert_eq!(
+            craps_stats.round_count, 2,
+            "Should only count finalized rounds"
+        );
+        assert_eq!(
+            craps_stats.total_volume, 1500,
+            "Should not include non-finalized round's bets"
+        );
+    }
+
+    #[test]
+    fn test_get_unique_game_types() {
+        use crate::explorer::get_unique_game_types;
+
+        let mut explorer = ExplorerState::default();
+        create_aggregation_fixture(&mut explorer);
+
+        let game_types = get_unique_game_types(&explorer);
+        assert_eq!(game_types.len(), 2, "Should have 2 game types");
+        assert!(game_types.contains(&"Blackjack".to_string()));
+        assert!(game_types.contains(&"Craps".to_string()));
+    }
+
+    #[test]
+    fn test_aggregation_average_calculations() {
+        use crate::explorer::compute_aggregated_stats;
+
+        let mut explorer = ExplorerState::default();
+        create_aggregation_fixture(&mut explorer);
+
+        let stats = compute_aggregated_stats(&explorer, None, None, None);
+
+        // Average bet size = 3500 / 9 = 388.89
+        assert!(
+            (stats.avg_bet_size - 388.89).abs() < 0.1,
+            "Avg bet size should be ~388.89, got {}",
+            stats.avg_bet_size
+        );
+
+        // Average payout per round = 2500 / 3 = 833.33
+        assert!(
+            (stats.avg_payout_per_round - 833.33).abs() < 0.1,
+            "Avg payout per round should be ~833.33, got {}",
+            stats.avg_payout_per_round
+        );
+    }
 }

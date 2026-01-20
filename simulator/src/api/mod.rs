@@ -194,7 +194,8 @@ impl Api {
                 "/explorer/rounds/:game_type/:round_id/payouts",
                 get(crate::explorer::get_round_payouts),
             )
-            .route("/explorer/leaderboard", get(crate::explorer::get_leaderboard));
+            .route("/explorer/leaderboard", get(crate::explorer::get_leaderboard))
+            .route("/explorer/stats", get(crate::explorer::get_aggregated_stats));
 
         #[cfg(feature = "passkeys")]
         let router = router

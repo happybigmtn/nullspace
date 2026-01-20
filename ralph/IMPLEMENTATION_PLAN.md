@@ -122,11 +122,27 @@
     - `GET /explorer/leaderboard` - Player stats with sorting (net_profit, total_wagered, bet_count)
   - All endpoints support caching, pagination (offset/limit), and case-insensitive game_type matching
   - Added `test_explorer_round_endpoints` test with 11 test cases covering pagination, filters, and edge cases
-- [ ] Add aggregation jobs for volume, house edge, and payouts
+- [x] Add aggregation jobs for volume, house edge, and payouts
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.4
   - Tests/backpressure:
     - Programmatic: unit tests with fixture data
   - Perceptual: None
+  - **Completed**: Added aggregation functionality in `explorer.rs`:
+    - `AggregatedStats` struct with volume, house edge, house profit, bet/round/player counts, averages, and player win rate
+    - `GameStats` struct for per-game breakdown
+    - `compute_aggregated_stats()` function for computing metrics from indexed rounds
+    - `get_unique_game_types()` helper for listing available games
+    - `GET /explorer/stats` HTTP endpoint with query params: game_type, from_height, to_height, breakdown
+    - Filters only include finalized rounds for accurate stats
+    - 8 unit tests with fixture data validating:
+      - Overall stats computation
+      - Game type filtering (case-insensitive)
+      - Height range filtering
+      - Combined filters
+      - Empty result handling
+      - Non-finalized round exclusion
+      - Unique game type extraction
+      - Average calculations (bet size, payout per round)
 - [ ] Add backfill process for empty storage
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.5
   - Tests/backpressure:
