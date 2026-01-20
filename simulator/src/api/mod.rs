@@ -195,7 +195,8 @@ impl Api {
                 get(crate::explorer::get_round_payouts),
             )
             .route("/explorer/leaderboard", get(crate::explorer::get_leaderboard))
-            .route("/explorer/stats", get(crate::explorer::get_aggregated_stats));
+            .route("/explorer/stats", get(crate::explorer::get_aggregated_stats))
+            .route("/backfill/blocks", get(crate::explorer::get_backfill_blocks));
 
         #[cfg(feature = "passkeys")]
         let router = router

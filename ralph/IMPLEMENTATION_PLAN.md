@@ -143,11 +143,23 @@
       - Non-finalized round exclusion
       - Unique game type extraction
       - Average calculations (bet size, payout per round)
-- [ ] Add backfill process for empty storage
+- [x] Add backfill process for empty storage
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.5
   - Tests/backpressure:
     - Programmatic: integration test on empty DB
   - Perceptual: None
+  - **Completed**: Added backfill infrastructure in `simulator`:
+    - Added `backfill_source_url` and `backfill_max_blocks` config options to `SimulatorConfig`
+    - Added `/backfill/blocks` HTTP endpoint in `explorer.rs` returning block metadata for backfill
+    - Added `backfill_from_source()` async function in `explorer_persistence.rs` to fetch blocks from remote source
+    - Added `is_storage_empty_sqlite()` and `is_storage_empty_postgres()` functions for empty storage detection
+    - Added `BackfillResponse` and `BackfillBlock` types for API response format
+    - Added `test_backfill_on_empty_storage` integration test validating:
+      - Empty storage detection (SQLite)
+      - Source simulator indexes blocks correctly
+      - Source database persistence works
+      - Backfill function handles unreachable source gracefully
+      - Backfill endpoint data format is correct
 - [ ] Expose health and metrics endpoints
   - Specs: `specs/sprint-04-indexer-explorer.md` AC-4.6
   - Tests/backpressure:

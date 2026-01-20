@@ -124,6 +124,10 @@ pub struct SimulatorConfig {
     pub cache_redis_url: Option<String>,
     pub cache_redis_prefix: Option<String>,
     pub cache_redis_ttl_seconds: Option<u64>,
+    /// URL of a remote simulator to backfill blocks from on empty storage.
+    pub backfill_source_url: Option<String>,
+    /// Maximum number of blocks to backfill from source (0 for unlimited).
+    pub backfill_max_blocks: Option<usize>,
 }
 
 impl Default for SimulatorConfig {
@@ -167,6 +171,8 @@ impl Default for SimulatorConfig {
             cache_redis_url: None,
             cache_redis_prefix: Some(DEFAULT_CACHE_REDIS_PREFIX.to_string()),
             cache_redis_ttl_seconds: Some(DEFAULT_CACHE_REDIS_TTL_SECONDS),
+            backfill_source_url: None,
+            backfill_max_blocks: None,
         }
     }
 }

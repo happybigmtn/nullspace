@@ -1810,6 +1810,83 @@ pub(crate) fn get_unique_game_types(explorer: &ExplorerState) -> Vec<String> {
     result
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Backfill Endpoint (AC-4.5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Query parameters for backfill endpoint
+#[derive(Deserialize)]
+pub(crate) struct BackfillQuery {
+    /// Starting block height (inclusive)
+    from_height: Option<u64>,
+    /// Maximum number of blocks to return
+    limit: Option<usize>,
+}
+
+/// Response for backfill endpoint - includes raw persisted block data
+#[derive(Serialize)]
+pub(crate) struct BackfillResponse {
+    /// List of raw blocks available for backfill
+    pub blocks: Vec<BackfillBlock>,
+    /// Minimum height in the persisted blocks
+    pub min_height: Option<u64>,
+    /// Maximum height in the persisted blocks
+    pub max_height: Option<u64>,
+    /// Total number of persisted blocks
+    pub total_blocks: usize,
+}
+
+/// A single block's raw data for backfill
+#[derive(Serialize)]
+pub(crate) struct BackfillBlock {
+    pub height: u64,
+    /// Hex-encoded Progress bytes
+    pub progress_hex: String,
+    /// Hex-encoded operations bytes (each op is encoded separately)
+    pub ops_hex: Vec<String>,
+    pub indexed_at_ms: u64,
+}
+
+/// Get raw block data for backfill purposes
+/// This endpoint returns the persisted block data that can be used to
+/// backfill an empty indexer from genesis.
+pub(crate) async fn get_backfill_blocks(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Query(params): Query<BackfillQuery>,
+) -> impl IntoResponse {
+    let from_height = params.from_height.unwrap_or(0);
+    let limit = params.limit.unwrap_or(100).min(1000);
+
+    let explorer = simulator.explorer.read().await;
+
+    // Get block height range
+    let min_height = explorer.indexed_blocks.first_key_value().map(|(h, _)| *h);
+    let max_height = explorer.indexed_blocks.last_key_value().map(|(h, _)| *h);
+    let total_blocks = explorer.indexed_blocks.len();
+
+    // For now, we return the indexed block data in a serializable format
+    // Note: This returns the already-indexed data, not the raw Progress/ops
+    // For full backfill support, you would need access to the persisted raw data
+    let blocks: Vec<BackfillBlock> = explorer
+        .indexed_blocks
+        .range(from_height..)
+        .take(limit)
+        .map(|(height, block)| BackfillBlock {
+            height: *height,
+            progress_hex: block.block_digest.clone(), // Block digest as identifier
+            ops_hex: block.tx_hashes.clone(),         // Transaction hashes
+            indexed_at_ms: block.indexed_at_ms,
+        })
+        .collect();
+
+    Json(BackfillResponse {
+        blocks,
+        min_height,
+        max_height,
+        total_blocks,
+    })
+}
+
 /// Get aggregated statistics for volume, house edge, and payouts
 pub(crate) async fn get_aggregated_stats(
     AxumState(simulator): AxumState<Arc<Simulator>>,

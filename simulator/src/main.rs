@@ -355,6 +355,14 @@ struct Args {
     /// Redis cache TTL in seconds (0 disables).
     #[arg(long)]
     cache_redis_ttl_seconds: Option<u64>,
+
+    /// URL of a remote simulator to backfill blocks from on empty storage.
+    #[arg(long)]
+    backfill_source_url: Option<String>,
+
+    /// Maximum number of blocks to backfill from source (0 for unlimited).
+    #[arg(long)]
+    backfill_max_blocks: Option<usize>,
 }
 
 fn is_production() -> bool {
@@ -442,6 +450,8 @@ fn build_config(args: &Args) -> Result<SimulatorConfig> {
         cache_redis_url: args.cache_redis_url.clone(),
         cache_redis_prefix: args.cache_redis_prefix.clone().or_else(|| defaults.cache_redis_prefix.clone()),
         cache_redis_ttl_seconds: map_optional_limit(args.cache_redis_ttl_seconds, defaults.cache_redis_ttl_seconds),
+        backfill_source_url: args.backfill_source_url.clone(),
+        backfill_max_blocks: map_optional_limit(args.backfill_max_blocks, defaults.backfill_max_blocks),
     })
 }
 
