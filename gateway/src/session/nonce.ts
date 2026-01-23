@@ -47,7 +47,7 @@ const DEFAULT_DATA_DIR = '.gateway-data';
 const DEFAULT_NONCE_FILE = 'nonces.json';
 const LEGACY_NONCE_FILE = '.gateway-nonces.json';
 const DEFAULT_NONCE_SYNC_INTERVAL_MS = 5_000;
-const DEFAULT_CONFIRMATION_TIMEOUT_MS = 30_000;
+const DEFAULT_CONFIRMATION_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_QUEUE_DEPTH = 10;
 
 function parsePositiveInt(input: number | string | null | undefined): number | null {
@@ -248,30 +248,44 @@ export class NonceManager {
     // Sync nonce before submission
     await this.maybeSync(publicKeyHex, backendUrl);
 
+    const nonceBefore = this.getCurrentNonce(publicKeyHex);
     const nonce = this.getAndIncrement(publicKeyHex);
+    console.log(`[NonceManager] executeSubmission for ${publicKeyHex.slice(0, 8)}: nonce=${nonce} (was ${nonceBefore})`);
+
+    // Set up confirmation callback BEFORE submitting to avoid race condition
+    // where ConfirmationWatcher confirms before callback exists
+    const confirmationPromise = this.setupConfirmationCallback(publicKeyHex, nonce);
+
     const result = await submit(nonce);
 
     if (!result.accepted) {
+      // Cancel the confirmation callback since tx wasn't accepted
+      this.cancelConfirmationCallback(publicKeyHex, nonce);
+
       // On rejection, check if it's a nonce error and resync
       if (result.error && this.handleRejection(publicKeyHex, result.error)) {
         // Resync and retry once
         const synced = await this.syncFromBackend(publicKeyHex, backendUrl);
         if (synced) {
           const retryNonce = this.getAndIncrement(publicKeyHex);
+          // Set up callback for retry
+          const retryConfirmationPromise = this.setupConfirmationCallback(publicKeyHex, retryNonce);
           const retryResult = await submit(retryNonce);
           if (retryResult.accepted) {
             // Wait for confirmation
-            const confirmed = await this.waitForConfirmation(publicKeyHex, retryNonce);
+            const confirmed = await retryConfirmationPromise;
             return { accepted: true, error: confirmed ? undefined : 'Confirmation timeout' };
           }
+          // Cancel retry callback if not accepted
+          this.cancelConfirmationCallback(publicKeyHex, retryNonce);
           return retryResult;
         }
       }
       return result;
     }
 
-    // Wait for confirmation
-    const confirmed = await this.waitForConfirmation(publicKeyHex, nonce);
+    // Wait for confirmation (callback already set up before submit)
+    const confirmed = await confirmationPromise;
     if (!confirmed) {
       // Confirmation timed out, but transaction was accepted
       // The transaction might still be pending in mempool
@@ -284,11 +298,11 @@ export class NonceManager {
   }
 
   /**
-   * Wait for a specific nonce to be confirmed
+   * Set up a confirmation callback for a nonce BEFORE submitting.
+   * Returns a promise that resolves when the nonce is confirmed.
    */
-  private waitForConfirmation(publicKeyHex: string, nonce: bigint): Promise<boolean> {
+  private setupConfirmationCallback(publicKeyHex: string, nonce: bigint): Promise<boolean> {
     return new Promise((resolve) => {
-      // Set up callback for when this nonce is confirmed
       let nonceMap = this.confirmationCallbacks.get(publicKeyHex);
       if (!nonceMap) {
         nonceMap = new Map();
@@ -304,6 +318,46 @@ export class NonceManager {
 
       nonceMap.set(nonce, pending);
     });
+  }
+
+  /**
+   * Cancel a confirmation callback (e.g., if transaction was rejected).
+   */
+  private cancelConfirmationCallback(publicKeyHex: string, nonce: bigint): void {
+    const nonceMap = this.confirmationCallbacks.get(publicKeyHex);
+    if (nonceMap) {
+      const pending = nonceMap.get(nonce);
+      if (pending) {
+        nonceMap.delete(nonce);
+        pending.resolve(false); // Resolve as not confirmed
+      }
+      if (nonceMap.size === 0) {
+        this.confirmationCallbacks.delete(publicKeyHex);
+      }
+    }
+  }
+
+  /**
+   * Wait for a specific nonce to be confirmed.
+   * @deprecated Use setupConfirmationCallback before submitting instead.
+   */
+  private waitForConfirmation(publicKeyHex: string, nonce: bigint): Promise<boolean> {
+    // Check if callback was already set up (preferred flow)
+    const existingMap = this.confirmationCallbacks.get(publicKeyHex);
+    if (existingMap?.has(nonce)) {
+      // Callback already exists, return a promise that waits for it
+      const pending = existingMap.get(nonce)!;
+      return new Promise((resolve) => {
+        // Replace the resolve function to capture the result
+        const originalResolve = pending.resolve;
+        pending.resolve = (confirmed: boolean) => {
+          originalResolve(confirmed);
+          resolve(confirmed);
+        };
+      });
+    }
+    // Fallback: set up callback now (but this has race condition risk)
+    return this.setupConfirmationCallback(publicKeyHex, nonce);
   }
 
   /**
@@ -360,12 +414,17 @@ export class NonceManager {
   }
 
   /**
-   * Serialize nonce usage per public key to avoid concurrent nonce races
+   * Serialize nonce usage per public key to avoid concurrent nonce races.
+   * Also waits for any pending confirmation from submitAndWaitForConfirmation.
    */
   async withLock<T>(
     publicKeyHex: string,
     fn: (nonce: bigint) => Promise<T>
   ): Promise<T> {
+    // Wait for any pending confirmations first
+    // This ensures the nonce we use is actually the next expected one on-chain
+    await this.waitForPendingConfirmations(publicKeyHex);
+
     const pendingLock = this.locks.get(publicKeyHex);
     if (pendingLock) {
       await pendingLock;
@@ -383,6 +442,44 @@ export class NonceManager {
       this.locks.delete(publicKeyHex);
       releaseLock!();
     }
+  }
+
+  /**
+   * Wait for any pending confirmations before proceeding.
+   * This ensures that withLock properly coordinates with submitAndWaitForConfirmation.
+   */
+  private async waitForPendingConfirmations(publicKeyHex: string): Promise<void> {
+    // Check if there are pending confirmations (transactions submitted but not confirmed)
+    const nonceMap = this.confirmationCallbacks.get(publicKeyHex);
+    if (!nonceMap || nonceMap.size === 0) {
+      // Also check the queue
+      const queue = this.txQueues.get(publicKeyHex);
+      if (!queue || !queue.processing) {
+        return;
+      }
+    }
+
+    // Wait until all pending confirmations are resolved
+    const startTime = Date.now();
+    const maxWaitMs = this.confirmationTimeoutMs + 5000;
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const nonceMapCheck = this.confirmationCallbacks.get(publicKeyHex);
+      const queueCheck = this.txQueues.get(publicKeyHex);
+
+      const hasPendingConfirmations = nonceMapCheck && nonceMapCheck.size > 0;
+      const hasProcessingQueue = queueCheck && queueCheck.processing;
+
+      if (!hasPendingConfirmations && !hasProcessingQueue) {
+        return; // All clear
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    console.warn(
+      `[NonceManager] Timeout waiting for pending confirmations for ${publicKeyHex.slice(0, 8)}`
+    );
   }
 
   /**
@@ -434,28 +531,15 @@ export class NonceManager {
         }
 
         const current = this.nonces.get(publicKeyHex);
-        if (current !== undefined) {
-          const drift = current > onChainNonce ? current - onChainNonce : onChainNonce - current;
-          // Large backwards drift (local >> onChain) indicates chain reset - prefer on-chain
-          const CHAIN_RESET_THRESHOLD = 100n;
-          if (current > onChainNonce && drift >= CHAIN_RESET_THRESHOLD) {
-            console.warn(
-              `Large nonce drift detected for ${publicKeyHex.slice(0, 8)}; resetting to on-chain nonce ${onChainNonce} (local was ${current}, drift=${drift})`
-            );
-            this.nonces.set(publicKeyHex, onChainNonce);
-          } else if (current > onChainNonce) {
-            // Small drift - likely indexer lag, keep local
-            console.warn(
-              `Backend nonce behind local for ${publicKeyHex.slice(0, 8)}; keeping local nonce ${current} (drift=${drift})`
-            );
-            this.nonces.set(publicKeyHex, current);
-          } else {
-            this.nonces.set(publicKeyHex, onChainNonce);
-          }
-        } else {
-          // Set to on-chain nonce (transactions will use this + 1)
-          this.nonces.set(publicKeyHex, onChainNonce);
+        // Always trust on-chain nonce - it's the source of truth
+        // Previous logic that kept local nonce when ahead caused nonce_too_high errors
+        // because registration tx hadn't confirmed yet but local was incremented
+        if (current !== undefined && current !== onChainNonce) {
+          console.log(
+            `Nonce sync for ${publicKeyHex.slice(0, 8)}: local=${current} -> on-chain=${onChainNonce}`
+          );
         }
+        this.nonces.set(publicKeyHex, onChainNonce);
 
         // Confirm all nonces up to on-chain nonce
         this.onNonceConfirmed(publicKeyHex, onChainNonce - 1n);

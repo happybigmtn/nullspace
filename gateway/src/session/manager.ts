@@ -275,6 +275,7 @@ export class SessionManager {
 	 * Register player on-chain (CasinoRegister)
 	 */
 	private async registerPlayer(session: Session): Promise<boolean> {
+		logDebug(`[SessionManager] registerPlayer for ${session.publicKeyHex.slice(0, 8)}`);
 		const instruction = encodeCasinoRegister(session.playerName);
 		return this.submitWithRetry(
 			session,

@@ -49,8 +49,7 @@ export class ConfirmationWatcher {
       parsePositiveInt(process.env.GATEWAY_CONFIRMATION_POLL_INTERVAL_MS) ??
       DEFAULT_POLL_INTERVAL_MS;
     this.enabled = options.enabled ??
-      (process.env.GATEWAY_MEMPOOL_AWARE_NONCE !== 'false') &&
-      DEFAULT_ENABLED;
+      ((process.env.GATEWAY_MEMPOOL_AWARE_NONCE !== 'false') && DEFAULT_ENABLED);
 
     if (this.enabled) {
       this.startPolling();
@@ -121,7 +120,10 @@ export class ConfirmationWatcher {
 
       try {
         const onChainNonce = await this.fetchAccountNonce(publicKeyHex);
-        if (onChainNonce !== null && onChainNonce >= watched.expectedNonce) {
+        // A transaction using nonce N is confirmed when on-chain nonce becomes > N
+        // (The on-chain nonce represents the NEXT expected nonce, so if it's > N,
+        // then nonce N was already consumed/confirmed)
+        if (onChainNonce !== null && onChainNonce > watched.expectedNonce) {
           logDebug(
             `[ConfirmationWatcher] Confirmed nonce ${watched.expectedNonce} for ${publicKeyHex.slice(0, 8)} (on-chain: ${onChainNonce})`
           );

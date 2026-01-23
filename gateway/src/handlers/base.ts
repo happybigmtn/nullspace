@@ -109,8 +109,10 @@ export abstract class GameHandler {
     }
 
     return nonceManager.withLock(session.publicKeyHex, async () => {
+      logDebug(`[GameHandler] startGame for ${session.publicKeyHex.slice(0, 8)} - before maybeSync`);
       await nonceManager.maybeSync(session.publicKeyHex, backendUrl);
       const nonce = nonceManager.getCurrentNonce(session.publicKeyHex);
+      logDebug(`[GameHandler] startGame for ${session.publicKeyHex.slice(0, 8)} - using nonce=${nonce}`);
 
       // Encode and submit
       const instruction = encodeCasinoStartGame(this.gameType, bet, gameSessionId);
@@ -337,7 +339,10 @@ export abstract class GameHandler {
 
         if (gameEvent) {
           if (gameEvent.type === 'error') {
-            // Move was rejected by backend
+            // Move was rejected by backend - game is effectively over
+            session.activeGameId = null;
+            session.gameType = null;
+            this.clearSessionUpdatesClient(session);
             const errorMsg = gameEvent.errorMessage || `Move rejected (code ${gameEvent.errorCode})`;
             logWarn(`[GameHandler] Backend error during move: ${errorMsg}`);
             return {
@@ -384,7 +389,13 @@ export abstract class GameHandler {
           }
         }
 
-        // Fallback if no event received
+        // Fallback if no event received - poll for game result via balance change
+        if (SKIP_EVENT_WAIT) {
+          const polledResult = await this.pollForGameResult(ctx, session, gameSessionId);
+          if (polledResult) {
+            return polledResult;
+          }
+        }
         return {
           success: true,
           response: {
@@ -407,6 +418,10 @@ export abstract class GameHandler {
             const gameEvent = await this.waitForMoveOrComplete(session);
             if (gameEvent) {
               if (gameEvent.type === 'error') {
+                // Move was rejected by backend - game is effectively over
+                session.activeGameId = null;
+                session.gameType = null;
+                this.clearSessionUpdatesClient(session);
                 const errorMsg = gameEvent.errorMessage || `Move rejected (code ${gameEvent.errorCode})`;
                 logWarn(`[GameHandler] Backend error during move: ${errorMsg}`);
                 return {
@@ -452,6 +467,13 @@ export abstract class GameHandler {
               }
             }
 
+            // Fallback if no event received - poll for game result via balance change
+            if (SKIP_EVENT_WAIT) {
+              const polledResult = await this.pollForGameResult(ctx, session, gameSessionId);
+              if (polledResult) {
+                return polledResult;
+              }
+            }
             return {
               success: true,
               response: {
@@ -471,6 +493,78 @@ export abstract class GameHandler {
         ),
       };
     });
+  }
+
+  /**
+   * Poll for game result via balance changes when events are not available.
+   * Used as fallback when SKIP_EVENT_WAIT is enabled or events aren't received.
+   */
+  private async pollForGameResult(
+    ctx: HandlerContext,
+    session: Session,
+    gameSessionId: bigint
+  ): Promise<HandleResult | null> {
+    const { submitClient, backendUrl } = ctx;
+    const previousBalance = session.balance;
+    const bet = session.lastGameBet ?? 0n;
+
+    // Poll for balance change with exponential backoff
+    const maxAttempts = 10;
+    const baseDelayMs = 100;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const delayMs = baseDelayMs * Math.pow(1.5, attempt);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+      try {
+        const account = await submitClient.getAccount(session.publicKeyHex);
+        if (!account) continue;
+
+        const newBalance = account.balance;
+
+        // If balance changed, game completed
+        if (newBalance !== previousBalance) {
+          const payout = newBalance - previousBalance + bet;
+          const won = payout > 0n;
+
+          // Update session state
+          session.balance = newBalance;
+          session.activeGameId = null;
+          session.gameType = null;
+          this.clearSessionUpdatesClient(session);
+          session.balanceSeq++;
+
+          logInfo('[GameHandler] Polled game result', {
+            sessionId: gameSessionId.toString(),
+            previousBalance: previousBalance.toString(),
+            newBalance: newBalance.toString(),
+            bet: bet.toString(),
+            payout: payout.toString(),
+            won,
+          });
+
+          return {
+            success: true,
+            response: {
+              type: 'game_result',
+              sessionId: gameSessionId.toString(),
+              gameType: session.gameType ?? this.gameType,
+              won,
+              payout: payout.toString(),
+              balance: newBalance.toString(),
+              balanceSeq: session.balanceSeq.toString(),
+            },
+          };
+        }
+      } catch (err) {
+        logWarn('[GameHandler] Poll attempt failed:', err);
+      }
+    }
+
+    logWarn('[GameHandler] Failed to poll game result after max attempts', {
+      sessionId: gameSessionId.toString(),
+    });
+    return null;
   }
 
   /**

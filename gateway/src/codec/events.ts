@@ -850,11 +850,15 @@ function decodeOutput(
   contextLabel: string
 ): void {
   const outputKind = reader.readU8();
+  logDebug(`[decodeOutput] ${contextLabel}: outputKind=0x${outputKind.toString(16)}`);
   if (outputKind === 0x00) {
     const tag = reader.readU8();
+    logDebug(`[decodeOutput] Event tag=${tag} (casino: 21-23,29)`);
     const casinoEvent = parseCasinoEventWithTag(reader, tag);
     if (casinoEvent) {
-      if (validateEvent(casinoEvent)) {
+      const valid = validateEvent(casinoEvent);
+      logDebug(`[decodeOutput] Parsed casino event: ${casinoEvent.type}, session=${casinoEvent.sessionId}, valid=${valid}`);
+      if (valid) {
         casino.push(casinoEvent);
       }
       return;
@@ -873,11 +877,13 @@ function decodeOutput(
   }
 
   if (outputKind === 0x01) {
+    logDebug(`[decodeOutput] Skipping Transaction`);
     skipTransaction(reader);
     return;
   }
 
   if (outputKind === 0x02) {
+    logDebug(`[decodeOutput] Skipping Commit`);
     reader.readU64BE();
     reader.readU64BE();
     return;
@@ -904,13 +910,16 @@ function decodeFilteredEvents(
   skipProof(reader);
 
   const opsLen = reader.readVarint();
+  logDebug(`[decodeFilteredEvents] ${data.length} bytes, opsLen=${opsLen}, remaining=${reader.remaining}`);
   for (let i = 0; i < opsLen; i += 1) {
-    reader.readU64BE(); // location
+    const location = reader.readU64BE();
     const context = reader.readU8();
+    logDebug(`[decodeFilteredEvents] op[${i}]: location=${location}, context=0x${context.toString(16)}`);
     if (context === 0x01) {
       decodeOutput(reader, casino, global, 'FilteredEvents');
     } else if (context === 0x00) {
       const hasValue = reader.readBool();
+      logDebug(`[decodeFilteredEvents] op[${i}]: Insert hasValue=${hasValue}`);
       if (!hasValue) {
         continue;
       }
@@ -920,6 +929,7 @@ function decodeFilteredEvents(
     }
   }
 
+  logDebug(`[decodeFilteredEvents] Parsed ${casino.length} casino, ${global.length} global events`);
   return { casino, global };
 }
 
