@@ -7,6 +7,7 @@ import type { WebSocket } from "ws";
 import { ed25519 } from "@noble/curves/ed25519";
 
 import { NonceManager } from "./nonce.js";
+import { ConfirmationWatcher } from "./confirmation-watcher.js";
 import { SubmitClient } from "../backend/http.js";
 import { UpdatesClient, type CasinoGameEvent } from "../backend/updates.js";
 import { logDebug, logError, logWarn } from "../logger.js";
@@ -41,6 +42,7 @@ export class SessionManager {
 	private sessions: Map<WebSocket, Session> = new Map();
 	private byPublicKey: Map<string, Session> = new Map();
 	private nonceManager: NonceManager;
+	private confirmationWatcher: ConfirmationWatcher;
 	private submitClient: SubmitClient;
 	private backendUrl: string;
 	private origin: string;
@@ -59,6 +61,12 @@ export class SessionManager {
 		this.backendUrl = backendUrl;
 		this.nonceManager = nonceManager ?? new NonceManager();
 		this.origin = origin ?? "http://localhost:9010";
+		// Initialize confirmation watcher for mempool-aware nonce management
+		this.confirmationWatcher = new ConfirmationWatcher(
+			this.nonceManager,
+			this.backendUrl,
+			{ origin: this.origin }
+		);
 	}
 
 	private generatePrivateKey(): Uint8Array {
@@ -224,7 +232,8 @@ export class SessionManager {
 	}
 
 	/**
-	 * Submit a transaction with retry on nonce mismatch
+	 * Submit a transaction with confirmation tracking.
+	 * Uses the mempool-aware nonce manager to ensure proper transaction ordering.
 	 */
 	private async submitWithRetry(
 		session: Session,
@@ -232,59 +241,34 @@ export class SessionManager {
 		onSuccess: () => void,
 		actionName: string
 	): Promise<boolean> {
-		return this.nonceManager.withLock(session.publicKeyHex, async () => {
-			await this.nonceManager.maybeSync(
-				session.publicKeyHex,
-				this.getBackendUrl(),
-			);
-
-			const trySubmit = async (nonce: bigint): Promise<boolean> => {
+		const result = await this.nonceManager.submitAndWaitForConfirmation(
+			session.publicKeyHex,
+			async (nonce: bigint) => {
 				const tx = buildTransaction(nonce, instruction, session.privateKey);
 				const submission = wrapSubmission(tx);
-				const result = await this.submitClient.submit(submission);
+				const submitResult = await this.submitClient.submit(submission);
 
-				if (result.accepted) {
-					this.nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
-					onSuccess();
-					logDebug(`${actionName} for ${session.playerName}`);
-					return true;
-				}
-				return false;
-			};
-
-			const nonce = this.nonceManager.getCurrentNonce(session.publicKeyHex);
-			const tx = buildTransaction(nonce, instruction, session.privateKey);
-			const submission = wrapSubmission(tx);
-			const result = await this.submitClient.submit(submission);
-
-			if (result.accepted) {
-				this.nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
-				onSuccess();
-				logDebug(`${actionName} for ${session.playerName}`);
-				return true;
-			}
-
-			if (
-				result.error &&
-				this.nonceManager.handleRejection(session.publicKeyHex, result.error)
-			) {
-				const synced = await this.nonceManager.syncFromBackend(
-					session.publicKeyHex,
-					this.getBackendUrl(),
-				);
-				if (synced) {
-					const retryNonce = this.nonceManager.getCurrentNonce(
+				if (submitResult.accepted) {
+					// Start watching for confirmation
+					this.confirmationWatcher.watchForConfirmation(
 						session.publicKeyHex,
+						nonce
 					);
-					if (await trySubmit(retryNonce)) {
-						return true;
-					}
 				}
-			}
 
-			logWarn(`${actionName} rejected for ${session.playerName}: ${result.error}`);
-			return false;
-		});
+				return submitResult;
+			},
+			this.getBackendUrl()
+		);
+
+		if (result.accepted) {
+			onSuccess();
+			logDebug(`${actionName} for ${session.playerName}`);
+			return true;
+		}
+
+		logWarn(`${actionName} rejected for ${session.playerName}: ${result.error}`);
+		return false;
 	}
 
 	/**
