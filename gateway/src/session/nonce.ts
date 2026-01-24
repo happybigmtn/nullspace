@@ -628,9 +628,26 @@ export class NonceManager {
   }
 
   /**
-   * Restore nonces from disk
+   * Restore nonces from disk.
+   * Set GATEWAY_SKIP_NONCE_RESTORE=1 to skip restoration and always sync from backend.
+   * This is useful after chain resets when persisted nonces are stale.
    */
   restore(): void {
+    // Skip restoration if env var is set - forces sync from backend on first access
+    if (process.env.GATEWAY_SKIP_NONCE_RESTORE === '1') {
+      console.log('[NonceManager] Skipping nonce restoration (GATEWAY_SKIP_NONCE_RESTORE=1)');
+      // Delete the persisted file to start fresh
+      try {
+        if (existsSync(this.persistPath)) {
+          unlinkSync(this.persistPath);
+          console.log('[NonceManager] Deleted stale nonces file');
+        }
+      } catch (err) {
+        console.warn('[NonceManager] Failed to delete stale nonces file:', err);
+      }
+      return;
+    }
+
     try {
       if (!existsSync(this.persistPath)) {
         return;
