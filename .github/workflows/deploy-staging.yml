@@ -341,6 +341,7 @@ jobs:
             docker run -d --name nullspace-gateway \
               --restart unless-stopped \
               --env-file /etc/nullspace/gateway.env \
+              -e GATEWAY_SKIP_NONCE_RESTORE=1 \
               -p 9010:9010 \
               -v /var/lib/nullspace/gateway:/data \
               $GHCR_REGISTRY/$IMAGE_PREFIX-gateway:$IMAGE_TAG
@@ -568,6 +569,7 @@ jobs:
             docker run -d --name nullspace-gateway \
               --restart unless-stopped \
               --env-file /etc/nullspace/gateway.env \
+              -e GATEWAY_SKIP_NONCE_RESTORE=1 \
               -p 9010:9010 \
               -v /var/lib/nullspace/gateway:/data \
               $GHCR_REGISTRY/$IMAGE_PREFIX-gateway:$TAG
