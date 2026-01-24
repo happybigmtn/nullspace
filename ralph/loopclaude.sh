@@ -101,6 +101,7 @@ filter_output() {
 
 # Resolve script directory for prompt paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Parse arguments
 WORK_SCOPE=""
@@ -134,7 +135,7 @@ fi
 
 ITERATION=0
 TOTAL_COST=0
-CURRENT_BRANCH=$(git branch --show-current)
+CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
 
 # Temp file for raw output (for completion detection)
 RAWFILE=$(mktemp)
@@ -143,6 +144,7 @@ trap "rm -f $RAWFILE" EXIT
 echo -e "${BOLD}🚀 Starting Ralph${NC}"
 echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "Mode:   ${CYAN}$MODE${NC}"
+echo -e "Root:   ${DIM}$REPO_ROOT${NC}"
 echo -e "Prompt: ${DIM}$PROMPT_FILE${NC}"
 echo -e "Branch: ${GREEN}$CURRENT_BRANCH${NC}"
 [ -n "$WORK_SCOPE" ] && echo -e "Scope:  ${YELLOW}$WORK_SCOPE${NC}"
@@ -162,13 +164,14 @@ while true; do
         break
     fi
 
-    # Run Ralph iteration with selected prompt
+    # Run Ralph iteration with selected prompt from repo root
     # -p: Headless mode (non-interactive, reads from stdin)
     # --dangerously-skip-permissions: Auto-approve all tool calls (YOLO mode)
     # --output-format=stream-json: Structured output for logging/monitoring
     # --model opus: Primary agent uses Opus for complex reasoning (task selection, prioritization)
     #               Can use 'sonnet' in build mode for speed if plan is clear and tasks well-defined
     # --verbose: Detailed execution logging
+    pushd "$REPO_ROOT" > /dev/null
     if [ -n "$WORK_SCOPE" ]; then
         # Prepend scope to plan-work prompt
         { echo "## Work Scope: $WORK_SCOPE"; echo ""; cat "$PROMPT_FILE"; } | claude -p \
@@ -183,6 +186,7 @@ while true; do
             --model opus \
             --verbose 2>&1 | tee "$RAWFILE" | filter_output
     fi
+    popd > /dev/null
 
     # Track cumulative cost
     iteration_cost=$(grep -o '"total_cost_usd":[0-9.]*' "$RAWFILE" 2>/dev/null | tail -1 | cut -d: -f2)
@@ -205,12 +209,12 @@ while true; do
     # Commit + push changes after each iteration (build mode only)
     if [ "$MODE" = "build" ]; then
         # Create a checkpoint commit if there are any changes (including untracked).
-        if [ -n "$(git status --porcelain)" ]; then
+        if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
             ts=$(date +"%Y-%m-%d %H:%M:%S")
             msg="loop: iteration $((ITERATION + 1)) @ $ts"
             echo -e "${DIM}📦 Committing checkpoint: ${msg}${NC}"
-            git add -A
-            git commit -m "$msg" 2>&1 | head -5 || {
+            git -C "$REPO_ROOT" add -A
+            git -C "$REPO_ROOT" commit -m "$msg" 2>&1 | head -5 || {
                 echo -e "${YELLOW}⚠ Commit failed; leaving changes uncommitted${NC}"
             }
         else
@@ -218,9 +222,9 @@ while true; do
         fi
 
         echo -e "${DIM}📤 Pushing to origin/$CURRENT_BRANCH...${NC}"
-        git push origin "$CURRENT_BRANCH" 2>&1 | head -3 || {
+        git -C "$REPO_ROOT" push origin "$CURRENT_BRANCH" 2>&1 | head -3 || {
             echo -e "${YELLOW}Creating remote branch...${NC}"
-            git push -u origin "$CURRENT_BRANCH" 2>&1 | head -3
+            git -C "$REPO_ROOT" push -u origin "$CURRENT_BRANCH" 2>&1 | head -3
         }
     else
         echo -e "${DIM}↪ Skipping commit/push in $MODE mode${NC}"
