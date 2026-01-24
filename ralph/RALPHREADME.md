@@ -6,80 +6,67 @@ One context window. One task. Fresh each iteration.
 
 ## Philosophy
 
-- Context windows are arrays—allocate deliberately
+- Context is everything — stay in the "smart zone" (40-60% utilization)
 - One goal per iteration, then reset
-- Stay in the "smart zone" (avoid context exhaustion)
+- Subagents extend memory without polluting main context
 - Tests provide backpressure, not optional extras
 - Human ON the loop, not IN it
+- Let Ralph Ralph — self-identify, self-correct, self-improve
 
 ## Three Phases
 
-### 1. Specs → Define WHAT (not HOW)
-- `specs/*.md` — Acceptance criteria (AC-x.y format)
-- Behavioral outcomes, not implementation details
-- Perceptual criteria (AC-PQ.x) for subjective quality
+### 1. Specs: Define WHAT (not HOW)
+- `specs/*.md` — Acceptance criteria, behavioral outcomes
+- One spec per topic of concern
+- Prompt: `PROMPT_plan.md` or `PROMPT_plan_work.md`
 
-### 2. Plan → Derive tests from ACs
-- `IMPLEMENTATION_PLAN.md` — Prioritized task list
-- Each task cites spec ACs and required tests
-- Prompt: `PROMPT_plan.md`
+### 2. Plan: Derive tasks from specs
+- `IMPLEMENTATION_PLAN.md` — Prioritized bullet-point task list
+- Gap analysis: compare specs vs code
+- Ultrathink with Opus subagent for complex reasoning
 
-### 3. Build → Implement with test backpressure
-- Pick ONE unchecked task
-- Implement minimal code for cited ACs
-- Tests must pass before marking complete
+### 3. Build: Implement with backpressure
+- Pick ONE unchecked task from plan
+- Search first (don't assume not implemented)
+- Use parallel subagents for search/read
+- Use only 1 subagent for build/tests (backpressure control)
 - Prompt: `PROMPT_build.md`
 
-## Build Rules (Non-Negotiable)
+## Key Principles
 
-1. **Single task** — Pick exactly ONE unchecked item
-2. **Spec-grounded** — Only implement cited ACs
-3. **No phantom criteria** — Don't invent new ACs
-4. **No drive-by refactors** — Stay focused
-5. **Tests required** — All cited tests must pass
-6. **Update plan** — Record learnings
-
-## Test Output Rules
-
-- Only show FAILING test output
-- Passing tests: just "✓ N tests passed"
-- Summarize if >50 lines of output
-
-## RCT (Review Completed Tasks)
-
-When tasks are already marked complete in `IMPLEMENTATION_PLAN.md`, follow RCT:
-
-1. Review each `[x]` task in order and verify the implementation against cited ACs.
-2. Make only necessary corrections; ignore unrelated/unreviewed changes.
-3. Move the completed task entry into `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`.
-4. Commit per task (check `git status` before each commit; never amend without approval).
+- **Steering upstream**: Existing code patterns shape what Ralph generates
+- **Steering downstream**: Tests, typechecks, lints create backpressure
+- **Plan is disposable**: Wrong plan? Regenerate it
+- **Subagents as memory**: Each gets ~156kb, garbage collected after
 
 ## Files
 
 ```
-RALPHREADME.md          # This file (keep lean!)
-IMPLEMENTATION_PLAN.md  # Current tasks
-PROMPT_plan.md          # Planning prompt
+AGENTS.md               # Operational guide (build/run/validate)
+IMPLEMENTATION_PLAN.md  # Current prioritized tasks
+PROMPT_plan.md          # Full planning prompt
+PROMPT_plan_work.md     # Scoped planning prompt
 PROMPT_build.md         # Building prompt
 specs/*.md              # Acceptance criteria
-docs/                   # Extended documentation
 ```
 
 ## Loop Commands
 
 ```bash
-./loopclaude.sh              # Build, unlimited
+# Claude (default)
+./loopclaude.sh              # Build until no tasks remain
 ./loopclaude.sh 20           # Build, max 20 iterations
-./loopclaude.sh plan         # Update plan
-./loopclaude.sh plan-work "scope"  # Scoped planning
+./loopclaude.sh plan         # Full planning
+./loopclaude.sh plan-work "scope"  # Scoped planning for work branch
+
+# Alternative models
+./loopgemini.sh              # Gemini 2.5 Pro
+./loopcodex.sh               # GPT-5.2 via Codex
+./loopopencode.sh            # Claude Opus 4.5 via GitHub Copilot
 ```
 
-## Completion
+The loop counts `- [ ]` checkboxes in `IMPLEMENTATION_PLAN.md` and stops when zero remain. Each iteration logs to `logs/`.
 
-When all tasks done, output:
-```
-<promise>COMPLETE</promise>
-```
+## Environment
 
----
-*Full methodology: `docs/ralph-methodology.md`*
+- `RALPH_AUTOCOMMIT=1` — Auto-commit after each iteration

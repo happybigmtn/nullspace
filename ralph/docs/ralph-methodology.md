@@ -6,7 +6,7 @@ A disciplined approach to AI-assisted software development using three-phase con
 
 > "Deterministically bad in an undeterministic world."
 
-Ralph operates monolithically on one task at a time, with fresh context per iteration. Plans are disposable—regenerate when wrong. Tests provide backpressure to ensure quality. The loop continues until acceptance criteria are met.
+Ralph operates monolithically on one task at a time, with fresh context per iteration. Plans are disposable-regenerate when wrong. Tests provide backpressure to ensure quality. The loop continues until acceptance criteria are met.
 
 ---
 
@@ -17,7 +17,7 @@ Ralph operates monolithically on one task at a time, with fresh context per iter
 **Goal**: Define WHAT success looks like, not HOW to build it.
 
 **Artifacts**:
-- `specs/sprint2/*.md` and `specs/*.md` (excluding `specs/archive/`) — Feature specifications with acceptance criteria
+- `specs/**/*.md` (excluding `specs/archive/`) — Feature specifications with acceptance criteria
 - Each spec defines a coherent unit of functionality
 
 **Process**:
@@ -68,7 +68,7 @@ Ralph operates monolithically on one task at a time, with fresh context per iter
 - [ ] Implement command palette fuzzy search
   - Tests: AC-2.1 (fuzzy finds with ≤3 keystrokes), AC-2.4 (execution <100ms)
   - Perceptual: None
-  
+
 - [ ] Implement hero turn visual indicator
   - Tests: AC-1.1 (SplitBorder renders), AC-1.4 (accent color applied)
   - Perceptual: AC-PQ.1 (visual hierarchy distinguishes hero turn)
@@ -183,15 +183,13 @@ project/
 ├── RALPHREADME.md          # This document
 ├── AGENTS.md               # Operational notes (how to run/build)
 ├── IMPLEMENTATION_PLAN.md  # Current plan with task list
+├── ARCHIVE.md              # Completed items (when plan grows large)
 ├── PROMPT_plan.md          # Planning prompt
 ├── PROMPT_plan_work.md     # Scoped planning prompt (work branches)
 ├── PROMPT_build.md         # Building prompt
-├── specs/                  # Active specs only
+├── specs/ (active specs anywhere under specs/, archive in specs/archive)
 │   ├── feature-one.md      # Spec with acceptance criteria
-│   └── archive/            # Completed/superseded specs
-│       ├── README.md       # Archive index
-│       └── old-spec.md     # Archived spec
-│       └── IMPLEMENTATION_PLAN_ARCHIVE.md  # Archived plan items
+│   └── feature-two.md      # Another spec
 ├── src/
 │   ├── ...                 # Application code
 │   └── testing/
@@ -199,54 +197,6 @@ project/
 │       └── llm_review.rs   # LLM-as-judge fixture
 └── loop.sh                 # Automation script (optional)
 ```
-
----
-
-## Archiving Policy
-
-### When to Archive
-
-After completing work, archive to keep the active plan focused:
-
-1. **Completed plan items**: Move from `IMPLEMENTATION_PLAN.md` to `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`
-2. **Completed specs**: Move from `specs/*.md` to `specs/archive/`
-3. **Superseded specs**: Move when a newer spec replaces the old one
-
-### How to Archive
-
-**Plan Items**:
-```bash
-# Move completed sections from IMPLEMENTATION_PLAN.md to archive
-# Keep only: Current Blocking Issues, Pending Work, Implementation Order
-```
-
-**Specs**:
-```bash
-# Move completed spec to archive
-mv specs/feature-complete.md specs/archive/
-
-# Update specs/archive/README.md with entry
-```
-
-### Archive Structure
-
-```
-specs/archive/
-├── README.md                        # Index of archived items with dates
-├── IMPLEMENTATION_PLAN_ARCHIVE.md   # Completed plan items
-└── *.md                             # Archived specs
-```
-
-### What Stays Active
-
-- `IMPLEMENTATION_PLAN.md` should contain ONLY:
-  - Current blocking issues (if any)
-  - Pending/in-progress work items
-  - Implementation order for remaining work
-
-- `specs/*.md` should contain ONLY:
-  - Specs with unfinished acceptance criteria
-  - Specs being actively worked on
 
 ---
 
