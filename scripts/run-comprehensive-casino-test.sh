@@ -133,7 +133,7 @@ run_phase_1() {
 
     # Run existing WebSocket stress test as baseline
     echo -e "${CYAN}Running WebSocket baseline test...${NC}"
-    pnpm -C gateway test:stress -- --testPathPattern=websocket-stress 2>&1 | tee "$REPORT_DIR/phase1-websocket.log" || true
+    RUN_STRESS=true pnpm -C gateway exec vitest run tests/stress/websocket-stress.test.ts 2>&1 | tee "$REPORT_DIR/phase1-websocket.log" || true
 
     echo -e "${GREEN}Phase 1 complete${NC}"
     echo ""
@@ -159,7 +159,7 @@ run_phase_2() {
 
     for game in "${GAMES[@]}"; do
         echo -e "${CYAN}Testing $game...${NC}"
-        pnpm -C gateway test:stress -- --testPathPattern="games/$game" 2>&1 | tee "$REPORT_DIR/phase2-$game.log" || true
+        RUN_STRESS=true pnpm -C gateway exec vitest run "games/$game" 2>&1 | tee "$REPORT_DIR/phase2-$game.log" || true
         echo ""
     done
 
@@ -173,13 +173,13 @@ run_phase_3() {
     echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
     echo -e "${CYAN}Running multi-game concurrent test...${NC}"
-    pnpm -C gateway test:stress -- --testPathPattern=multi-game-concurrent 2>&1 | tee "$REPORT_DIR/phase3-concurrent.log" || true
+    RUN_STRESS=true pnpm -C gateway exec vitest run multi-game-concurrent 2>&1 | tee "$REPORT_DIR/phase3-concurrent.log" || true
 
     echo -e "${CYAN}Running sustained load test...${NC}"
-    pnpm -C gateway test:stress -- --testPathPattern=sustained-load 2>&1 | tee "$REPORT_DIR/phase3-sustained.log" || true
+    RUN_STRESS=true pnpm -C gateway exec vitest run sustained-load 2>&1 | tee "$REPORT_DIR/phase3-sustained.log" || true
 
     echo -e "${CYAN}Running peak load test...${NC}"
-    pnpm -C gateway test:stress -- --testPathPattern=peak-load 2>&1 | tee "$REPORT_DIR/phase3-peak.log" || true
+    RUN_STRESS=true pnpm -C gateway exec vitest run peak-load 2>&1 | tee "$REPORT_DIR/phase3-peak.log" || true
 
     echo -e "${GREEN}Phase 3 complete${NC}"
     echo ""
@@ -191,7 +191,7 @@ run_phase_4() {
     echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
     echo -e "${CYAN}Running state consistency tests...${NC}"
-    pnpm -C gateway test:stress -- --testPathPattern=state-verification 2>&1 | tee "$REPORT_DIR/phase4-state.log" || true
+    RUN_STRESS=true pnpm -C gateway exec vitest run state-verification 2>&1 | tee "$REPORT_DIR/phase4-state.log" || true
 
     echo -e "${GREEN}Phase 4 complete${NC}"
     echo ""
@@ -203,10 +203,10 @@ run_phase_5() {
     echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
     echo -e "${CYAN}Running timing edge cases...${NC}"
-    pnpm -C gateway test:stress -- --testPathPattern=edge-cases/timing 2>&1 | tee "$REPORT_DIR/phase5-timing.log" || true
+    RUN_STRESS=true pnpm -C gateway exec vitest run edge-cases/timing 2>&1 | tee "$REPORT_DIR/phase5-timing.log" || true
 
     echo -e "${CYAN}Running balance edge cases...${NC}"
-    pnpm -C gateway test:stress -- --testPathPattern=edge-cases/balance 2>&1 | tee "$REPORT_DIR/phase5-balance.log" || true
+    RUN_STRESS=true pnpm -C gateway exec vitest run edge-cases/balance 2>&1 | tee "$REPORT_DIR/phase5-balance.log" || true
 
     echo -e "${GREEN}Phase 5 complete${NC}"
     echo ""

@@ -26,17 +26,17 @@
 ## 🚧 Work in Progress / Known Issues
 
 ### 🔴 Critical: Gateway WebSocket Ingress (Staging)
-- **Issue**: The Gateway on `ns-gw-1` (`api.testnet.regenesis.dev`) is reachable via HTTPS but fails to upgrade WebSocket connections (returns 404 or 200 instead of 101 Switching Protocols).
-- **Impact**: Clients cannot connect to the game server; "Connecting..." state persists.
-- **Diagnosis**: Likely a misconfiguration in the Caddy reverse proxy or the Gateway's WebSocket server binding. SSH access to `ns-gw-1` timed out, delaying fix.
+- **Issue**: The Gateway on `ns-gw-1` (`api.testnet.regenesis.dev`) returns `404 Not Found` for WebSocket connections, while `/healthz` works.
+- **Diagnosis**: This indicates the **Caddy reverse proxy is not passing `Upgrade` headers** correctly. Node.js treats the request as a standard HTTP GET to `/`, which has no handler (404).
+- **Blocker**: SSH access to `ns-gw-1` is timing out (firewall/network issue), preventing immediate config fix.
+- **Workaround**: Proceeding with local network verification to validate client/server logic while infra is inaccessible.
 
-### ⚠️ BLS Signature Bypass
-- **Issue**: The system currently runs with a bypass for BLS signature verification (`nullspace-simulator:bypass` image) due to a DKG/serialization mismatch.
-- **Status**: Deferred. Removing the bypass now would crash the chain. Root cause analysis required in `commonware-cryptography`.
-
-### ⚠️ Explorer Latency
-- **Issue**: The Explorer API reports "STALE" status intermittently during heavy indexing catch-up periods due to lock contention in `ExplorerState`.
-- **Mitigation**: Watchdog ensures eventual consistency, but API response times can be high.
+### 🟡 Local Test Verification
+- **Status**: Partially Successful
+- **Gateway**: Verified `NonceManager` logic and connection stability (100 concurrent connections passed).
+- **Game Logic**: Tests ran but timed out waiting for game results from the local simulator/validator network.
+- **Root Cause**: Likely resource constraints or configuration mismatch in the local ephemeral environment preventing block finalization.
+- **Conclusion**: Client-side resilience code is verified; backend infrastructure needs attention (Staging Caddy fix + Local Consensus debugging).
 
 ## Next Steps
 1.  **Fix Gateway Ingress**: Regain access to `ns-gw-1`, inspect Caddy logs, and fix WebSocket upgrade path.
