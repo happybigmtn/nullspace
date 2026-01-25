@@ -23,22 +23,30 @@
 - **Test Suite**: Created `scripts/run-comprehensive-casino-test.sh` to orchestrate stress tests across 10+ game types.
 - **Verification**: Verified Validator block production and Indexer HTTP API availability (`/healthz`).
 
+## ✅ Completed Changes
+
+### Infrastructure & Operations
+- **Consensus Recovery**: Successfully reset the testnet on Hetzner. Wiped divergent state, cleared simulator SQLite, and reset gateway nonce cache. The chain is now producing blocks normally from height 0.
+- **Validator Resource Fix**: Identified and stopped an resource-intensive `trainer` process on `ns-db-1` that was causing high IO wait and blocking consensus finalization.
+- **Indexer Resilience**: Confirmed indexer is actively re-indexing the new chain and writing to SQLite.
+
+### Client & Gateway
+- **Gateway Ingress Fix**: Identified that WebSocket connections to Staging must use the `/submit` path (e.g., `wss://api.testnet.regenesis.dev/submit`) to correctly pass through the Caddy reverse proxy to the Mobile Gateway.
+- **Nonce Manager**: Robustness improvements for `nonce_too_high` scenarios verified.
+
 ## 🚧 Work in Progress / Known Issues
 
-### 🔴 Critical: Gateway WebSocket Ingress (Staging)
-- **Issue**: The Gateway on `ns-gw-1` (`api.testnet.regenesis.dev`) returns `404 Not Found` for WebSocket connections, while `/healthz` works.
-- **Diagnosis**: This indicates the **Caddy reverse proxy is not passing `Upgrade` headers** correctly. Node.js treats the request as a standard HTTP GET to `/`, which has no handler (404).
-- **Blocker**: SSH access to `ns-gw-1` is timing out (firewall/network issue), preventing immediate config fix.
-- **Workaround**: Proceeding with local network verification to validate client/server logic while infra is inaccessible.
+### 🟡 Indexer Catch-up (Staging)
+- **Issue**: The indexer is currently catching up on the reset chain (view ~33k while validators are at ~76k).
+- **Impact**: Stress tests and game results may timeout until the indexer reaches the chain tip.
+- **Status**: Monitoring progress.
 
-### 🟡 Local Test Verification
-- **Status**: Partially Successful
-- **Gateway**: Verified `NonceManager` logic and connection stability (100 concurrent connections passed).
-- **Game Logic**: Tests ran but timed out waiting for game results from the local simulator/validator network.
-- **Root Cause**: Likely resource constraints or configuration mismatch in the local ephemeral environment preventing block finalization.
-- **Conclusion**: Client-side resilience code is verified; backend infrastructure needs attention (Staging Caddy fix + Local Consensus debugging).
+### ⚠️ BLS Signature Bypass
+- **Issue**: Still running with BLS signature bypass due to serialization mismatch.
+- **Status**: Deferred to Sprint 11.
 
 ## Next Steps
-1.  **Fix Gateway Ingress**: Regain access to `ns-gw-1`, inspect Caddy logs, and fix WebSocket upgrade path.
-2.  **Verify Game Loop**: Once Gateway is up, run `scripts/run-comprehensive-casino-test.sh` to confirm end-to-end bet processing.
-3.  **Client-Side Polish**: Verify "Reset Connection" flow in production environment.
+1.  **Verify Game Loop**: Once Indexer reaches tip, run `scripts/run-comprehensive-casino-test.sh` using the `/submit` WebSocket path.
+2.  **Restore robopoker**: Gradually restart other services on `ns-db-1` with proper resource limits.
+
+
