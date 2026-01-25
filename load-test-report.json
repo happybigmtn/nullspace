@@ -1,0 +1,36 @@
+{
+    "timestamp": "2026-01-24T21:16:45Z",
+    "passed": false,
+    "quick_mode": true,
+    "configuration": {
+        "gateway_url": "ws://localhost:9010",
+        "gateway_connections_target": 100,
+        "gateway_p99_target_ms": 100,
+        "engine_url": "http://localhost:8080",
+        "engine_rps_target": 50,
+        "engine_p99_target_ms": 200,
+        "load_test_duration_s": 10
+    },
+    "results": {
+        "gateway": {
+    "component": "gateway",
+    "passed": false,
+    "metrics": {
+        "connections_target": 100,
+        "p99_latency_ms": 0,
+        "p99_target_ms": 100,
+        "success_rate": 0,
+        "success_rate_target": 0.95
+    },
+    "tests_passed": 0,
+    "tests_failed": 0,
+    "duration_s": 2
+},
+        "engine": {
+    "component": "engine",
+    "passed": false,
+    "error": "Engine not available at http://localhost:8080",
+    "metrics": {}
+}
+    }
+}

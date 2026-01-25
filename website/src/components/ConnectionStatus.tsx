@@ -159,6 +159,20 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
   const isError = status === 'error' || status === 'offline';
   const canInlineCreate = vaultState.passwordSupported;
 
+  const handleResetConnection = () => {
+    if (!window.confirm('Reset connection data? This will clear pending transactions and refresh.')) return;
+
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('casino_nonce') || key.startsWith('casino_tx'))) {
+        toRemove.push(key);
+      }
+    }
+    toRemove.forEach((k) => localStorage.removeItem(k));
+    window.location.reload();
+  };
+
   const handleVaultSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!password) return;
@@ -378,6 +392,15 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
                 </button>
               </div>
             </form>
+            <div className="pt-4 mt-2 border-t border-black/10 dark:border-white/10">
+              <button
+                type="button"
+                onClick={handleResetConnection}
+                className="w-full text-center text-[10px] text-action-destructive hover:text-action-destructive-hover uppercase tracking-[0.2em]"
+              >
+                Reset Connection Data
+              </button>
+            </div>
             {!vaultExists && !canInlineCreate ? (
               <p className="text-xs text-ns-muted">
                 Passkeys are not available on this device. Open Security to finish setup.

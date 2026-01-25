@@ -222,13 +222,13 @@ describe.skipIf(!STRESS_ENABLED)('WebSocket Stress Tests', () => {
           isGatewayAvailable = true;
           resolve();
         });
-        ws.on('error', () => {
+        ws.on('error', (err) => {
           clearTimeout(timeout);
-          reject(new Error('Gateway connection error'));
+          reject(new Error(`Gateway connection error: ${err.message}`));
         });
       });
-    } catch {
-      console.warn('Gateway not available, skipping stress tests');
+    } catch (e: any) {
+      console.warn(`Gateway not available (${GATEWAY_URL}), skipping stress tests: ${e.message}`);
     }
   }, 10000);
 

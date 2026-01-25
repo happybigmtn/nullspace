@@ -544,6 +544,21 @@ export class NonceManager {
   }
 
   /**
+   * Reset the nonce manager state completely (clears all storage).
+   */
+  reset() {
+    this.resetNonce();
+    this.cleanupAllTransactions();
+    // Clear all nonce/tx keys from storage to be safe
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('casino_nonce') || key.startsWith('casino_tx'))) {
+        localStorage.removeItem(key);
+      }
+    }
+  }
+
+  /**
    * Attempt to resubmit all pending transactions.
    * @returns {Promise<void>}
    * @private
@@ -621,7 +636,7 @@ export class NonceManager {
         ? pendingTxs.filter(tx => tx.nonce >= chainNonce)
         : pendingTxs.filter(tx => tx.nonce >= currentNonce);
 
-      const nonceTooLowPattern = /nonce[_\s-]?too[_\s-]?low|expected=\d+/i;
+      const nonceTooLowPattern = /nonce[_\s-]?too[_\s-]?(?:low|high)|expected=\d+/i;
       for (const txRecord of validPendingTxs) {
         const txData = new Uint8Array(txRecord.txData);
         try {
@@ -712,7 +727,7 @@ export class NonceManager {
         }
       }
 
-      const nonceErrorPattern = /nonce[_\\s-]?too[_\\s-]?low|nonce[_\\s-]?mismatch|expected=\\d+/i;
+      const nonceErrorPattern = /nonce[_\\s-]?too[_\\s-]?(?:low|high)|nonce[_\\s-]?mismatch|expected=\\d+/i;
       const maxAttempts = 2;
 
       for (let attempt = 0; attempt < maxAttempts; attempt++) {

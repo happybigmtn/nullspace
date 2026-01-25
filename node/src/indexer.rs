@@ -33,7 +33,7 @@ use std::{
     pin::Pin,
     sync::atomic::AtomicU64,
     task::{Context, Poll},
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 use tracing::{error, info, warn};
 
@@ -256,7 +256,24 @@ where
                 let mempool_connected = mempool_connected_inner;
                 let mempool_connected_updated_ms = mempool_connected_updated_ms_inner;
                 let mut backoff = Duration::from_millis(200);
+                let mut last_connected = Instant::now();
+                const MAX_DISCONNECT_DURATION: Duration = Duration::from_secs(60);
+
                 loop {
+                    // Check if we've been disconnected too long
+                    if mempool_connected.get() == 0 {
+                        let disconnected_duration = last_connected.elapsed();
+                        if disconnected_duration > MAX_DISCONNECT_DURATION {
+                            error!(
+                                ?disconnected_duration,
+                                "mempool connection lost for too long; exiting process to force restart"
+                            );
+                            // Give logs a moment to flush
+                            context.sleep(Duration::from_millis(500)).await;
+                            std::process::exit(1);
+                        }
+                    }
+
                     // Try to connect
                     connect_attempts.inc();
                     match indexer.listen_mempool().await {
@@ -265,11 +282,15 @@ where
                             info!("connected to mempool stream");
                             mempool_connected.set(1);
                             mempool_connected_updated_ms.set(system_time_ms(context.current()));
+                            last_connected = Instant::now(); // Reset watchdog
                             let mut stream = Box::pin(stream);
                             backoff = Duration::from_millis(200);
 
                             // Forward transactions until stream fails
                             while let Some(result) = stream.next().await {
+                                // Update watchdog on activity
+                                last_connected = Instant::now();
+                                
                                 match result {
                                     Ok(pending) => {
                                         // Batch verify transactions
