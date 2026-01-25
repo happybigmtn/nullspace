@@ -34,6 +34,14 @@
 - **Gateway Ingress Fix**: Identified that WebSocket connections to Staging must use the `/submit` path (e.g., `wss://api.testnet.regenesis.dev/submit`) to correctly pass through the Caddy reverse proxy to the Mobile Gateway.
 - **Nonce Manager**: Robustness improvements for `nonce_too_high` scenarios verified.
 
+## 🚀 Deployment Status
+
+### testnet.regenesis.dev (Staging)
+- **Website**: 🟡 **PENDING DEPLOY** (Currently `177f8ed`, waiting for CI to build `6fa0450`).
+- **Gateway**: 🟡 **PENDING DEPLOY** (Running `local` tag).
+- **Simulator**: 🟡 **PENDING DEPLOY** (Running `bypass` image, waiting for CI to build `6fa0450`).
+- **Validators**: ✅ **UPDATED** (Running `sha-569e67e`).
+
 ## 🚧 Work in Progress / Known Issues
 
 ### 🟡 Indexer Catch-up (Staging)
