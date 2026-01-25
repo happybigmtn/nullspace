@@ -17,9 +17,16 @@ Services & URLs:
 
 - Website: https://testnet.regenesis.dev (ns-gw-1:8080)
 - Gateway: https://api.testnet.regenesis.dev (ns-gw-1:9010)
+  - WebSocket (Game/Submit): `wss://api.testnet.regenesis.dev/submit`
+  - WebSocket (Updates): `wss://api.testnet.regenesis.dev/updates/<filter>`
 - Indexer: https://indexer.testnet.regenesis.dev (ns-sim-1:8080)
 - Auth: https://auth.testnet.regenesis.dev (ns-auth-1:4000)
 - Convex: https://convex.testnet.regenesis.dev (ns-db-1:3210)
+
+Client Troubleshooting:
+
+- **Stuck Connection**: If users are stuck on "Connecting..." or seeing repeated nonce errors, use the **"Reset Connection Data"** button in the Vault modal (top-right status pill). This clears local storage and forces a fresh sync.
+- **WebSocket 404**: Ensure clients are connecting to `/submit` or `/updates/*`. The root path `/` on the Gateway does not handle WebSockets and will return 404/502 behind Caddy.
 
 Hetzner CLI (firewall/server management):
 

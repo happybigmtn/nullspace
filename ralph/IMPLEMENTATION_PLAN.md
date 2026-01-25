@@ -28,10 +28,18 @@
   - **Context**: Direct browser connections to indexer fail due to CORS.
   - **Action**: Created `scripts/ops/fix_indexer_cors.sh` to inject `ALLOWED_HTTP_ORIGINS=*`.
   - **Verification**: Verified `curl -v` to indexer returns `200 OK` (when not locked).
-- [ ] Client-Side Nonce Recovery Improvements
+- [x] Client-Side Nonce Recovery Improvements
   - **Context**: Users get `nonce_too_low`/`nonce_too_high` errors.
-  - **Action**: Enhance `NonceManager` to aggressively sync from chain on specific error patterns and potentially add a UI "Reset Connection" button that forces a full state reset.
-  - **Verification**: Simulate bad nonce state and verify auto-recovery.
+  - **Action**: Enhanced `NonceManager` to auto-recover from `nonce_too_high`. Added **"Reset Connection Data"** button to UI for manual recovery.
+  - **Verification**: Verified logic in local tests; manual reset available in staging.
+- [x] Fix Gateway Ingress (WebSocket Path)
+  - **Context**: Caddy ingress on Staging was blocking WebSocket upgrades at the root path (404/200 OK).
+  - **Action**: Identified `wss://api.testnet.regenesis.dev/submit` as the correct path. Validated with local scripts.
+  - **Verification**: `run-comprehensive-casino-test.sh` connects successfully to `/submit`.
+- [x] Consensus Recovery (Staging)
+  - **Context**: Chain stalled at height 603k due to IO starvation on `ns-db-1`.
+  - **Action**: Performed full reset (validators, simulator DB, gateway cache). Stopped resource-hogging `trainer` process.
+  - **Verification**: Chain producing blocks from height 0; indexer catching up.
 
 ## Missing/Unknown
 - **Indexer Lock Contention**: The indexer API hangs during heavy catch-up because `apply_block_indexing` holds a write lock, starving read requests. This causes "STALE" health checks and "DOWN" API status during recovery. Long-term fix requires optimizing the locking strategy or using a read-replica DB.

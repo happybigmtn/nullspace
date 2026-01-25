@@ -36,6 +36,11 @@
     the web client is pointing at the indexer directly and cannot submit transactions.
   - Fix by routing through the gateway or same-origin `/api` proxy (see Permanent Fix below).
 
+### Client-Side Reset & Recovery
+If a user is stuck in a bad state (e.g., "nonce too low" loop or perpetual "Connecting..."):
+1.  **"Reset Connection Data"**: Open the Vault modal (click the status pill in the top right) and click the **"Reset Connection Data"** button at the bottom. This clears `localStorage` (nonces, pending txs) and reloads the page.
+2.  **Verify Gateway Path**: Ensure the client is connecting to `wss://api.testnet.regenesis.dev/submit`. Connecting to the root `/` will fail with 404.
+
 **Permanent Fix**
 - Mempool self-healing was added in `node/src/application/mempool.rs`: if the queue is empty or stale while tracked transactions exist, rebuild the queue and retry `peek_batch`.
 - Deploy the new node image to staging (via `deploy-staging.yml`) so proposers always see candidates.
