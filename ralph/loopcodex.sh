@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Ralph loop runner using Codex CLI (gpt-5.2-codex)
 # Usage: ./loopcodex.sh [mode] [max_iterations]
 # Examples:
 #   ./loopcodex.sh                        # Build mode, unlimited iterations
@@ -7,6 +8,8 @@
 #   ./loopcodex.sh plan 5                 # Plan mode, max 5 iterations
 #   ./loopcodex.sh plan-work "scope"      # Scoped planning for work branch
 #   ./loopcodex.sh plan-work "scope" 3    # Scoped planning, max 3 iterations
+
+set -euo pipefail
 
 # Colors for output
 CYAN='\033[0;36m'
@@ -17,213 +20,306 @@ DIM='\033[0;90m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Filter function to extract readable output from Codex JSONL
-filter_output() {
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
+# Resolve script directory and repo root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-        # Validate JSON before parsing
-        if ! echo "$line" | jq -e . >/dev/null 2>&1; then
+# Configuration
+LOG_DIR="$SCRIPT_DIR/logs"
+
+# Codex configuration
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.2-codex}"
+CODEX_REASONING="${CODEX_REASONING:-high}"
+
+# Find IMPLEMENTATION_PLAN.md - check repo root first, then ralph/ (matches loopclaude.sh)
+if [[ -f "$REPO_ROOT/IMPLEMENTATION_PLAN.md" ]]; then
+    PLAN_FILE="$REPO_ROOT/IMPLEMENTATION_PLAN.md"
+elif [[ -f "$SCRIPT_DIR/IMPLEMENTATION_PLAN.md" ]]; then
+    PLAN_FILE="$SCRIPT_DIR/IMPLEMENTATION_PLAN.md"
+else
+    echo -e "${RED}✗ Error: IMPLEMENTATION_PLAN.md not found${NC}"
+    echo -e "${DIM}  Checked: $REPO_ROOT/IMPLEMENTATION_PLAN.md${NC}"
+    echo -e "${DIM}  Checked: $SCRIPT_DIR/IMPLEMENTATION_PLAN.md${NC}"
+    exit 1
+fi
+
+# Filter function to colorize and format Codex output
+filter_output() {
+    local line_count=0
+    local in_code_block=0
+    local last_was_empty=0
+
+    while IFS= read -r line; do
+        line_count=$((line_count + 1))
+
+        # Skip excessive empty lines
+        if [[ -z "$line" ]] || [[ "$line" =~ ^[[:space:]]*$ ]]; then
+            if [[ "$last_was_empty" -eq 1 ]]; then
+                continue
+            fi
+            last_was_empty=1
+            echo ""
+            continue
+        fi
+        last_was_empty=0
+
+        # Track code blocks
+        if [[ "$line" == '```'* ]]; then
+            if [[ "$in_code_block" -eq 0 ]]; then
+                in_code_block=1
+                echo -e "${DIM}$line${NC}"
+            else
+                in_code_block=0
+                echo -e "${DIM}$line${NC}"
+            fi
             continue
         fi
 
-        type=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
+        # Inside code block - show dimmed
+        if [[ "$in_code_block" -eq 1 ]]; then
+            echo -e "${DIM}  $line${NC}"
+            continue
+        fi
 
-        case "$type" in
-            "thread.started")
-                echo -e "${DIM}🔧 Session initialized${NC}"
+        # Colorize based on content patterns
+        case "$line" in
+            # Tool/action indicators
+            *"Reading"*|*"reading"*)
+                echo -e "${DIM}📖 $line${NC}"
                 ;;
-            "item.started"|"item.completed")
-                item_type=$(echo "$line" | jq -r '.item.type // empty' 2>/dev/null)
-                case "$item_type" in
-                    "agent_message")
-                        if [[ "$type" == "item.completed" ]]; then
-                            text=$(echo "$line" | jq -r '.item.text // empty' 2>/dev/null | tr '\n' ' ' | head -c 120)
-                            if [[ -n "$text" ]]; then
-                                echo -e "${CYAN}▸${NC} ${text}..."
-                            fi
-                        fi
-                        ;;
-                    "command_execution")
-                        if [[ "$type" == "item.started" ]]; then
-                            cmd=$(echo "$line" | jq -r '.item.command // empty' 2>/dev/null | head -c 80)
-                            [[ -n "$cmd" ]] && echo -e "${YELLOW}⚡ Running${NC} ${DIM}${cmd}${NC}"
-                        fi
-                        ;;
-                    "file_change")
-                        if [[ "$type" == "item.completed" ]]; then
-                            file=$(echo "$line" | jq -r '.item.path // .item.file_path // .item.file // empty' 2>/dev/null | xargs basename 2>/dev/null | head -1)
-                            [[ -n "$file" ]] && echo -e "${GREEN}✏️  Editing${NC} $file"
-                        fi
-                        ;;
-                    "mcp_tool_call"|"tool_call")
-                        if [[ "$type" == "item.started" ]]; then
-                            tool=$(echo "$line" | jq -r '.item.tool // .item.name // empty' 2>/dev/null | head -c 50)
-                            [[ -n "$tool" ]] && echo -e "${DIM}🔧 ${tool}${NC}"
-                        fi
-                        ;;
-                    "web_search")
-                        if [[ "$type" == "item.started" ]]; then
-                            query=$(echo "$line" | jq -r '.item.query // empty' 2>/dev/null | head -c 50)
-                            [[ -n "$query" ]] && echo -e "${DIM}🔍 Searching${NC} ${query}"
-                        fi
-                        ;;
-                    "plan_update")
-                        if [[ "$type" == "item.completed" ]]; then
-                            echo -e "${CYAN}📋 Updating plan${NC}"
-                        fi
-                        ;;
-                    "reasoning")
-                        ;;
-                    *)
-                        if [[ "$type" == "item.completed" && -n "$item_type" ]]; then
-                            echo -e "${DIM}🔧 ${item_type}${NC}"
-                        fi
-                        ;;
-                esac
+            *"Writing"*|*"writing"*|*"Creating"*|*"creating"*)
+                echo -e "${GREEN}📝 $line${NC}"
                 ;;
-            "turn.completed")
-                in_tokens=$(echo "$line" | jq -r '.usage.input_tokens // 0' 2>/dev/null)
-                out_tokens=$(echo "$line" | jq -r '.usage.output_tokens // 0' 2>/dev/null)
-                total_tokens=$(echo "$line" | jq -r '.usage.total_tokens // empty' 2>/dev/null)
-                if [[ -z "$total_tokens" || "$total_tokens" == "null" ]]; then
-                    total_tokens=$((in_tokens + out_tokens))
+            *"Editing"*|*"editing"*|*"Updating"*|*"updating"*|*"Modified"*|*"modified"*)
+                echo -e "${GREEN}✏️  $line${NC}"
+                ;;
+            *"Running"*|*"running"*|*"Executing"*|*"executing"*)
+                echo -e "${YELLOW}⚡ $line${NC}"
+                ;;
+            *"Searching"*|*"searching"*|*"Looking"*|*"looking"*|*"Finding"*|*"finding"*)
+                echo -e "${DIM}🔍 $line${NC}"
+                ;;
+            *"Testing"*|*"testing"*|*"Test"*|*"test "*|*"tests"*)
+                echo -e "${CYAN}🧪 $line${NC}"
+                ;;
+            *"Commit"*|*"commit"*|*"Git"*|*"git "*)
+                echo -e "${CYAN}📦 $line${NC}"
+                ;;
+
+            # Status indicators
+            *"✓"*|*"Success"*|*"success"*|*"Complete"*|*"complete"*|*"Done"*|*"done"*|*"Pass"*|*"PASS"*)
+                echo -e "${GREEN}$line${NC}"
+                ;;
+            *"✗"*|*"Error"*|*"error"*|*"Fail"*|*"fail"*|*"FAIL"*)
+                echo -e "${RED}$line${NC}"
+                ;;
+            *"Warning"*|*"warning"*|*"TODO"*|*"FIXME"*|*"Skip"*|*"skip"*)
+                echo -e "${YELLOW}$line${NC}"
+                ;;
+            *"Note:"*|*"INFO"*|*"Hint:"*)
+                echo -e "${DIM}$line${NC}"
+                ;;
+
+            # Task/file references
+            *"P1-"*|*"P2-"*|*"P3-"*|*"P4-"*|*"P5-"*)
+                echo -e "${CYAN}▸ $line${NC}"
+                ;;
+            *".ts"*|*".tsx"*|*".rs"*|*".md"*|*".json"*)
+                echo -e "${DIM}  $line${NC}"
+                ;;
+
+            # Headers and sections
+            \#\#*)
+                echo -e "${BOLD}${CYAN}$line${NC}"
+                ;;
+            \#*)
+                echo -e "${BOLD}$line${NC}"
+                ;;
+            "---"*|"==="*|"━"*)
+                echo -e "${DIM}$line${NC}"
+                ;;
+
+            # Bullet points
+            "- ["*"]"*)
+                if [[ "$line" == *"[x]"* ]]; then
+                    echo -e "${GREEN}$line${NC}"
+                else
+                    echo -e "${YELLOW}$line${NC}"
                 fi
-                if [[ -n "$total_tokens" && "$total_tokens" != "0" ]]; then
-                    echo -e "${DIM}📊 Tokens: in=${in_tokens} out=${out_tokens} total=${total_tokens}${NC}"
-                fi
                 ;;
-            "turn.failed"|"error")
-                msg=$(echo "$line" | jq -r '.error.message // .message // empty' 2>/dev/null | head -c 200)
-                [[ -n "$msg" ]] && echo -e "${RED}✗ Error: ${msg}${NC}"
+            "- "*|"* "*)
+                echo -e "  $line"
+                ;;
+
+            # Default
+            *)
+                echo "  $line"
                 ;;
         esac
     done
 }
 
-# Resolve script directory for prompt paths
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Parse arguments
+# Determine prompt file based on mode
+MODE="build"
 WORK_SCOPE=""
-if [ "$1" = "plan" ]; then
-    # Plan mode
+PROMPT_FILE="$SCRIPT_DIR/PROMPT_build.md"
+MAX_ITERATIONS=0  # 0 = unlimited
+
+if [[ "${1:-}" == "plan" ]]; then
     MODE="plan"
     PROMPT_FILE="$SCRIPT_DIR/PROMPT_plan.md"
     MAX_ITERATIONS=${2:-0}
-elif [ "$1" = "plan-work" ]; then
-    # Scoped plan mode for work branches
+elif [[ "${1:-}" == "plan-work" ]]; then
     MODE="plan-work"
     PROMPT_FILE="$SCRIPT_DIR/PROMPT_plan_work.md"
-    WORK_SCOPE="$2"
+    WORK_SCOPE="${2:-}"
     MAX_ITERATIONS=${3:-0}
-    if [ -z "$WORK_SCOPE" ]; then
+    if [[ -z "$WORK_SCOPE" ]]; then
         echo -e "${RED}✗ Error: plan-work requires a scope description${NC}"
         echo -e "${DIM}Usage: ./loopcodex.sh plan-work \"description of work scope\"${NC}"
         exit 1
     fi
-elif [[ "$1" =~ ^[0-9]+$ ]]; then
-    # Build mode with max iterations
-    MODE="build"
-    PROMPT_FILE="$SCRIPT_DIR/PROMPT_build.md"
+elif [[ "${1:-}" =~ ^[0-9]+$ ]]; then
     MAX_ITERATIONS=$1
-else
-    # Build mode, unlimited (no arguments or invalid input)
-    MODE="build"
-    PROMPT_FILE="$SCRIPT_DIR/PROMPT_build.md"
-    MAX_ITERATIONS=0
 fi
 
-ITERATION=0
-CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
+mkdir -p "$LOG_DIR"
 
-# Temp file for raw output (for completion detection)
-RAWFILE=$(mktemp)
-trap "rm -f $RAWFILE" EXIT
+count_remaining() {
+    grep -c '^- \[ \]' "$PLAN_FILE" 2>/dev/null || echo "0"
+}
 
-echo -e "${BOLD}🚀 Starting Ralph (Codex)${NC}"
-echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "Mode:   ${CYAN}$MODE${NC}"
-echo -e "Prompt: ${DIM}$PROMPT_FILE${NC}"
-echo -e "Root:   ${DIM}$REPO_ROOT${NC}"
-echo -e "Branch: ${GREEN}$CURRENT_BRANCH${NC}"
-[ -n "$WORK_SCOPE" ] && echo -e "Scope:  ${YELLOW}$WORK_SCOPE${NC}"
-[ $MAX_ITERATIONS -gt 0 ] && echo -e "Max:    ${YELLOW}$MAX_ITERATIONS iterations${NC}"
-echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
+count_completed() {
+    grep -c '^- \[x\]' "$PLAN_FILE" 2>/dev/null || echo "0"
+}
 
-# Verify prompt file exists
-if [ ! -f "$PROMPT_FILE" ]; then
+count_blocked() {
+    grep -c 'Blocked:' "$PLAN_FILE" 2>/dev/null || echo "0"
+}
+
+# Verify files exist
+if [[ ! -f "$PROMPT_FILE" ]]; then
     echo -e "${RED}✗ Error: $PROMPT_FILE not found${NC}"
     exit 1
 fi
 
+# Header
+CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "unknown")
+echo ""
+echo -e "${BOLD}🚀 Ralph Loop (Codex)${NC}"
+echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "Mode:      ${CYAN}$MODE${NC}"
+echo -e "Model:     ${GREEN}$CODEX_MODEL${NC} ${DIM}(reasoning=$CODEX_REASONING)${NC}"
+echo -e "Branch:    ${GREEN}$CURRENT_BRANCH${NC}"
+echo -e "Prompt:    ${DIM}$(basename "$PROMPT_FILE")${NC}"
+echo -e "Plan:      ${DIM}$PLAN_FILE${NC}"
+[[ -n "$WORK_SCOPE" ]] && echo -e "Scope:     ${YELLOW}$WORK_SCOPE${NC}"
+[[ "$MAX_ITERATIONS" -gt 0 ]] && echo -e "Max:       ${YELLOW}$MAX_ITERATIONS iterations${NC}"
+[[ "$MAX_ITERATIONS" -eq 0 ]] && echo -e "Max:       ${DIM}unlimited${NC}"
+echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+
+iteration=0
 while true; do
-    if [ $MAX_ITERATIONS -gt 0 ] && [ $ITERATION -ge $MAX_ITERATIONS ]; then
-        echo -e "${YELLOW}⚠ Reached max iterations: $MAX_ITERATIONS${NC}"
+    iteration=$((iteration + 1))
+    remaining=$(count_remaining)
+    completed=$(count_completed)
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    log_file="$LOG_DIR/codex-${iteration}-${timestamp}.log"
+
+    echo -e "${BOLD}${CYAN}═══════════════════════ LOOP $iteration ═══════════════════════${NC}"
+    echo -e "  Remaining: ${YELLOW}$remaining${NC} | Completed: ${GREEN}$completed${NC}"
+    echo ""
+
+    if [[ "$remaining" -eq 0 ]]; then
+        echo -e "${GREEN}✓ All tasks complete!${NC}"
         break
     fi
 
-    # Run Ralph iteration with selected prompt
-    # --json: Structured JSONL output for logging/monitoring
-    # --sandbox danger-full-access: Full access (use only in controlled environments)
-    # -a never: Non-interactive automation
-    if [ -n "$WORK_SCOPE" ]; then
-        # Prepend scope to plan-work prompt
-        { echo "## Work Scope: $WORK_SCOPE"; echo ""; cat "$PROMPT_FILE"; } | codex \
-            -a never \
-            -s danger-full-access \
-            -C "$REPO_ROOT" \
-            exec \
-            --json \
-            - 2>&1 | tee "$RAWFILE" | filter_output
+    if [[ "$MAX_ITERATIONS" -gt 0 ]] && [[ "$iteration" -gt "$MAX_ITERATIONS" ]]; then
+        echo -e "${YELLOW}⚠ Max iterations ($MAX_ITERATIONS) reached. $remaining tasks remaining.${NC}"
+        exit 1
+    fi
+
+    # Build prompt with scope substitution for plan-work mode
+    if [[ "$MODE" == "plan-work" ]]; then
+        export WORK_SCOPE
+        prompt_content=$(envsubst < "$PROMPT_FILE")
     else
-        cat "$PROMPT_FILE" | codex \
-            -a never \
-            -s danger-full-access \
-            -C "$REPO_ROOT" \
-            exec \
-            --json \
-            - 2>&1 | tee "$RAWFILE" | filter_output
+        prompt_content=$(cat "$PROMPT_FILE")
     fi
 
-    # Check for completion signal
-    if grep -qE '<promise>COMPLETE</promise>' "$RAWFILE" 2>/dev/null; then
-        echo -e "${GREEN}✅ All tasks complete!${NC}"
-        break
+    # Capture plan hash before run (for plan mode progress detection)
+    plan_hash_before=$(md5sum "$PLAN_FILE" | cut -d' ' -f1)
+
+    # Run Codex CLI from repo root
+    echo -e "${DIM}Running Codex from $REPO_ROOT...${NC}"
+    start_time=$(date +%s)
+
+    pushd "$REPO_ROOT" > /dev/null
+
+    # Run Codex with reasoning level, pipe through filter, save to log
+    if codex exec \
+        --dangerously-bypass-approvals-and-sandbox \
+        -m "$CODEX_MODEL" \
+        -c "reasoning=$CODEX_REASONING" \
+        "$prompt_content" 2>&1 | tee "$log_file" | filter_output; then
+        echo ""
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
+        echo -e "${GREEN}✓ Codex completed${NC} ${DIM}(${duration}s)${NC}"
+    else
+        echo ""
+        echo -e "${YELLOW}⚠ Codex exited with error, checking if progress was made...${NC}"
     fi
+    popd > /dev/null
 
-    # Commit + push changes after each iteration (build mode only, opt-in)
-    if [ "$MODE" = "build" ]; then
-        if [ "${AUTO_GIT:-0}" = "1" ]; then
-            # Create a checkpoint commit if there are any changes (including untracked).
-            if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
-                ts=$(date +"%Y-%m-%d %H:%M:%S")
-                msg="loop: iteration $((ITERATION + 1)) @ $ts"
-                echo -e "${DIM}📦 Committing checkpoint: ${msg}${NC}"
-                git -C "$REPO_ROOT" add -A
-                git -C "$REPO_ROOT" commit -m "$msg" 2>&1 | head -5 || {
-                    echo -e "${YELLOW}⚠ Commit failed; leaving changes uncommitted${NC}"
-                }
-            else
-                echo -e "${DIM}✓ No changes to commit${NC}"
-            fi
-
-            echo -e "${DIM}📤 Pushing to origin/$CURRENT_BRANCH...${NC}"
-            git -C "$REPO_ROOT" push origin "$CURRENT_BRANCH" 2>&1 | head -3 || {
-                echo -e "${YELLOW}Creating remote branch...${NC}"
-                git -C "$REPO_ROOT" push -u origin "$CURRENT_BRANCH" 2>&1 | head -3
-            }
+    # Check progress - different logic for plan vs build mode
+    if [[ "$MODE" == "plan" ]] || [[ "$MODE" == "plan-work" ]]; then
+        # Plan mode: progress = file was modified
+        plan_hash_after=$(md5sum "$PLAN_FILE" | cut -d' ' -f1)
+        if [[ "$plan_hash_after" == "$plan_hash_before" ]]; then
+            echo -e "${RED}✗ No progress made this iteration (plan unchanged)${NC}"
+            echo -e "${DIM}  Check log: $log_file${NC}"
+            echo -e "${DIM}  Waiting 10s before retry...${NC}"
+            sleep 10
         else
-            echo -e "${DIM}↪ Skipping commit/push (set AUTO_GIT=1 to enable)${NC}"
+            new_remaining=$(count_remaining)
+            echo -e "${GREEN}✓ Plan updated: $remaining -> $new_remaining tasks${NC}"
         fi
     else
-        echo -e "${DIM}↪ Skipping commit/push in $MODE mode${NC}"
+        # Build mode: progress = tasks completed
+        new_remaining=$(count_remaining)
+        if [[ "$new_remaining" -eq "$remaining" ]]; then
+            echo -e "${RED}✗ No progress made this iteration${NC}"
+            echo -e "${DIM}  Check log: $log_file${NC}"
+            echo -e "${DIM}  Waiting 10s before retry...${NC}"
+            sleep 10
+        else
+            tasks_done=$((remaining - new_remaining))
+            echo -e "${GREEN}✓ Progress: $tasks_done task(s) completed ($remaining -> $new_remaining)${NC}"
+        fi
     fi
 
-    ITERATION=$((ITERATION + 1))
+    # Auto-commit if enabled (from repo root)
+    if [[ "${RALPH_AUTOCOMMIT:-0}" == "1" ]] && [[ "$MODE" == "build" ]]; then
+        if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
+            ts=$(date +"%Y-%m-%d %H:%M:%S")
+            msg="loop: iteration $iteration @ $ts (codex)"
+            echo -e "${DIM}📦 Committing: $msg${NC}"
+            git -C "$REPO_ROOT" add -A && git -C "$REPO_ROOT" commit -m "$msg" || echo -e "${YELLOW}⚠ Commit failed${NC}"
+        fi
+    fi
+
     echo ""
-    echo -e "${BOLD}${CYAN}═══════════════════════ LOOP $ITERATION ═══════════════════════${NC}"
-    echo ""
+    sleep 2
 done
+
+echo ""
+echo -e "${BOLD}${GREEN}═══════════════════════ COMPLETE ═══════════════════════${NC}"
+echo -e "  Total iterations: ${CYAN}$iteration${NC}"
+echo -e "  Tasks completed:  ${GREEN}$(count_completed)${NC}"
+echo -e "  Tasks remaining:  ${YELLOW}$(count_remaining)${NC}"
+echo -e "  Tasks blocked:    ${RED}$(count_blocked)${NC}"
+echo -e "  Logs:             ${DIM}$LOG_DIR/${NC}"
+echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
