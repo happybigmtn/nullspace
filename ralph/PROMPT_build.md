@@ -1,54 +1,47 @@
-## Phase 3: Building (Ralph)
+0a. Study @IMPLEMENTATION_PLAN.md to understand what needs to be built.
+0b. Reference `specs/*` as needed (read specific files, don't bulk-scan).
+0c. Nullspace is a Solana-based application. Source in `programs/`, `sdk/`, and `app/`.
 
-**Goal**: Implement the next plan item with tests as backpressure.
+## Task Selection
 
-### Scope Lock (Non-Negotiable)
-- Implement code/tests **only** for the next unchecked task in `IMPLEMENTATION_PLAN.md`.
-- Do **not** implement extra features “since you’re here”.
-- Do **not** change specs to match code unless explicitly instructed.
+1. Find unchecked tasks (`- [ ]`) in @IMPLEMENTATION_PLAN.md
+2. Choose ONE task with clear implementation scope
+3. Search codebase before assuming something is missing
+4. Use up to 10 parallel subagents for searches, 1 for builds/tests
 
-### Hard Rules (Prevent Sloppy Builds)
-- **Single-task focus**: pick exactly ONE unchecked task; do not progress multiple tasks per iteration.
-- **Spec-grounded**: only implement behaviors explicitly required by the task’s cited ACs.
-- **No phantom criteria**: don’t introduce new ACs/PQ tests unless present in specs.
-- **No drive-by refactors**: avoid unrelated formatting/churn.
+## Required Tests
 
-### Test Output Rules (Token Conservation)
-- **Only show FAILING test output** — passing tests waste tokens
-- For passing tests, summarize: "✓ N tests passed"
-- If test output exceeds 50 lines, show only failures and error messages
-- Never dump full test logs into context
+Each task has "Required Tests:" — implement these. Tests are NOT optional.
+Task complete ONLY when required tests exist AND pass.
 
-### Build Process (Must Follow)
-1. Identify the next unchecked task in `IMPLEMENTATION_PLAN.md` and quote:
-   - task text
-   - cited spec paths + AC IDs
-2. Search the codebase (and `vendor/robopoker`, `vendor/codex-rs/.../tui2`) before writing new primitives.
-3. Implement the minimal code to satisfy the cited ACs.
-4. Implement the exact tests/backpressure specified by the plan entry.
-5. Run the smallest relevant validation command(s) first.
-6. Update `IMPLEMENTATION_PLAN.md` only if you learned something that changes required backpressure.
+## Targeted Testing (CRITICAL)
 
-### Output Requirement
-At the end of the iteration, print:
-- Files changed
-- Tests/commands run and results
-- Which single plan checkbox is now complete
+Run ONLY tests for YOUR specific task — nothing else.
 
-### Archiving Completed Work
-When a task or spec is fully complete:
+**NEVER run workspace-level commands:**
+✗ `cargo test` (runs all Rust tests)
+✗ `cargo test-sbf` (runs all on-chain tests)
+✗ `npm test` (runs all JS tests)
+✗ `pnpm test` (runs all workspace tests)
 
-1. **Completed plan items**: Move the completed section from `IMPLEMENTATION_PLAN.md` to `specs/archive/IMPLEMENTATION_PLAN_ARCHIVE.md`
-2. **Completed specs**: Move from `specs/*.md` to `specs/archive/` and update `specs/archive/README.md`
-3. Keep `IMPLEMENTATION_PLAN.md` focused on current blocking issues and pending work only
+**ALWAYS use filters:**
+✓ `cargo check` - Fast syntax/type check
+✓ `cargo test specific_test_name` - One Rust test only
+✓ `npm test -- --testPathPattern="feature"` - Filtered JS tests
+✓ `cargo test-sbf -- test_specific_instruction` - One on-chain test
 
-### Completion Signal (Critical)
-- Run `grep -c '\- \[ \]' IMPLEMENTATION_PLAN.md` before considering completion
-- ONLY output `<promise>COMPLETE</promise>` if this returns `0` (zero unchecked tasks)
-- Do **NOT** confuse "current sprint complete" with "all work complete"
-- After completing your ONE task, the iteration ends naturally—just stop
-- The loop script handles restarting for the next task automatically
-- Completing a sprint does NOT mean all work is done—check ALL sprints
+IGNORE unrelated test failures — document them as new tasks.
 
-### Commit Policy
-- Do **not** commit/push unless the user explicitly requests it.
+## Marking Complete
+
+1. BEFORE committing, edit @IMPLEMENTATION_PLAN.md
+2. Change `- [ ] ...` to `- [x] ...`
+3. Then `git add -A`, `git commit -m "feat: description"`
+
+## Rules
+
+- CRITICAL: Required tests MUST exist and MUST pass before committing
+- CRITICAL: Run TARGETED tests only — never workspace-level commands
+- CRITICAL: Mark task complete in IMPLEMENTATION_PLAN.md before committing
+- Important: No placeholders, stubs, or TODOs - implement completely
+- Note: Document unrelated test failures as new tasks in IMPLEMENTATION_PLAN.md

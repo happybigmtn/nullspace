@@ -26,9 +26,10 @@
 2. Compare those ACs to the current plan and identify gaps or incorrect mappings.
 3. For each gap, add/update exactly one plan task with:
    - **Specs**: spec file path(s)
-   - **Tests/backpressure**: 1–3 checks derived directly from the cited ACs
+   - **Tests/backpressure**: 1–3 TARGETED checks with exact test commands (e.g., `cargo test test_hand_evaluation`)
    - **Perceptual**: only if the cited specs explicitly define a perceptual AC (e.g., `AC-PQ.1`)
 4. Prefer smaller, testable tasks over giant milestones.
+5. Each test requirement MUST include the specific command with filter — avoid "run all tests" requirements.
 
 ### Task Format (Required)
 Use this format for each task:

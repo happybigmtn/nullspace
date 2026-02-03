@@ -533,11 +533,15 @@
       - Type coercion safety
       - Injection attack prevention (SQL injection, XSS, prototype pollution)
     - Tests: `cargo test -p nullspace-types proptest_fuzz` (20 tests), `pnpm -C gateway test` (278 tests including 43 fuzz tests)
-- [ ] Add staging pipeline smoke tests and regression gates
+- [x] Add staging pipeline smoke tests and regression gates
   - Specs: `specs/sprint-09-production-readiness.md` AC-9.5
   - Tests/backpressure:
     - Programmatic: `scripts/agent-review.sh`
   - Perceptual: None
+  - **Completed**: Added comprehensive staging pipeline infrastructure:
+    - `ralph/scripts/staging-smoke-test.sh`: Orchestration script running health checks, regression detection via agent-review.sh, and core test suite. Supports --quick, --report, --ci modes. Outputs JSON report with pass/fail/warn status per check.
+    - `.github/workflows/staging-smoke-tests.yml`: CI workflow with 6 parallel jobs (RegressionGates, BuildVerification, GatewayVerification, ProtocolVerification, ExecutionSmoke, ObservabilityValidation). Regression thresholds: >100 high-severity = fail, >50 = warn. Summary job aggregates results and gates deployment.
+    - Tests: `./scripts/staging-smoke-test.sh --quick` runs in ~1s with regression detection and health checks
 
 ## Missing/Unknown
 - None
