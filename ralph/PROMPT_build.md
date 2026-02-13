@@ -38,6 +38,14 @@ IGNORE unrelated test failures — document them as new tasks.
 2. Change `- [ ] ...` to `- [x] ...`
 3. Then `git add -A`, `git commit -m "feat: description"`
 
+## Marking Blocked
+
+If a task cannot be completed (needs human action, external dependency, missing credentials, hardware access):
+1. Change `- [ ] ...` to `- [!] ...` in @IMPLEMENTATION_PLAN.md
+2. Keep the **Blocked: reason** note on the task line
+3. Do NOT attempt to work around blockers that require human intervention
+4. The loop will skip `[!]` tasks and move to the next `[ ]` task
+
 ## Rules
 
 - CRITICAL: Required tests MUST exist and MUST pass before committing
